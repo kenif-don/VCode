@@ -82,6 +82,7 @@ import {
   AttachmentPreview,
 } from "@/components/ai-elements/attachments.js";
 import { Button } from "@/components/ui/button.js";
+import { WorkspaceOpenTerminalButton } from "@/WorkspaceOpenTerminalButton.js";
 import {
   Dialog,
   DialogClose,
@@ -2469,6 +2470,11 @@ function ConversationComposerImpl({
   const leadingActionsNode = useMemo(
     () => (
       <>
+        {/* FR-5-2：底部“打开终端”入口（点击在右侧面板打开/聚焦终端页签）。 */}
+        <WorkspaceOpenTerminalButton
+          workspacePath={workspacePath}
+          workspaceIdentity={workspaceIdentity}
+        />
         <V4ComposerModeSwitch
           workspacePath={workspacePath}
           workspaceIdentity={workspaceIdentity}

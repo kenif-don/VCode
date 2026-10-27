@@ -1851,6 +1851,19 @@ const enUS: Record<string, string> = {
   "git.actionMenu.pushDialog.error.requestFailed": "Push failed: {error}",
   "git.actionMenu.pushDialog.toast.success": "Pushed to {target}",
   "git.branchSwitcher.label": "Branch",
+
+  // FR-3-2 worktree isolated session creation
+  "git.worktree.create": "Worktree session",
+  "git.worktree.dialog.title": "New worktree isolated session",
+  "git.worktree.dialog.description":
+    "Create an isolated worktree (new branch) under .hba/worktrees/<name> and open a new session rooted there for high-risk experiments.",
+  "git.worktree.name.label": "Name",
+  "git.worktree.name.placeholder": "feature-x",
+  "git.worktree.branch.label": "New branch (default hba/<name>)",
+  "git.worktree.base.label": "Start point (optional)",
+  "git.worktree.submit": "Create and open session",
+  "git.worktree.error.invalidName": "Name may only contain letters, digits, dot, underscore and dash.",
+  "git.worktree.error.failed": "Failed to create worktree. See logs.",
   "git.branchSwitcher.trigger.ariaLabel": "Switch Git branch",
   "git.branchSwitcher.searchPlaceholder": "Search branches",
   "git.branchSwitcher.section.branches": "Branches",

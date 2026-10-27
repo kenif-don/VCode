@@ -4,6 +4,8 @@ import type {
   GitCommitGraphRequest,
   GitCommitGraphResult,
   GitCreateBranchRequest,
+  GitCreateWorktreeRequest,
+  GitCreateWorktreeResult,
   GitChangesRequest,
   GitCommitRequest,
   GitCommitResult,
@@ -36,6 +38,8 @@ export interface IGitService {
   getCommitGraph(params: GitCommitGraphRequest): Promise<GitCommitGraphResult>;
   switchBranch(params: GitSwitchBranchRequest): Promise<GitBranchMutationResult>;
   createBranchAndSwitch(params: GitCreateBranchRequest): Promise<GitBranchMutationResult>;
+  /** FR-3-2:在 <repoRoot>/.hba/worktrees/<name> 创建独立 worktree(新分支),供隔离会话打开。 */
+  createWorktree(params: GitCreateWorktreeRequest): Promise<GitCreateWorktreeResult>;
   getChanges(params: GitChangesRequest): Promise<GitFileChange[]>;
   getIgnoredPaths(params: GitIgnoredPathsRequest): Promise<string[]>;
   getDiff(params: GitDiffQuery): Promise<GitDiffResult>;

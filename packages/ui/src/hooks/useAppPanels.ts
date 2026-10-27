@@ -90,6 +90,7 @@ import { getPathLeaf, joinFilePath, toFileUrl } from "@/lib/path.js";
 import { shouldOpenWorkflowArtifactInBrowser } from "@/lib/workflowArtifactOpen.js";
 import { useWhiteboardStore } from "@/store/whiteboardStore.js";
 import { useModelTrajectoryOpenBridge } from "@/hooks/useModelTrajectoryOpenBridge.js";
+import { useTerminalEntryBridge } from "@/hooks/useTerminalEntryBridge.js";
 import { useServices } from "@/hooks/useServices.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { clearSelectionSideChat } from "@/lib/selectionSideChatRuntime.js";
@@ -906,6 +907,38 @@ export function useAppPanels(options: {
     workspaceRemoteSessionId,
   ]);
 
+  // FR-5-2：底部“打开终端”按钮的打开/聚焦语义——已有终端 tab 时只聚焦，没有才新建；
+  // 与 quickpick add-terminal-tab 的“始终新建页签”语义分开，重复点击不再堆叠终端。
+  const handleOpenOrFocusTerminalTab = useCallback(() => {
+    if (isOfficeMode) return;
+    revealSidePaneForCurrentOwner();
+    commitOpenedSidePaneState((current) => {
+      const existing = current?.tabs.find((tab) => tab.type === "terminal");
+      if (existing) {
+        logger.info(
+          `[App] 聚焦右侧终端 tab=${existing.title} workspace=${workspaceAbsPath} tabs=${current?.tabs.length ?? 0}`,
+        );
+        return setActiveSidePaneTab(current, existing.id);
+      }
+      const title = createTerminalSidePaneTitle(current, workspaceAbsPath);
+      const next = openTerminalSidePane(current, {
+        title,
+        cwd: workspaceAbsPath,
+        remoteSessionId: workspaceRemoteSessionId,
+      });
+      logger.info(
+        `[App] 新建右侧终端 tab=${title} workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
+      );
+      return next;
+    });
+  }, [
+    isOfficeMode,
+    commitOpenedSidePaneState,
+    revealSidePaneForCurrentOwner,
+    workspaceAbsPath,
+    workspaceRemoteSessionId,
+  ]);
+
   const handleOpenModelTrajectory = useCallback(
     (params: { taskId: string; title?: string | null }) => {
       if (!params.taskId) {
@@ -1337,6 +1370,13 @@ export function useAppPanels(options: {
     handleOpenModelTrajectory,
   );
 
+  // FR-5-2：底部“打开终端”按钮挂载位置很深（composer 左下），经 terminalEntryStore 单例桥
+  // 发起请求，这里按 workspaceKey 匹配消费，避免把侧栏控制器回调贯穿 composer 树。
+  useTerminalEntryBridge(
+    workspaceIdentity?.trim() || workspaceAbsPath,
+    handleOpenOrFocusTerminalTab,
+  );
+
   const handleToggleTerminal = useCallback(() => {
     setIsTerminalOpen((open) => {
       if (isOfficeMode && !open) return open;
@@ -1675,6 +1715,7 @@ export function useAppPanels(options: {
     handleOpenPluginMarket,
     handleOpenNewSidePaneTab,
     handleOpenTerminalTab,
+    handleOpenOrFocusTerminalTab,
     handleOpenModelTrajectory,
     handleOpenSubagentSession,
     handleOpenBackgroundBash,

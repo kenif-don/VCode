@@ -1708,6 +1708,19 @@ const zhCN: Record<string, string> = {
   "git.actionMenu.pushDialog.error.requestFailed": "推送失败：{error}",
   "git.actionMenu.pushDialog.toast.success": "已推送到 {target}",
   "git.branchSwitcher.label": "分支",
+
+  // FR-3-2 worktree 隔离会话创建
+  "git.worktree.create": "Worktree 会话",
+  "git.worktree.dialog.title": "新建 worktree 隔离会话",
+  "git.worktree.dialog.description":
+    "在 .hba/worktrees/<名称> 创建独立 worktree（新分支），并以该目录为工作区打开新会话，用于高风险实验。",
+  "git.worktree.name.label": "名称",
+  "git.worktree.name.placeholder": "feature-x",
+  "git.worktree.branch.label": "新分支（缺省 hba/<名称>）",
+  "git.worktree.base.label": "起始引用（可选）",
+  "git.worktree.submit": "创建并打开会话",
+  "git.worktree.error.invalidName": "名称仅允许字母、数字、点、下划线与连字符。",
+  "git.worktree.error.failed": "worktree 创建失败，请查看日志。",
   "git.branchSwitcher.trigger.ariaLabel": "切换 Git 分支",
   "git.branchSwitcher.searchPlaceholder": "搜索分支",
   "git.branchSwitcher.section.branches": "分支",

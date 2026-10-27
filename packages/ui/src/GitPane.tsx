@@ -5,7 +5,7 @@ import type { GitChangeSourceId, GitDiffResult } from "@zcode/shared";
 import { TID_GIT_PANE } from "@zcode/shared/test-ids";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
-import { FileTextIcon, RefreshCw } from "lucide-react";
+import { FileTextIcon, GitForkIcon, RefreshCw } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select.js";
 import { type GitPaneFileChange, type GitPaneRepositoryState } from "@/hooks/useGitRepository.js";
 import { useServices } from "@/hooks/useServices.js";
+import type { CreateTaskRequest } from "@/app-shell/types.js";
+import { GitWorktreeDialog } from "@/GitWorktreeDialog.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
 import { useWorkspaceOpenInEditorTarget } from "@/hooks/useWorkspaceOpenInEditorTarget.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -53,6 +55,7 @@ export function GitPane({
   onClose: _onClose,
   onRefresh,
   onRevealFileInTree,
+  onCreateTask,
   workspaceIdentity,
   workspaceRemoteSessionId,
 }: {
@@ -70,6 +73,8 @@ export function GitPane({
   onClose: () => void;
   onRefresh: () => void;
   onRevealFileInTree?: (path: string) => void;
+  /** FR-3-2：worktree 创建成功后在新会话打开（targetWorkspace 指向 worktree 路径）。 */
+  onCreateTask?: (request?: CreateTaskRequest) => void;
 }) {
   const { gitService } = useServices();
   const { intl } = useZCodeIntl();
@@ -90,6 +95,7 @@ export function GitPane({
   });
   const resolvedTheme = resolveTheme(theme);
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
+  const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
   const [diffStateByKey, setDiffStateByKey] = useState<Record<string, GitDiffLoadState>>({});
   const diffGenerationRef = useRef(0);
   const pendingDiffKeysRef = useRef(new Set<string>());
@@ -474,6 +480,16 @@ export function GitPane({
             <RefreshCw className={cn("size-3.5", gitState.loading && "animate-spin")} />
             {intl.formatMessage({ id: "git.action.refresh" })}
           </Button>
+          {/* FR-3-2：worktree 隔离会话创建入口（P1）。 */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            onClick={() => setWorktreeDialogOpen(true)}
+          >
+            <GitForkIcon className="size-3.5" />
+            {intl.formatMessage({ id: "git.worktree.create" })}
+          </Button>
         </div>
       </div>
 
@@ -541,6 +557,12 @@ export function GitPane({
           </div>
         )}
       </div>
+      <GitWorktreeDialog
+        open={worktreeDialogOpen}
+        onOpenChange={setWorktreeDialogOpen}
+        workspacePath={workspacePath}
+        onCreateTask={onCreateTask}
+      />
     </section>
   );
 }

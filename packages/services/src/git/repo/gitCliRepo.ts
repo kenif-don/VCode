@@ -8,6 +8,7 @@ import type {
   GitBranchMutationResult,
   GitCommitGraphCommit,
   GitCommitGraphRef,
+  GitCreateWorktreeResult,
   GitDiffQuery,
   GitDiffResult,
   GitIdentity,
@@ -1247,6 +1248,128 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
         created: true,
         summary: nextStatus.summary,
       });
+    },
+
+    // FR-3-2：worktree 隔离会话创建。目录约定 <repoRoot>/.hba/worktrees/<name>（与 HBA
+    // 业务数据 .hba/ 同根）；新分支缺省 hba/<name>。主工作区状态与 worktree 相互独立，
+    // 创建后由 UI 侧在 worktree 路径打开新会话（onCreateTask targetWorkspace）。
+    async createWorktree(
+      workspacePath: string,
+      name: string,
+      branchName?: string,
+      startPoint?: string,
+    ): Promise<GitCreateWorktreeResult> {
+      const status = await this.getStatus(workspacePath);
+      const resolution = ensureRepositoryAvailable(status.resolution, "create worktrees");
+      const normalizedName = name.trim();
+      // 目录名作为路径段使用；白名单校验避免路径穿越与跨平台非法字符。
+      if (
+        !/^[A-Za-z0-9._-]+$/.test(normalizedName) ||
+        normalizedName === "." ||
+        normalizedName === ".."
+      ) {
+        return {
+          ok: false,
+          issues: [
+            {
+              code: "invalid-name",
+              message:
+                "Worktree name may only contain letters, digits, dot, underscore and dash.",
+            },
+          ],
+          summary: status.summary,
+        };
+      }
+
+      const normalizedBranchName = branchName?.trim() || `hba/${normalizedName}`;
+      if (status.entries.some((entry) => entry.isConflicted)) {
+        return {
+          ok: false,
+          issues: [
+            { code: "conflicts-present", message: "Repository still has unresolved conflicts." },
+          ],
+          summary: status.summary,
+        };
+      }
+
+      if (await hasOperationInProgress(resolution)) {
+        return {
+          ok: false,
+          issues: [
+            {
+              code: "operation-in-progress",
+              message: "Another Git operation is still in progress.",
+            },
+          ],
+          summary: status.summary,
+        };
+      }
+
+      const invalidBranchIssue = await validateBranchName(resolution, normalizedBranchName);
+      if (invalidBranchIssue) {
+        return {
+          ok: false,
+          issues: [{ code: "invalid-name", message: invalidBranchIssue.message }],
+          summary: status.summary,
+        };
+      }
+
+      const worktreePath = join(resolution.repoRoot, ".hba", "worktrees", normalizedName);
+      if (await fileExists(worktreePath)) {
+        return {
+          ok: false,
+          issues: [{ code: "path-exists", message: "Target worktree path already exists." }],
+          summary: status.summary,
+        };
+      }
+
+      const normalizedStartPoint = startPoint?.trim();
+      const result = await commandProvider.run({
+        cwd: resolution.repoRoot,
+        // `git worktree add -b <branch> <path> [<commit-ish>]`；path 由 repoRoot 拼出，
+        // 不会以 `-` 开头，无需 `--` 终止选项解析。
+        args: [
+          "worktree",
+          "add",
+          "-b",
+          normalizedBranchName,
+          worktreePath,
+          ...(normalizedStartPoint ? [normalizedStartPoint] : []),
+        ],
+        timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+        maxOutputBytes: DEFAULT_GIT_OUTPUT_BYTES,
+      });
+      if (result.exitCode !== 0) {
+        const detail = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.toLowerCase();
+        const issueCode = detail.includes("already exists")
+          ? detail.includes("branch")
+            ? "branch-exists"
+            : "path-exists"
+          : detail.includes("already used by worktree")
+            ? "branch-exists"
+            : "command-failed";
+        return {
+          ok: false,
+          issues: [
+            {
+              code: issueCode,
+              message:
+                result.stderr?.trim() ||
+                "git worktree add failed. Use a different name or branch.",
+            },
+          ],
+          summary: status.summary,
+        };
+      }
+
+      invalidate(workspacePath);
+      const nextStatus = await this.getStatus(workspacePath);
+      return {
+        ok: true,
+        worktreePath,
+        branchName: normalizedBranchName,
+        summary: nextStatus.summary,
+      };
     },
 
     async getDiff(params: GitDiffQuery): Promise<GitDiffResult> {

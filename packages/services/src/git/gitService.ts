@@ -211,6 +211,15 @@ export function createGitService(options?: {
       );
     },
 
+    async createWorktree(params) {
+      return await repo.createWorktree(
+        params.workspacePath,
+        params.name,
+        params.branchName,
+        params.startPoint,
+      );
+    },
+
     async getChanges(params) {
       const status = await repo.getStatus(params.workspacePath);
 

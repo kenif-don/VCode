@@ -136,6 +136,43 @@ export interface GitWorkspaceRepositoryInfo {
   isGitAvailable: boolean;
 }
 
+/** FR-3-2:worktree 隔离会话创建请求;worktree 统一落在 <repoRoot>/.hba/worktrees/<name>。 */
+export interface GitCreateWorktreeRequest {
+  workspacePath: string;
+  /** worktree 目录名(.hba/worktrees/<name> 的 <name>);仅允许字母/数字/点/下划线/连字符。 */
+  name: string;
+  /** 新分支名;缺省 hba/<name>。 */
+  branchName?: string;
+  /** 起始引用(分支/标签/提交);缺省 HEAD。 */
+  startPoint?: string;
+}
+
+export type GitCreateWorktreeIssueCode =
+  | "invalid-name"
+  | "path-exists"
+  | "branch-exists"
+  | "conflicts-present"
+  | "operation-in-progress"
+  | "command-failed";
+
+export interface GitCreateWorktreeIssue {
+  code: GitCreateWorktreeIssueCode;
+  message: string;
+}
+
+export type GitCreateWorktreeResult =
+  | {
+      ok: true;
+      worktreePath: string;
+      branchName: string;
+      summary: GitRepositorySummary;
+    }
+  | {
+      ok: false;
+      issues: GitCreateWorktreeIssue[];
+      summary: GitRepositorySummary | null;
+    };
+
 export interface GitSwitchBranchRequest extends GitRepositoryRequest {
   targetBranchName: string;
 }
