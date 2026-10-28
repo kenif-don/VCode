@@ -427,6 +427,55 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     // marketplace 条目都对齐；具体版本由原子 producer bump 工作流维护。
     version: "0.6.5",
   },
+  {
+    // HBA 迁移（fr6）：UI 原型面板。UI 插件（server.mjs + ui/ 面板资源），默认启用，
+    // 首启 seed 后即出现在右侧面板 launcher（见 ui 侧 BUILTIN_UI_PLUGIN_RECOMMENDATIONS）。
+    componentTypes: ["ui"],
+    defaultEnabled: true,
+    listing: {
+      author: { name: "HBA->ZCode Migration" },
+      category: "productivity",
+      displayName: "UI Prototype",
+      displayName_i18n: { "zh-CN": "UI 原型" },
+      description_i18n: {
+        "zh-CN":
+          "UI 原型面板（HBA FR-2 迁移）：需求输入生成多屏原型，画布缩放/拖拽/跳转热点，390px 手机预览，演示播放，HTML/JSX/Vue 产物切换，历史版本、本地目录导入与导出。",
+      },
+    },
+    name: "hba-uigen",
+    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/bridge.js", "ui/panel.html"],
+    rootCandidates: [
+      "packages/hba-uigen-plugin",
+      "../hba-uigen-plugin",
+      "../../hba-uigen-plugin",
+      "../../../hba-uigen-plugin",
+    ],
+    version: "0.1.1",
+  },
+  {
+    // HBA 迁移（fr6）：运行面板。同为 UI 插件，默认启用，launcher 常驻入口。
+    componentTypes: ["ui"],
+    defaultEnabled: true,
+    listing: {
+      author: { name: "HBA" },
+      category: "productivity",
+      displayName: "HBA Run Panel",
+      displayName_i18n: { "zh-CN": "HBA 运行面板" },
+      description_i18n: {
+        "zh-CN":
+          "HBA 运行面板：管理运行配置（启动命令、工作目录、环境变量、预览地址），一键运行/停止并实时查看输出，浏览任务历史，并在运行成功后打开预览。",
+      },
+    },
+    name: "hba-run",
+    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/panel.html"],
+    rootCandidates: [
+      "packages/hba-run-plugin",
+      "../hba-run-plugin",
+      "../../hba-run-plugin",
+      "../../../hba-run-plugin",
+    ],
+    version: "0.1.0",
+  },
 ];
 
 // 在 official plugin 定义里标了 defaultEnabled: true 的, 拼成 `<name>@<marketplace>` 形式,

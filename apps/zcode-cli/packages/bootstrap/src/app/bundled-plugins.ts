@@ -51,8 +51,13 @@ const includedTopLevelPaths = new Set([
   // Browser skill 会从官方插件根目录动态导入 scripts/browser-client.mjs。
   // filesystem seed 若漏掉 scripts，Dev 会连接 node_repl 成功却在首次 Browser Use 时导入失败。
   "scripts",
+  // HBA UI 插件（hba-uigen / hba-run）的 MCP server 直接放在包根，面板资源在 ui/。
+  // 两处顶层白名单（这里与 desktop 的 prepare-agent-node-bundle.mjs）漏任何一项，
+  // seed 都会装出只有 manifest 的残缺插件。
+  "server.mjs",
   "skills",
   "templates",
+  "ui",
 ]);
 
 interface OfficialPluginSeedFile {

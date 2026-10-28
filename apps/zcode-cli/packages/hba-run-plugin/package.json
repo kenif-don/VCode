@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@zcode/hba-run-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Run panel plugin (FR-4): run configurations, one-click run/stop with live output, task history and preview linking, persisted to .hba/run.json.",
+  "license": "Apache-2.0",
+  "type": "module"
+}

@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HBA 运行面板</title>
+<style>
+  :root {
+    --bg: #1e1f24;
+    --bg2: #26272e;
+    --bg3: #2e3038;
+    --fg: #e6e6e6;
+    --fg-dim: #9a9aa2;
+    --accent: #4f8cff;
+    --ok: #3fb96f;
+    --err: #e5534b;
+    --warn: #d4a72c;
+    --border: #3a3c45;
+    --mono: "Cascadia Code", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-width: 640px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: var(--bg3);
+    color: var(--fg-dim);
+    white-space: nowrap;
+  }
+  .badge.ok { color: var(--ok); }
+  .badge.err { color: var(--err); }
+  .badge.run { color: var(--accent); }
+  .badge.run::before {
+    content: "";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+
+  main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  aside {
+    width: 240px;
+    min-width: 200px;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  aside .head, .section-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  aside .head .spacer, .section-head .spacer { flex: 1; }
+  #config-items { flex: 1; overflow: auto; padding: 6px; }
+  .config-item {
+    padding: 7px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    margin-bottom: 4px;
+  }
+  .config-item:hover { background: var(--bg3); }
+  .config-item.selected { background: var(--bg3); border-color: var(--accent); }
+  .config-item .name { font-weight: 600; word-break: break-all; }
+  .config-item .cmd {
+    color: var(--fg-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  section#work {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: auto;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card .body { padding: 10px 12px; }
+  .form-grid {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 8px 10px;
+    align-items: start;
+  }
+  .form-grid label { color: var(--fg-dim); padding-top: 5px; }
+  input[type=text], textarea {
+    width: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 64px; }
+  .hint { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
+
+  button {
+    background: var(--bg3);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+  button.small { padding: 2px 8px; font-size: 11px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar .spacer { flex: 1; }
+
+  #runs-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .run-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .run-chip.current { border-color: var(--accent); }
+
+  #console-box .body { display: flex; flex-direction: column; gap: 8px; }
+  #console {
+    background: #141519;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  #console .l-stderr { color: var(--err); }
+  #console .l-system { color: var(--warn); }
+  #console .l-stdout { color: var(--fg); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--fg-dim); font-weight: 600; white-space: nowrap; }
+  td { word-break: break-all; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: var(--bg3); }
+
+  .empty { color: var(--fg-dim); padding: 12px; text-align: center; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tag { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>HBA 运行面板</h1>
+  <span id="conn-badge" class="badge">桥连接中…</span>
+  <span class="spacer"></span>
+  <span id="workspace-tag" class="tag"></span>
+  <button id="btn-open-preview" class="primary" disabled>打开预览</button>
+</header>
+<main>
+  <aside>
+    <div class="head">
+      运行配置
+      <span class="spacer"></span>
+      <button class="small" id="btn-new">新建</button>
+      <button class="small" id="btn-dup">复制</button>
+      <button class="small danger" id="btn-del">删除</button>
+    </div>
+    <div id="config-items"><div class="empty">暂无配置</div></div>
+  </aside>
+
+  <section id="work">
+    <div class="card">
+      <div class="section-head">
+        <span id="form-title">配置编辑</span>
+        <span class="spacer"></span>
+        <span id="form-id" class="tag"></span>
+        <button class="primary" id="btn-save">保存</button>
+        <button id="btn-run">运行</button>
+      </div>
+      <div class="body">
+        <div class="form-grid">
+          <label for="f-name">名称</label>
+          <input type="text" id="f-name" placeholder="例如：前端开发服务">
+          <label for="f-command">启动命令</label>
+          <input type="text" id="f-command" placeholder="例如：npm run dev">
+          <label for="f-cwd">工作目录</label>
+          <div>
+            <input type="text" id="f-cwd" placeholder="留空 = 工作区根目录;可填相对或绝对路径">
+            <div class="hint">相对路径相对于工作区根目录解析</div>
+          </div>
+          <label for="f-env">环境变量</label>
+          <div>
+            <textarea id="f-env" placeholder="每行一条 KEY=VALUE&#10;PORT=5173&#10;NODE_ENV=development"></textarea>
+            <div class="hint">每行一条 KEY=VALUE,以 # 开头的行为注释</div>
+          </div>
+          <label for="f-preview">预览地址</label>
+          <div>
+            <input type="text" id="f-preview" placeholder="例如：http://localhost:5173">
+            <div class="hint">配置后,该配置运行成功时可一键打开预览</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="console-box">
+      <div class="section-head">
+        运行输出
+        <span id="console-run-tag" class="tag"></span>
+        <span class="spacer"></span>
+        <label class="hint"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
+        <button class="small" id="btn-clear">清空</button>
+        <button class="small" id="btn-copy">复制</button>
+      </div>
+      <div class="body">
+        <div id="runs-bar"></div>
+        <div id="console"><div class="empty">选择一个运行查看输出</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-head">
+        任务历史
+        <span class="spacer"></span>
+        <button class="small" id="btn-refresh-history">刷新</button>
+      </div>
+      <div class="body" style="padding:0">
+        <table>
+          <thead>
+            <tr>
+              <th>配置</th><th>命令</th><th>开始时间</th><th>结束时间</th><th>退出码</th><th>状态</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr><td colspan="7" class="empty">暂无历史记录</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* ===========================================================================
+ * bridge 适配层(独立块,便于集成期替换)
+ * 协议来源:对 ZCode 官方 pdf-plugin 的 .zcode-plugin/plugin.json + dist/ui/panel.html
+ * 反推得到的 MCP-over-postMessage 桥:
+ *   - 面板 iframe 是一个 MCP client,JSON-RPC 2.0 消息原样经 window.parent.postMessage
+ *     发往宿主,window "message" 事件收取(e.source 必须是 window.parent);
+ *   - 握手:initialize(protocolVersion "2025-06-18") -> notifications/initialized
+ *     -> ui/notifications/initialized(UI 扩展握手);
+ *   - 之后走标准 MCP:tools/call、resources/read、resources/subscribe,
+ *     服务端以 notifications/resources/updated 推送状态变化;
+ *   - 面板可发 ui/notifications/size-changed {width,height} 通知宿主尺寸,
+ *     宿主可发 ui/notifications/request-teardown 要求面板清理。
+ * 结论为反推所得,集成期需与宿主联测校验(见 README「桥协议结论」)。
+ * ======================================================================== */
+const Bridge = (() => {
+  const pending = new Map();
+  const resourceListeners = new Set();
+  const teardownListeners = new Set();
+  let nextId = 1;
+  let connected = false;
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+    if (msg.id !== undefined && msg.id !== null && (msg.result !== undefined || msg.error !== undefined)) {
+      const entry = pending.get(msg.id);
+      if (!entry) return;
+      pending.delete(msg.id);
+      clearTimeout(entry.timer);
+      if (msg.error) entry.reject(new Error(msg.error.message || "JSON-RPC error"));
+      else entry.resolve(msg.result);
+      return;
+    }
+    if (typeof msg.method === "string") {
+      if (msg.method === "notifications/resources/updated") {
+        for (const cb of resourceListeners) { try { cb(msg.params || {}); } catch (e) { console.error(e); } }
+      } else if (msg.method === "ui/notifications/request-teardown") {
+        for (const cb of teardownListeners) { try { cb(); } catch (e) { console.error(e); } }
+      }
+    }
+  });
+
+  function request(method, params, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error("bridge 请求超时: " + method));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      window.parent.postMessage({ jsonrpc: "2.0", id, method, params: params || {} }, "*");
+    });
+  }
+
+  function notify(method, params) {
+    window.parent.postMessage({ jsonrpc: "2.0", method, params: params || {} }, "*");
+  }
+
+  async function connect() {
+    const result = await request("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "hba-run-panel", version: "0.1.0" }
+    });
+    notify("notifications/initialized", {});
+    notify("ui/notifications/initialized", {});
+    connected = true;
+    return result;
+  }
+
+  async function callTool(name, args) {
+    const result = await request("tools/call", { name, arguments: args || {} }, 30000);
+    if (result && result.isError) {
+      const text = (result.content || []).map((c) => c.text || "").join("\n");
+      throw new Error(text || ("工具执行失败: " + name));
+    }
+    return result && result.structuredContent !== undefined ? result.structuredContent : result;
+  }
+
+  async function readResource(uri) {
+    const result = await request("resources/read", { uri });
+    return result && result.contents ? result.contents[0] : null;
+  }
+
+  async function subscribe(uri) {
+    try { await request("resources/subscribe", { uri }); } catch (e) { console.warn(e); }
+  }
+
+  function onResourceUpdate(cb) { resourceListeners.add(cb); return () => resourceListeners.delete(cb); }
+  function onTeardown(cb) { teardownListeners.add(cb); return () => teardownListeners.delete(cb); }
+
+  function sendSizeChanged() {
+    const width = Math.ceil(window.innerWidth);
+    const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    notify("ui/notifications/size-changed", { width, height });
+  }
+
+  return {
+    connect, request, notify, callTool, readResource, subscribe,
+    onResourceUpdate, onTeardown, sendSizeChanged,
+    get connected() { return connected; }
+  };
+})();
+
+/* ===========================================================================
+ * 应用逻辑
+ * ======================================================================== */
+const $ = (id) => document.getElementById(id);
+
+const App = {
+  configs: [],
+  runs: [],
+  history: [],
+  selectedConfigId: null,
+  currentRunId: null,
+  outputByRun: Object.create(null), // runId -> { lines: [], since: 0 }
+  autoScroll: true,
+  pollTimer: null,
+  refreshTimer: null
+};
+
+function fmtTime(iso) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+function stateBadge(run) {
+  if (run.state === "running") return '<span class="badge run">运行中</span>';
+  if (run.stopped && run.state === "exited") return '<span class="badge">已停止</span>';
+  if (run.state === "exited") return '<span class="badge ok">已完成</span>';
+  return '<span class="badge err">失败</span>';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function parseEnvLines(text) {
+  const env = {};
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const i = line.indexOf("=");
+    if (i <= 0) continue;
+    env[line.slice(0, i).trim()] = line.slice(i + 1);
+  }
+  return env;
+}
+
+function envToLines(env) {
+  return Object.entries(env || {}).map(([k, v]) => k + "=" + v).join("\n");
+}
+
+// ---- 渲染 ------------------------------------------------------------------
+
+function renderConfigs() {
+  const box = $("config-items");
+  if (!App.configs.length) {
+    box.innerHTML = '<div class="empty">暂无配置,点「新建」创建</div>';
+    return;
+  }
+  box.innerHTML = App.configs.map((c) => `
+    <div class="config-item ${c.id === App.selectedConfigId ? "selected" : ""}" data-id="${escapeHtml(c.id)}">
+      <div class="name">${escapeHtml(c.name)}</div>
+      <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
+    </div>`).join("");
+  for (const el of box.querySelectorAll(".config-item")) {
+    el.addEventListener("click", () => selectConfig(el.dataset.id));
+    el.addEventListener("dblclick", () => startRunOf(el.dataset.id));
+  }
+}
+
+function renderForm() {
+  const c = App.configs.find((x) => x.id === App.selectedConfigId);
+  $("form-title").textContent = c ? "配置编辑" : "新建配置";
+  $("form-id").textContent = c ? c.id : "";
+  $("f-name").value = c ? c.name : "";
+  $("f-command").value = c ? c.command : "";
+  $("f-cwd").value = c ? (c.cwd || "") : "";
+  $("f-env").value = c ? envToLines(c.env) : "";
+  $("f-preview").value = c ? (c.previewUrl || "") : "";
+  $("btn-run").disabled = !c;
+  $("btn-dup").disabled = !c;
+  $("btn-del").disabled = !c;
+  updatePreviewButton();
+}
+
+function renderRunsBar() {
+  const bar = $("runs-bar");
+  const live = App.runs.filter((r) => r.state === "running");
+  const recent = App.runs.filter((r) => r.state !== "running").slice(-5);
+  const items = [...live, ...recent];
+  if (!items.length) { bar.innerHTML = ""; return; }
+  bar.innerHTML = items.map((r) => `
+    <div class="run-chip ${r.runId === App.currentRunId ? "current" : ""}" data-run="${escapeHtml(r.runId)}">
+      ${stateBadge(r)}
+      <span>${escapeHtml(r.configName || r.command)}</span>
+      ${r.state === "running" ? `<button class="small danger" data-stop="${escapeHtml(r.runId)}">停止</button>` : ""}
+    </div>`).join("");
+  for (const el of bar.querySelectorAll(".run-chip")) {
+    el.addEventListener("click", (e) => {
+      if (e.target.dataset.stop) return;
+      selectRun(el.dataset.run);
+    });
+  }
+  for (const el of bar.querySelectorAll("[data-stop]")) {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      stopRun(el.dataset.stop);
+    });
+  }
+}
+
+function renderHistory() {
+  const body = $("history-body");
+  if (!App.history.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">暂无历史记录</td></tr>';
+    return;
+  }
+  body.innerHTML = App.history.map((h) => `
+    <tr class="clickable" data-run="${escapeHtml(h.id)}">
+      <td>${escapeHtml(h.configName || "—")}</td>
+      <td class="tag" title="${escapeHtml(h.command)}">${escapeHtml(h.command)}</td>
+      <td>${fmtTime(h.startedAt)}</td>
+      <td>${fmtTime(h.endedAt)}</td>
+      <td>${h.exitCode === null || h.exitCode === undefined ? "—" : h.exitCode}</td>
+      <td>${stateBadge(h)}</td>
+      <td>
+        <button class="small" data-view="${escapeHtml(h.id)}">查看输出</button>
+        ${h.previewUrl && h.state === "exited" && !h.stopped
+          ? `<button class="small" data-preview="${escapeHtml(h.previewUrl)}">打开预览</button>` : ""}
+      </td>
+    </tr>`).join("");
+  for (const el of body.querySelectorAll("[data-view]")) {
+    el.addEventListener("click", (e) => { e.stopPropagation(); selectRun(el.dataset.view); });
+  }
+  for (const el of body.querySelectorAll("[data-preview]")) {
+    el.addEventListener("click", (e) => { e.stopPropagation(); openPreview(el.dataset.preview); });
+  }
+  for (const el of body.querySelectorAll("tr[data-run]")) {
+    el.addEventListener("click", () => selectRun(el.dataset.run));
+  }
+}
+
+function renderConsole() {
+  const tag = $("console-run-tag");
+  const box = $("console");
+  const view = App.outputByRun[App.currentRunId];
+  tag.textContent = App.currentRunId ? App.currentRunId : "";
+  if (!view || !view.lines.length) {
+    box.innerHTML = '<div class="empty">暂无输出</div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const l of view.lines) {
+    const div = document.createElement("div");
+    div.className = "l-" + (l.stream || "stdout");
+    div.textContent = l.text;
+    frag.appendChild(div);
+  }
+  box.innerHTML = "";
+  box.appendChild(frag);
+  if (App.autoScroll) box.scrollTop = box.scrollHeight;
+}
+
+function updatePreviewButton() {
+  const btn = $("btn-open-preview");
+  const c = App.configs.find((x) => x.id === App.selectedConfigId);
+  let url = "";
+  if (c && c.previewUrl) {
+    // 最近一次该配置的成功运行(实时优先,其次历史)
+    const liveOk = [...App.runs].reverse().find(
+      (r) => r.configId === c.id && r.state === "exited" && !r.stopped && !r.spawnError
+    );
+    const histOk = [...App.history].find(
+      (h) => h.configId === c.id && h.state === "exited" && !h.stopped
+    );
+    if (liveOk || histOk) url = c.previewUrl;
+  }
+  btn.disabled = !url;
+  btn.dataset.url = url;
+}
+
+// ---- 动作 ------------------------------------------------------------------
+
+function selectConfig(id) {
+  App.selectedConfigId = id;
+  renderConfigs();
+  renderForm();
+}
+
+function selectRun(runId) {
+  App.currentRunId = runId;
+  if (!App.outputByRun[runId]) App.outputByRun[runId] = { lines: [], since: 0 };
+  renderRunsBar();
+  renderConsole();
+  fetchOutput(runId).catch((e) => console.warn(e));
+}
+
+async function refreshAll() {
+  await Promise.all([refreshConfigs(), refreshRuns(), refreshHistory()]);
+}
+
+async function refreshConfigs() {
+  const res = await Bridge.callTool("run_config_list", {});
+  App.configs = res.configs || [];
+  if (App.selectedConfigId && !App.configs.some((c) => c.id === App.selectedConfigId)) {
+    App.selectedConfigId = null;
+  }
+  if (!App.selectedConfigId && App.configs.length) {
+    App.selectedConfigId = App.configs[0].id;
+  }
+  renderConfigs();
+  renderForm();
+}
+
+async function refreshRuns() {
+  const res = await Bridge.callTool("run_status", {});
+  App.runs = res.runs || [];
+  renderRunsBar();
+  updatePreviewButton();
+}
+
+async function refreshHistory() {
+  const res = await Bridge.callTool("run_history", { limit: 50 });
+  App.history = res.history || [];
+  renderHistory();
+  updatePreviewButton();
+}
+
+async function fetchOutput(runId) {
+  const view = App.outputByRun[runId] || (App.outputByRun[runId] = { lines: [], since: 0 });
+  const res = await Bridge.callTool("run_output", { runId, since: view.since });
+  if (res.lines && res.lines.length) {
+    view.lines.push(...res.lines);
+    if (view.lines.length > 5000) view.lines.splice(0, view.lines.length - 5000);
+  }
+  view.since = res.nextSince !== undefined ? res.nextSince : view.since;
+  if (App.currentRunId === runId) renderConsole();
+}
+
+async function saveConfig() {
+  const payload = {
+    name: $("f-name").value.trim(),
+    command: $("f-command").value.trim(),
+    cwd: $("f-cwd").value.trim(),
+    env: parseEnvLines($("f-env").value),
+    previewUrl: $("f-preview").value.trim()
+  };
+  if (!payload.name || !payload.command) {
+    alert("名称和启动命令不能为空");
+    return;
+  }
+  if (App.selectedConfigId) payload.id = App.selectedConfigId;
+  const res = await Bridge.callTool("run_config_save", payload);
+  if (res.config) App.selectedConfigId = res.config.id;
+  await refreshConfigs();
+}
+
+async function deleteConfig() {
+  if (!App.selectedConfigId) return;
+  if (!confirm("确认删除该运行配置?历史记录会保留。")) return;
+  await Bridge.callTool("run_config_delete", { configId: App.selectedConfigId });
+  App.selectedConfigId = null;
+  await refreshConfigs();
+}
+
+async function duplicateConfig() {
+  if (!App.selectedConfigId) return;
+  const res = await Bridge.callTool("run_config_duplicate", { configId: App.selectedConfigId });
+  if (res.config) App.selectedConfigId = res.config.id;
+  await refreshConfigs();
+}
+
+function newConfig() {
+  App.selectedConfigId = null;
+  renderConfigs();
+  renderForm();
+  $("f-name").focus();
+}
+
+async function startRunOf(configId) {
+  const res = await Bridge.callTool("run_start", { configId });
+  if (res.run) {
+    App.selectedConfigId = configId;
+    selectRun(res.run.runId);
+  }
+  await Promise.all([refreshRuns(), refreshHistory()]);
+}
+
+async function stopRun(runId) {
+  try {
+    await Bridge.callTool("run_stop", { runId });
+  } catch (e) {
+    alert("停止失败: " + e.message);
+  }
+  setTimeout(() => {
+    refreshRuns().catch(() => {});
+    refreshHistory().catch(() => {});
+  }, 800);
+}
+
+function openPreview(url) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function copyConsole() {
+  const view = App.outputByRun[App.currentRunId];
+  const text = view ? view.lines.map((l) => l.text).join("\n") : "";
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+
+function clearConsole() {
+  if (!App.currentRunId) return;
+  App.outputByRun[App.currentRunId] = { lines: [], since: 0 };
+  renderConsole();
+  fetchOutput(App.currentRunId).catch(() => {});
+}
+
+// ---- 启动 ------------------------------------------------------------------
+
+function scheduleRefresh() {
+  if (App.refreshTimer) return;
+  App.refreshTimer = setTimeout(() => {
+    App.refreshTimer = null;
+    Promise.all([refreshRuns(), refreshHistory()])
+      .then(() => {
+        if (App.currentRunId) return fetchOutput(App.currentRunId);
+      })
+      .catch((e) => console.warn(e));
+  }, 250);
+}
+
+function startPolling() {
+  if (App.pollTimer) return;
+  App.pollTimer = setInterval(() => {
+    const anyRunning = App.runs.some((r) => r.state === "running");
+    if (!anyRunning) return;
+    Promise.all([refreshRuns()])
+      .then(() => (App.currentRunId ? fetchOutput(App.currentRunId) : null))
+      .catch(() => {});
+  }, 1200);
+}
+
+async function init() {
+  // 事件绑定
+  $("btn-new").addEventListener("click", newConfig);
+  $("btn-save").addEventListener("click", () => saveConfig().catch((e) => alert(e.message)));
+  $("btn-del").addEventListener("click", () => deleteConfig().catch((e) => alert(e.message)));
+  $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => alert(e.message)));
+  $("btn-run").addEventListener("click", () => {
+    if (App.selectedConfigId) startRunOf(App.selectedConfigId).catch((e) => alert(e.message));
+  });
+  $("btn-clear").addEventListener("click", clearConsole);
+  $("btn-copy").addEventListener("click", () => copyConsole().catch((e) => console.warn(e)));
+  $("chk-autoscroll").addEventListener("change", (e) => {
+    App.autoScroll = e.target.checked;
+    if (App.autoScroll) renderConsole();
+  });
+  $("btn-refresh-history").addEventListener("click", () => refreshHistory().catch((e) => console.warn(e)));
+  $("btn-open-preview").addEventListener("click", () => openPreview($("btn-open-preview").dataset.url));
+
+  const badge = $("conn-badge");
+  if (window.parent === window) {
+    badge.textContent = "独立打开模式(未连接宿主)";
+    badge.className = "badge err";
+    return;
+  }
+
+  try {
+    await Bridge.connect();
+    badge.textContent = "已连接";
+    badge.className = "badge ok";
+  } catch (e) {
+    badge.textContent = "桥连接失败: " + e.message;
+    badge.className = "badge err";
+    return;
+  }
+
+  Bridge.onResourceUpdate(() => {
+    scheduleRefresh();
+    if (App.currentRunId) fetchOutput(App.currentRunId).catch(() => {});
+    startPolling();
+  });
+  Bridge.onTeardown(() => {
+    if (App.pollTimer) clearInterval(App.pollTimer);
+    if (App.refreshTimer) clearTimeout(App.refreshTimer);
+  });
+
+  await Bridge.subscribe("ui://run/state");
+  await refreshAll();
+  startPolling();
+  Bridge.sendSizeChanged();
+  window.addEventListener("resize", () => Bridge.sendSizeChanged());
+}
+
+init().catch((e) => {
+  console.error(e);
+  const badge = $("conn-badge");
+  badge.textContent = "初始化失败: " + e.message;
+  badge.className = "badge err";
+});
+</script>
+</body>
+</html>

@@ -248,6 +248,23 @@ const officialPluginPackages = [
     stagedPath: "packages/zcode-guide-plugin",
   },
   {
+    // HBA 迁移（fr6）：UI 原型面板。零外部依赖（node 内置模块），无 runtime 构建；
+    // server.mjs 与 ui/ 面板资源靠 includedOfficialPluginTopLevelPaths 白名单进包。
+    packageName: "@zcode/hba-uigen-plugin",
+    relativePath: "apps/zcode-cli/packages/hba-uigen-plugin",
+    requiresRuntime: false,
+    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/bridge.js", "ui/panel.html"],
+    stagedPath: "packages/hba-uigen-plugin",
+  },
+  {
+    // HBA 迁移（fr6）：运行面板。同上，纯 JS 插件，直接 stage。
+    packageName: "@zcode/hba-run-plugin",
+    relativePath: "apps/zcode-cli/packages/hba-run-plugin",
+    requiresRuntime: false,
+    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/panel.html"],
+    stagedPath: "packages/hba-run-plugin",
+  },
+  {
     // node_repl 宿主：Browser Use 与 Computer Use 共用的 MCP runtime，本轮抽成独立包。
     // 它没有 listing（不进插件市场展示面），但生产包首启 seed 必须拿到它的 dist runtime，
     // 否则 bua/cua 任一开启时都会连不上 node_repl。
@@ -293,8 +310,12 @@ const includedOfficialPluginTopLevelPaths = new Set([
   "output-styles",
   "package.json",
   "scripts",
+  // 与 bootstrap/bundled-plugins.ts 的 includedTopLevelPaths 保持同步：
+  // HBA UI 插件的 server.mjs（包根）与 ui/（面板资源）必须进包。
+  "server.mjs",
   "skills",
   "templates",
+  "ui",
 ]);
 const excludedOfficialPluginAssetNames = new Set([
   ".DS_Store",

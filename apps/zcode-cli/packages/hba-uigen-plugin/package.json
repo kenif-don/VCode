@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@zcode/hba-uigen-plugin",
+  "version": "0.1.1",
+  "private": true,
+  "description": "UI prototype generation panel (HBA FR-2): multi-screen canvas, 390px preview, demo playback, HTML/JSX/Vue artifacts, versions, import/export.",
+  "license": "Apache-2.0",
+  "type": "module"
+}
