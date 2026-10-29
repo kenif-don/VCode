@@ -68,11 +68,11 @@ pnpm run test:unit                # vitest 单元测试(排除 desktop e2e)
 
 | # | 改造点 | 位置(证据:已核实) | 动作 |
 |---|---|---|---|
-| 1 | 应用名 / appId | `packages/desktop/scripts/desktop-product-identity.mjs`:`PRODUCTION_IDENTITY`(appId `dev.zcode.app`、productName `ZCode`、linuxExecutableName `zcode`;`PREVIEW_IDENTITY` 同文件) | 改为 HBA 名称与 appId(如 productName `HBA`、appId `dev.hba.app`);`packages/desktop/electron-builder.config.js` 经 `resolveDesktopProductIdentity` 消费该文件,勿绕过 |
-| 2 | 图标 | `packages/desktop/build/`:`icon.icns`、`icon.ico`、`icon.png`、`icon_windows.png`、`icon_installer.icns/.ico/.png`、`icons/`、`dmg_background*.png` | 全部换 HBA 图标(尺寸/命名保持一致);安装器与 dmg 背景同步 |
+| 1 | 应用名 / appId | `packages/desktop/scripts/desktop-product-identity.mjs`:`PRODUCTION_IDENTITY`(appId `dev.zcode.app`、productName `ZCode`、linuxExecutableName `zcode`;`PREVIEW_IDENTITY` 同文件) | 改为 HBA 名称与 appId(如 productName `HBA`、appId `dev.hba.app`);`packages/desktop/electron-builder.config.js` 经 `resolveDesktopProductIdentity` 消费该文件,勿绕过。**✅ fr13 已定稿:productName `VCode`、appId `dev.vcode.app`、linux 名 `vcode`(2026-10-29)** |
+| 2 | 图标 | `packages/desktop/build/`:`icon.icns`、`icon.ico`、`icon.png`、`icon_windows.png`、`icon_installer.icns/.ico/.png`、`icons/`、`dmg_background*.png` | 全部换 HBA 图标(尺寸/命名保持一致);安装器与 dmg 背景同步。**✅ fr13 已完成(HBA 六边形徽标,`branding/generate-icons.py`;dmg 背景待设计)** |
 | 3 | 默认 provider / 模型 | 构建期 `scripts/builtin-provider-config.mjs`(读 `ZCODE_ENV` 与 `.env.production`);智能体 `model` 占位符按 `../docs/fr1-agents.md` §1.3 在打包前替换 | 内置默认供应商/模型改为白标默认;6 个智能体定义的 `【provider:model,…】` 占位替换 |
 | 4 | NOTICE / 许可证(必须保留) | 根 `LICENSE`(Apache-2.0)、`NOTICE.md`、`THIRD-PARTY-NOTICES.md`;打包期 `scripts/third-party-notices.mjs`(`stageElectronNotices`、`noticesFileName`)随安装包分发 | **不删不改署名**;第三方许可证清单随包分发(PRD 5.4 合规要点);第三方组件许可证检查进发布门禁(PRD 8.8) |
-| 5 | 去 Z.ai / ZCode 商标字样 | UI 文案与配置:`packages/ui/src/WelcomeScreen.tsx`、`packages/ui/src/login/*`、`packages/ui/src/settings/ModelProviderSection.tsx`、`packages/ui/src/settings/model-provider-section/codingPlanPricingCards.ts`、`packages/ui/src/lib/productDocs.ts`、`packages/ui/src/lib/appTelemetry.ts`、`packages/ui/src/i18n/locales/{zh-CN,en-US}.ts`、`packages/ui/src/assets/provider-icons/model-provider-logo-sources.json` 等(grep `Z\.ai|ZCode` 命中清单) | 商标性使用全部替换为 HBA;**但 LICENSE/NOTICE/THIRD-PARTY-NOTICES 中的上游版权与名称声明依法保留**(Apache-2.0 条款) |
+| 5 | 去 Z.ai / ZCode 商标字样 | UI 文案与配置:`packages/ui/src/WelcomeScreen.tsx`、`packages/ui/src/login/*`、`packages/ui/src/settings/ModelProviderSection.tsx`、`packages/ui/src/settings/model-provider-section/codingPlanPricingCards.ts`、`packages/ui/src/lib/productDocs.ts`、`packages/ui/src/lib/appTelemetry.ts`、`packages/ui/src/i18n/locales/{zh-CN,en-US}.ts`、`packages/ui/src/assets/provider-icons/model-provider-logo-sources.json` 等(grep `Z\.ai|ZCode` 命中清单) | 商标性使用全部替换为 HBA;**但 LICENSE/NOTICE/THIRD-PARTY-NOTICES 中的上游版权与名称声明依法保留**(Apache-2.0 条款)。**✅ fr13 已完成 ZCode→VCode 全量改名(`branding/apply-whitelabel.mjs`,版权/署名行依法保留);Z.ai 供应商图标(OAuth 登录)按供应商品牌保留** |
 | 6 | 更新/登录等远程端点 | `packages/desktop/dev-app-update.yml`、`app-update.yml`(安装包 resources)、登录/用量上报(`useUsageStats.ts`、`codingPlanUsageSources.ts`) | 白标包默认关闭或指向 HBA 端点;不留 Z.ai 通道(**待产品确认**关闭策略) |
 
 ## 5. 核心 diff 最小化原则(PRD 5.1 / 7.5)
@@ -86,8 +86,20 @@ pnpm run test:unit                # vitest 单元测试(排除 desktop e2e)
 | `patches/fr5-02-bottom-open-terminal-button.patch` | FR-5-2 底部"打开终端"按钮 → 右侧面板终端页签打开/聚焦(5 文件,+172 行,含 3 个新文件) | 同上 |
 | `patches/fr3-01-git-worktree-create-service.patch` | FR-3-2 worktree 创建服务层(shared 类型 + IGitService + gitCliRepo `git worktree add`) | `../docs/fr3-git-worktree-plan.md` |
 | `patches/fr3-02-gitpane-worktree-entry.patch` | FR-3-2 GitPane 入口按钮 + 创建对话框 + 新会话打开 + i18n | 同上 |
+| `patches/fr13-01-remove-tasknav-arrows.patch` | fr13-01 删除左上角任务导航箭头整套(7 文件 + locale 2 词条,含 props 链路死代码) | `../docs/fr13-whitelabel-vcode.md` |
+| `patches/fr13-02-whitelabel-brand-icons.patch` | fr13-02 应用内品牌图标代码(启动壳×3/About/登录/引导/分享卡/空态/logo 组件重写) | 同上 |
+| `patches/fr14-01-footer-entry-row-icons.patch` | fr14 自动化/插件市场入口迁底部图标行(仅图标,顺序 自动化\|统计\|插件市场\|手机连接\|设置) | `../docs/fr14-footer-entry-row.md` |
+| `patches/fr15-01-whitelabel-ui-batch.patch` | fr15 六项 UI 修正(自动化点击修复/去左上角图标/新会话徽标改小/创建弹框只选文件夹/右上角 git 快捷簇常驻/设置去智谱套餐) | `../docs/fr15-whitelabel-ui-batch.md` |
+| `patches/fr15-02-branch-switcher-git-actions.patch` | fr15-02 分支弹层补齐拉取/提交或推送(与右上角 git 面板一致) | `../docs/fr15-whitelabel-ui-batch.md` |
+| `branding/apply-whitelabel.mjs`(**脚本**,非补丁) | fr13 白标改名:独立词 ZCode→VCode(约 740 文件)+ 产品身份/进程名定点转换;版权/署名行依法豁免 | 同上 |
+| `branding/generate-icons.py` + `branding/icons/`(**脚本**,非补丁) | fr13 图标资产:由 `icons/hba-icon-1024.png` 生成全套 ico/icns/png 并铺到既有位置(含 favicon data URI) | 同上 |
 
-3. 新增核心改动必须进 `patches/` 并在本表登记;每个补丁独立可应用、可回退(`git apply -R`);
+> **白标批次为何用脚本**:改名/图标天然触碰数百文件与二进制资产,固化 patch 会在季度
+> rebase 时大面积冲突;脚本幂等可重放,rebase 后重跑一遍即收敛(「可重放的补丁」)。
+> 顺序约束:fr13-01 → apply-whitelabel.mjs(改名)→ fr13-02(上下文为改名后文本)→ generate-icons.py。
+> **编号让位**:同日并行批次已占用 fr9-01(Git 拉取)/fr10-01(文件树)/fr11-01(保活)/fr12-01(launcher),白标批次=fr13。
+
+3. 新增核心改动必须进 `patches/`(或白标 `branding/` 脚本)并在本表登记;每个补丁独立可应用、可回退(`git apply -R`);
 4. 代码规范、提交规范沿用上游约定(oxlint / oxfmt,`pnpm run lint`、`pnpm run fmt`),降低合并成本(PRD 7.5)。
 
 ```bash
@@ -96,7 +108,14 @@ git apply fork/patches/fr5-01-remove-topbar-terminal-button.patch
 git apply fork/patches/fr5-02-bottom-open-terminal-button.patch
 git apply fork/patches/fr3-01-git-worktree-create-service.patch
 git apply fork/patches/fr3-02-gitpane-worktree-entry.patch
-# 一次性校验:git apply --check 各补丁;四个补丁叠加已验证无冲突。
+git apply fork/patches/fr13-01-remove-tasknav-arrows.patch
+node fork/branding/apply-whitelabel.mjs .
+git apply fork/patches/fr13-02-whitelabel-brand-icons.patch
+python fork/branding/generate-icons.py .
+git apply fork/patches/fr14-01-footer-entry-row-icons.patch
+git apply fork/patches/fr15-01-whitelabel-ui-batch.patch
+git apply fork/patches/fr15-02-branch-switcher-git-actions.patch
+# 一次性校验:git apply --check 各补丁;叠加已验证无冲突(fr13 四步管线经干净 worktree 逐字节重现)。
 ```
 
 ## 6. 季度 rebase 流程(PRD 7.3"每季度评估 rebase 一次",R1)
@@ -120,6 +139,6 @@ git apply fork/patches/fr3-02-gitpane-worktree-entry.patch
 |---|---|---|
 | 1 | 基线完整 SHA 与上游 tag 命名(`git clone` 后 `git tag -l` 补录) | 待源码确认 |
 | 2 | Windows 签名 / NSIS 安装器定制与 macOS 签名(`ZCODE_ENABLE_MAC_SIGN`)实测 | 未实测 |
-| 3 | 白标应用名/appId/图标最终稿(HBA 侧设计资产) | 待设计输入 |
+| 3 | 白标应用名/appId/图标最终稿(HBA 侧设计资产) | **已定稿(fr13,2026-10-29)**:VCode / dev.vcode.app / HBA 六边形徽标;dmg 背景图待设计 |
 | 4 | 默认 provider/模型(白标默认值)与登录/更新端点关闭策略 | 待产品确认 |
-| 5 | `packages/ui` 中 Z.ai/ZCode 字样的完整替换清单(含埋点与 provider 图标资源)随白标 PR 逐项走查 | 进行中(本表 §4-5 为初版清单) |
+| 5 | `packages/ui` 中 Z.ai/ZCode 字样的完整替换清单(含埋点与 provider 图标资源)随白标 PR 逐项走查 | **ZCode→VCode 已全量完成(fr13)**;Z.ai 端点/埋点随 #4 端点策略一并走查 |

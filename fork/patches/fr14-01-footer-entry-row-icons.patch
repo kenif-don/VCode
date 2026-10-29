@@ -1,0 +1,343 @@
+diff --git a/packages/ui/src/WorkspaceSidebarFooter.tsx b/packages/ui/src/WorkspaceSidebarFooter.tsx
+index 2b7daa25..15658dfe 100644
+--- a/packages/ui/src/WorkspaceSidebarFooter.tsx
++++ b/packages/ui/src/WorkspaceSidebarFooter.tsx
+@@ -2,12 +2,13 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+ import type { Locale, UserInfo } from "@zcode/shared";
+ import { memo, type ReactNode } from "react";
+ import {
++  TID_AUTOMATIONS_OPEN,
+   TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON,
+   TID_TASK_SETTINGS_BUTTON,
+ } from "@zcode/shared/test-ids";
+ import { Button } from "@/components/ui/button.js";
+ import { cn } from "@/components/lib/utils.js";
+-import { BarChart3, Settings } from "lucide-react";
++import { BarChart3, Blocks, CalendarClock, Settings } from "lucide-react";
+ import type { Theme } from "@/useTheme.js";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import { setPendingSettingsUsageIntent } from "@/lib/settingsNavigation.js";
+@@ -17,6 +18,10 @@ import { WorkspaceWebRemoteControlTrigger } from "@/WorkspaceWebRemoteControlTri
+ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterComponent({
+   onSettingsButtonClick,
+   onUsageClick,
++  onOpenAutomations,
++  automationsActive,
++  onOpenPluginStore,
++  pluginStoreActive,
+   settingsButtonMode = "settings",
+   workspacePath,
+   workspaceIdentity,
+@@ -32,6 +37,11 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+   onThemeChange: (value: string) => void;
+   onSettingsButtonClick?: () => void;
+   onUsageClick?: () => void;
++  /** 自动化/插件市场入口(自侧栏顶部迁入的图标入口;Settings 复用 footer 时不传即不显示)。 */
++  onOpenAutomations?: () => void;
++  automationsActive?: boolean;
++  onOpenPluginStore?: () => void;
++  pluginStoreActive?: boolean;
+   onUpgradeClick?: Parameters<
+     typeof WorkspaceSidebarFooterUsageSummaryContent
+   >[0]["onUpgradeClick"];
+@@ -53,6 +63,8 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+       ? intl.formatMessage({ id: "workspace.backToWorkspace" })
+       : intl.formatMessage({ id: "settings.title" });
+   const usageStatsLabel = intl.formatMessage({ id: "sidebar.usage.plan.openStats" });
++  const automationsLabel = intl.formatMessage({ id: "workspace.openScheduledSettings" });
++  const pluginStoreLabel = intl.formatMessage({ id: "workspace.openPluginsSettings" });
+   const usageButtonClick = onUsageClick ?? onSettingsButtonClick;
+ 
+   return (
+@@ -61,8 +73,24 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+       {banner}
+       <div className="flex min-w-0 gap-2">
+         {/* HBA 白标：隐藏登录者信息入口与其点击展开菜单（登录信息/界面语言/主题/界面模式/缩放/登录登出），
+-            使用统计保留为图标入口，与手机连接、设置同一行，行内图标左对齐。 */}
++            底部统一图标行：自动化 | 使用统计 | 插件市场 | 手机连接 | 设置（自动化/插件市场自顶部导航迁入，仅图标）。 */}
+         <div className="flex shrink-0 items-center gap-1.5">
++          {onOpenAutomations ? (
++            <ControlHintTooltip title={automationsLabel}>
++              <Button
++                type="button"
++                variant="ghost"
++                size="icon-lg"
++                data-testid={TID_AUTOMATIONS_OPEN}
++                aria-label={automationsLabel}
++                aria-pressed={automationsActive ?? false}
++                className={cn(automationsActive && "bg-selected text-foreground")}
++                onClick={onOpenAutomations}
++              >
++                <CalendarClock className="size-4" />
++              </Button>
++            </ControlHintTooltip>
++          ) : null}
+           <ControlHintTooltip title={usageStatsLabel}>
+             <Button
+               type="button"
+@@ -78,6 +106,22 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+               <BarChart3 className="size-4" />
+             </Button>
+           </ControlHintTooltip>
++          {onOpenPluginStore ? (
++            <ControlHintTooltip title={pluginStoreLabel}>
++              <Button
++                type="button"
++                variant="ghost"
++                size="icon-lg"
++                data-testid="plugin-store-sidebar-open"
++                aria-label={pluginStoreLabel}
++                aria-pressed={pluginStoreActive ?? false}
++                className={cn(pluginStoreActive && "bg-selected text-foreground")}
++                onClick={onOpenPluginStore}
++              >
++                <Blocks className="size-4" />
++              </Button>
++            </ControlHintTooltip>
++          ) : null}
+           {isDesktop && workspacePath ? (
+             <WorkspaceWebRemoteControlTrigger
+               workspacePath={workspacePath}
+diff --git a/packages/ui/src/project-sidebar/ProjectSidebarNavigation.tsx b/packages/ui/src/project-sidebar/ProjectSidebarNavigation.tsx
+index c26d5b83..a225cd27 100644
+--- a/packages/ui/src/project-sidebar/ProjectSidebarNavigation.tsx
++++ b/packages/ui/src/project-sidebar/ProjectSidebarNavigation.tsx
+@@ -1,9 +1,5 @@
+-import { Blocks, CalendarClock } from "lucide-react";
+-import { TID_AUTOMATIONS_OPEN } from "@zcode/shared/test-ids";
+ import type { ProjectSidebarProps } from "@/project-sidebar/contract.js";
+-import { Button } from "@/components/ui/button.js";
+ import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
+-import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import { WebRemoteControlDeviceHeader } from "@/web-remote-control/WebRemoteControlDeviceHeader.js";
+ 
+ /** 顶部导航只展示 Shell 的选中状态，路由仍由 Shell 唯一持有。 */
+@@ -11,18 +7,10 @@ export function ProjectSidebarNavigation({
+   props,
+   onCreate,
+ }: {
+-  props: Pick<
+-    ProjectSidebarProps,
+-    | "isWebRemoteControl"
+-    | "onOpenAutomations"
+-    | "automationsActive"
+-    | "onOpenPluginStore"
+-    | "pluginStoreActive"
+-    | "webRemoteControlWorkspaceSwitcher"
+-  >;
++  // 自动化/插件市场入口已迁至底部图标行（WorkspaceSidebarFooter），不再从这里进入。
++  props: Pick<ProjectSidebarProps, "isWebRemoteControl" | "webRemoteControlWorkspaceSwitcher">;
+   onCreate(): void;
+ }) {
+-  const { intl } = useZCodeIntl();
+   const deviceNavigation = props.webRemoteControlWorkspaceSwitcher?.deviceNavigation;
+   return (
+     <div
+@@ -32,31 +20,6 @@ export function ProjectSidebarNavigation({
+       {/* Relay V2 远控：当前电脑是项目与任务的上一级，放在导航首行；手机端占用原顶部留白。 */}
+       {deviceNavigation ? <WebRemoteControlDeviceHeader navigation={deviceNavigation} /> : null}
+       <NewTaskButtonGroup onCreateTask={onCreate} />
+-      {props.onOpenAutomations ? (
+-        <Button
+-          variant="ghost"
+-          size="lg"
+-          className={`w-full justify-start gap-2 ${props.automationsActive ? "bg-selected text-foreground" : ""}`}
+-          aria-pressed={props.automationsActive ?? false}
+-          data-testid={TID_AUTOMATIONS_OPEN}
+-          // 点击事件不能进入业务导航的可选 automationId 参数。
+-          onClick={() => props.onOpenAutomations?.()}
+-        >
+-          <CalendarClock className="size-4" />
+-          {intl.formatMessage({ id: "workspace.openScheduledSettings" })}
+-        </Button>
+-      ) : null}
+-      <Button
+-        variant="ghost"
+-        size="lg"
+-        className={`w-full justify-start gap-2 ${props.pluginStoreActive ? "bg-selected text-foreground" : ""}`}
+-        aria-pressed={props.pluginStoreActive ?? false}
+-        data-testid="plugin-store-sidebar-open"
+-        onClick={() => props.onOpenPluginStore?.()}
+-      >
+-        <Blocks className="size-4" />
+-        {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
+-      </Button>
+     </div>
+   );
+ }
+diff --git a/packages/ui/src/project-sidebar/index.tsx b/packages/ui/src/project-sidebar/index.tsx
+index ac83de39..3db6766e 100644
+--- a/packages/ui/src/project-sidebar/index.tsx
++++ b/packages/ui/src/project-sidebar/index.tsx
+@@ -332,6 +332,10 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
+                 onThemeChange={changeTheme}
+                 onSettingsButtonClick={openSettings}
+                 onUsageClick={openSettings}
++                onOpenAutomations={props.onOpenAutomations}
++                automationsActive={props.automationsActive}
++                onOpenPluginStore={props.onOpenPluginStore}
++                pluginStoreActive={props.pluginStoreActive}
+                 onUpgradeClick={upgrade}
+                 onLogin={props.onLogin}
+                 onLogout={props.onLogout}
+diff --git a/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts b/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts
+new file mode 100644
+index 00000000..7f0bd147
+--- /dev/null
++++ b/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts
+@@ -0,0 +1,114 @@
++// @vitest-environment jsdom
++import { createElement } from "react";
++import { cleanup, fireEvent, render, screen } from "@testing-library/react";
++import { afterEach, expect, it, vi } from "vitest";
++import { WorkspaceSidebarFooter } from "@/WorkspaceSidebarFooter.js";
++import {
++  TID_AUTOMATIONS_OPEN,
++  TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON,
++  TID_TASK_SETTINGS_BUTTON,
++} from "@zcode/shared/test-ids";
++
++vi.mock("@/ControlHintTooltip.js", async (importOriginal) => ({
++  ...(await importOriginal<typeof import("@/ControlHintTooltip.js")>()),
++  ControlHintTooltip: ({ children, title }: { children: unknown; title: string }) =>
++    createElement("span", { "data-tooltip-title": title }, children),
++}));
++
++vi.mock("@/WorkspaceWebRemoteControlTrigger.js", () => ({
++  WorkspaceWebRemoteControlTrigger: () =>
++    createElement("button", {
++      "data-testid": "web-remote-control-trigger",
++    }),
++}));
++
++vi.mock("@/i18n/IntlProvider.js", () => ({
++  useZCodeIntl: () => ({
++    intl: { formatMessage: ({ id }: { id: string }) => id },
++  }),
++}));
++
++afterEach(cleanup);
++
++function footerProps(overrides: Record<string, unknown> = {}) {
++  return {
++    theme: "light",
++    localeMenuValue: "zh-CN",
++    onLocaleChange: vi.fn(),
++    onThemeChange: vi.fn(),
++    ...overrides,
++  } as Parameters<typeof WorkspaceSidebarFooter>[0];
++}
++
++it("入口行顺序:自动化 → 使用统计 → 插件市场 → 手机连接 → 设置,自动化/插件市场仅图标", () => {
++  const onOpenAutomations = vi.fn();
++  const onOpenPluginStore = vi.fn();
++  render(
++    createElement(
++      WorkspaceSidebarFooter,
++      footerProps({
++        isDesktop: true,
++        workspacePath: "/local",
++        onSettingsButtonClick: vi.fn(),
++        onOpenAutomations,
++        onOpenPluginStore,
++      }),
++    ),
++  );
++  const scheduled = screen.getByTestId(TID_AUTOMATIONS_OPEN);
++  const usage = screen.getByTestId(TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON);
++  const plugins = screen.getByTestId("plugin-store-sidebar-open");
++  const remote = screen.getByTestId("web-remote-control-trigger");
++  const settings = screen.getByTestId(TID_TASK_SETTINGS_BUTTON);
++
++  // 仅图标入口：不渲染文字，悬停提示（data-tooltip-title）与 aria-label 承载名称。
++  expect(scheduled.textContent).toBe("");
++  expect(plugins.textContent).toBe("");
++  expect(scheduled.getAttribute("aria-label")).toBe("workspace.openScheduledSettings");
++  expect(plugins.getAttribute("aria-label")).toBe("workspace.openPluginsSettings");
++  expect(
++    scheduled.parentElement?.getAttribute("data-tooltip-title"),
++  ).toBe("workspace.openScheduledSettings");
++
++  // DOM 顺序即行内顺序。
++  const order = [scheduled, usage, plugins, remote, settings];
++  for (let i = 1; i < order.length; i += 1) {
++    expect(
++      order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING,
++    ).toBeTruthy();
++  }
++
++  fireEvent.click(scheduled);
++  expect(onOpenAutomations).toHaveBeenCalledOnce();
++  fireEvent.click(plugins);
++  expect(onOpenPluginStore).toHaveBeenCalledOnce();
++});
++
++it("未传 handler（Settings 复用 footer）时自动化/插件市场不渲染", () => {
++  render(
++    createElement(
++      WorkspaceSidebarFooter,
++      footerProps({ onSettingsButtonClick: vi.fn() }),
++    ),
++  );
++  expect(screen.queryByTestId(TID_AUTOMATIONS_OPEN)).toBeNull();
++  expect(screen.queryByTestId("plugin-store-sidebar-open")).toBeNull();
++  expect(screen.getByTestId(TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON)).toBeTruthy();
++  expect(screen.getByTestId(TID_TASK_SETTINGS_BUTTON)).toBeTruthy();
++});
++
++it("选中态映射到图标按钮的按下态", () => {
++  render(
++    createElement(
++      WorkspaceSidebarFooter,
++      footerProps({
++        onOpenAutomations: vi.fn(),
++        automationsActive: true,
++        onOpenPluginStore: vi.fn(),
++        pluginStoreActive: false,
++      }),
++    ),
++  );
++  expect(screen.getByTestId(TID_AUTOMATIONS_OPEN).getAttribute("aria-pressed")).toBe("true");
++  expect(screen.getByTestId("plugin-store-sidebar-open").getAttribute("aria-pressed")).toBe("false");
++});
+diff --git a/packages/ui/test/workspaceSidebarWebRemoteMobileLayout.test.ts b/packages/ui/test/workspaceSidebarWebRemoteMobileLayout.test.ts
+index d8ae3bd5..de4577ee 100644
+--- a/packages/ui/test/workspaceSidebarWebRemoteMobileLayout.test.ts
++++ b/packages/ui/test/workspaceSidebarWebRemoteMobileLayout.test.ts
+@@ -2,6 +2,7 @@
+ import { createElement } from "react";
+ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { TID_AUTOMATIONS_OPEN } from "@zcode/shared/test-ids";
+ import type {
+   ProjectSidebarProps,
+   ProjectTree,
+@@ -196,21 +197,18 @@ describe("virtual-project sidebar on desktop and mobile", () => {
+     await waitFor(() => expect(screen.queryByText("common.loading")).toBeNull());
+     expect(fixture.sourceManagement).not.toHaveBeenCalled();
+   });
+-  it("keeps plugin navigation immediately after automations and calls the selected destination", () => {
+-    const onOpenPluginStore = vi.fn();
++  it("moves automations and plugin store out of the top navigation (footer stub owns the row)", () => {
+     render(
+       createElement(
+         Sidebar,
+-        props({ isDesktop: true, onOpenAutomations: vi.fn(), onOpenPluginStore }),
++        props({ isDesktop: true, onOpenAutomations: vi.fn(), onOpenPluginStore: vi.fn() }),
+       ),
+     );
+-    const scheduled = screen.getByText("workspace.openScheduledSettings");
+-    const plugins = screen.getByText("workspace.openPluginsSettings");
+-    expect(
+-      scheduled.compareDocumentPosition(plugins) & Node.DOCUMENT_POSITION_FOLLOWING,
+-    ).toBeTruthy();
+-    fireEvent.click(plugins);
+-    expect(onOpenPluginStore).toHaveBeenCalledOnce();
++    // 顶部「新建任务」下方不再有文字入口；入口行由 WorkspaceSidebarFooter 承载（本文件是桩，行为见 workspaceSidebarFooterEntryRow）。
++    expect(screen.queryByText("workspace.openScheduledSettings")).toBeNull();
++    expect(screen.queryByText("workspace.openPluginsSettings")).toBeNull();
++    expect(screen.queryByTestId(TID_AUTOMATIONS_OPEN)).toBeNull();
++    expect(screen.queryByTestId("plugin-store-sidebar-open")).toBeNull();
+   });
+   it("inherits current organization at the top entry and keeps section new-task unclassified", () => {
+     const onCreateTask = vi.fn();

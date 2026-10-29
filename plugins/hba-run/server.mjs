@@ -102,6 +102,38 @@ function writeUiStateFile(state) {
 }
 
 // ---------------------------------------------------------------------------
+// 输出解码:Windows 中文环境的子进程(ffmpeg 包装脚本、批处理、控制台程序)常按
+// 系统 ANSI 代码页(GBK/CP936)输出字节流,与 UTF-8 输出混存。一律按 UTF-8 解会把
+// GBK 汉字解成乱码。按字节切行(0x0A 不会出现在 UTF-8/GBK 多字节序列内部)后逐行
+// 自适应解码:先严格 UTF-8,失败回退 GBK,都不可用时有损 UTF-8。
+// ---------------------------------------------------------------------------
+
+const utf8StrictDecoder = new TextDecoder("utf-8", { fatal: true });
+const utf8LossyDecoder = new TextDecoder("utf-8");
+let gbkDecoder = null;
+try {
+  gbkDecoder = new TextDecoder("gbk");
+} catch {
+  /* small-icu 构建缺 GBK 时退化为有损 UTF-8 */
+}
+
+function decodeOutputLine(buf) {
+  if (!buf || !buf.length) return "";
+  try {
+    return utf8StrictDecoder.decode(buf);
+  } catch {
+    if (gbkDecoder) {
+      try {
+        return gbkDecoder.decode(buf);
+      } catch {
+        /* fall through */
+      }
+    }
+    return utf8LossyDecoder.decode(buf);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Run manager
 // ---------------------------------------------------------------------------
 
@@ -144,8 +176,8 @@ class Run {
     this.child = null;
     this.stopTimer = null;
     this.notifyTimer = null;
-    this.partialStdout = "";
-    this.partialStderr = "";
+    this.partialStdout = Buffer.alloc(0);
+    this.partialStderr = Buffer.alloc(0);
     this.exited = false;
   }
 
@@ -227,11 +259,12 @@ function startRun(config) {
   run.appendLine("system", `[hba-run] started: ${run.command} (cwd: ${cwd}, pid: ${run.pid})`);
 
   const pump = (stream, run2, key) => (chunk) => {
-    run2[key] += chunk.toString("utf8");
-    let idx;
-    while ((idx = run2[key].indexOf("\n")) >= 0) {
-      const line = run2[key].slice(0, idx).replace(/\r$/, "");
-      run2[key] = run2[key].slice(idx + 1);
+    run2[key] = Buffer.concat([run2[key], chunk]);
+    let nl;
+    while ((nl = run2[key].indexOf(0x0a)) >= 0) {
+      const raw = run2[key].subarray(0, nl);
+      run2[key] = run2[key].subarray(nl + 1);
+      const line = decodeOutputLine(raw).replace(/\r$/, "");
       run2.appendLine(stream, line);
     }
   };
@@ -247,13 +280,13 @@ function startRun(config) {
 
   child.on("exit", (code, signal) => {
     // flush partial trailing lines
-    if (run.partialStdout) {
-      run.appendLine("stdout", run.partialStdout);
-      run.partialStdout = "";
+    if (run.partialStdout.length) {
+      run.appendLine("stdout", decodeOutputLine(run.partialStdout));
+      run.partialStdout = Buffer.alloc(0);
     }
-    if (run.partialStderr) {
-      run.appendLine("stderr", run.partialStderr);
-      run.partialStderr = "";
+    if (run.partialStderr.length) {
+      run.appendLine("stderr", decodeOutputLine(run.partialStderr));
+      run.partialStderr = Buffer.alloc(0);
     }
     let state;
     if (run.stopped) state = "exited"; // user-initiated stop is not a failure
@@ -348,6 +381,8 @@ function stopRun(run, graceMs = DEFAULT_STOP_GRACE_MS) {
 
 /**
  * Kill a process and all of its descendants. force=true -> uncatchable kill.
+ * Resolves when the kill operation has actually been issued/completed — the
+ * caller MUST await it when the process is about to exit (see shutdown).
  *
  * Windows: `taskkill /pid <pid> /T` (WM_CLOSE-based, graceful-ish) and
  * `taskkill /pid <pid> /T /F` (force). The direct child is deliberately NOT
@@ -360,40 +395,45 @@ function stopRun(run, graceMs = DEFAULT_STOP_GRACE_MS) {
  */
 function killTree(run, force) {
   const pid = run.pid;
-  if (!pid) return;
+  if (!pid) return Promise.resolve();
   if (IS_WIN) {
     const args = ["/pid", String(pid), "/T"];
     if (force) args.push("/F");
-    execFile("taskkill", args, { windowsHide: true }, (err) => {
-      if (err && force) {
-        // Last resort (e.g. taskkill missing): kill the direct child only.
-        try {
-          run.child.kill("SIGKILL");
-        } catch {
-          /* already dead */
+    return new Promise((resolve) => {
+      execFile("taskkill", args, { windowsHide: true }, (err) => {
+        if (err && force) {
+          // Last resort (e.g. taskkill missing): kill the direct child only.
+          try {
+            run.child.kill("SIGKILL");
+          } catch {
+            /* already dead */
+          }
         }
-      }
+        resolve();
+      });
     });
-  } else {
+  }
+  try {
+    process.kill(-pid, force ? "SIGKILL" : "SIGTERM");
+  } catch {
     try {
-      process.kill(-pid, force ? "SIGKILL" : "SIGTERM");
+      run.child.kill(force ? "SIGKILL" : "SIGTERM");
     } catch {
-      try {
-        run.child.kill(force ? "SIGKILL" : "SIGTERM");
-      } catch {
-        /* already dead */
-      }
+      /* already dead */
     }
   }
+  return Promise.resolve();
 }
 
 function killAllRuns() {
+  const jobs = [];
   for (const run of runs.values()) {
     if (!run.exited && run.child) {
       run.stopped = true;
-      killTree(run, true);
+      jobs.push(killTree(run, true));
     }
   }
+  return Promise.all(jobs);
 }
 
 // ---------------------------------------------------------------------------
@@ -941,14 +981,25 @@ process.stdin.on("data", (chunk) => {
   }
 });
 
+let shuttingDown = false;
 function shutdown() {
-  killAllRuns();
+  if (shuttingDown) return;
+  shuttingDown = true;
+  // fr9-02: 必须等 killAllRuns 的 taskkill 回调完成再退出。此前 process.exit(0)
+  // 抢跑在 execFile 之前,taskkill 根本没执行,运行中的服务漏杀成孤儿继续跑,
+  // 面板重开后状态与现实脱节(显示未启动、端口仍被占)。
+  const kills = killAllRuns();
   try {
     saveStore();
   } catch {
     /* best effort */
   }
-  process.exit(0);
+  const deadline = setTimeout(() => process.exit(0), 3000);
+  if (typeof deadline.unref === "function") deadline.unref();
+  kills.then(
+    () => process.exit(0),
+    () => process.exit(0)
+  );
 }
 process.stdin.on("end", shutdown);
 process.stdin.on("close", shutdown);

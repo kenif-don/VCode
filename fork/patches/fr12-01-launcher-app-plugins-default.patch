@@ -1,0 +1,455 @@
+diff --git a/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx b/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx
+index ae48e3da..0564a1de 100644
+--- a/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx
++++ b/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx
+@@ -868,49 +868,46 @@ export function AnimatedSidePanePanel({
+               />
+             ))}
+           </div>
+-          {/* 空会话暂不支持应用插件，连同分区入口一起隐藏。 */}
+-          {activeTaskId ? (
+-            <>
+-              <div aria-hidden="true" className="my-4 h-px w-24 self-center bg-border" />
+-              <section className="min-w-0" data-testid="side-pane-ui-recommendations">
+-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+-                  <h2 className="pl-2 text-ui-lg font-semibold text-foreground">
+-                    {intl.formatMessage({ id: "settings.plugins.store.ui.title" })}
+-                  </h2>
+-                  <Button
+-                    type="button"
+-                    variant="ghost"
+-                    size="sm"
+-                    className="shrink-0 text-foreground-subtle"
+-                    data-testid="side-pane-plugin-market"
+-                    onClick={() => {
+-                      if (!onOpenPluginMarket) return;
+-                      setMarketReturnTarget({
+-                        workspaceKey,
+-                        ownerId: sidePaneOwnerId ?? null,
+-                        tabId: visibleActiveTabId,
+-                      });
+-                      onOpenPluginMarket();
+-                    }}
+-                  >
+-                    {intl.formatMessage({ id: "sidePane.launcher.viewAllPlugins" })}
+-                    <ChevronRightIcon className="size-3.5" aria-hidden="true" />
+-                  </Button>
+-                </div>
+-                <div className="mt-2 grid min-w-0 grid-cols-1 gap-x-8 gap-y-1 @min-[36rem]/launcher:grid-cols-2">
+-                  {onOpenPluginUi ? (
+-                    <PluginUiLauncherItems
+-                      workspacePath={workspaceAbsPath}
+-                      workspaceIdentity={workspaceIdentity}
+-                      remoteSessionId={workspaceRemoteSessionId}
+-                      sessionId={activeTaskId}
+-                      onOpenPluginUi={onOpenPluginUi}
+-                    />
+-                  ) : null}
+-                </div>
+-              </section>
+-            </>
+-          ) : null}
++          {/* HBA fr12：应用插件区不再随空会话隐藏——新会话（草稿态）也默认显示全部条目；
++              草稿点击时由宿主按需补建 deferred 托管会话（面板已是项目级，会话只作宿主绑定）。 */}
++          <div aria-hidden="true" className="my-4 h-px w-24 self-center bg-border" />
++          <section className="min-w-0" data-testid="side-pane-ui-recommendations">
++            <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
++              <h2 className="pl-2 text-ui-lg font-semibold text-foreground">
++                {intl.formatMessage({ id: "settings.plugins.store.ui.title" })}
++              </h2>
++              <Button
++                type="button"
++                variant="ghost"
++                size="sm"
++                className="shrink-0 text-foreground-subtle"
++                data-testid="side-pane-plugin-market"
++                onClick={() => {
++                  if (!onOpenPluginMarket) return;
++                  setMarketReturnTarget({
++                    workspaceKey,
++                    ownerId: sidePaneOwnerId ?? null,
++                    tabId: visibleActiveTabId,
++                  });
++                  onOpenPluginMarket();
++                }}
++              >
++                {intl.formatMessage({ id: "sidePane.launcher.viewAllPlugins" })}
++                <ChevronRightIcon className="size-3.5" aria-hidden="true" />
++              </Button>
++            </div>
++            <div className="mt-2 grid min-w-0 grid-cols-1 gap-x-8 gap-y-1 @min-[36rem]/launcher:grid-cols-2">
++              {onOpenPluginUi ? (
++                <PluginUiLauncherItems
++                  workspacePath={workspaceAbsPath}
++                  workspaceIdentity={workspaceIdentity}
++                  remoteSessionId={workspaceRemoteSessionId}
++                  sessionId={activeTaskId}
++                  onOpenPluginUi={onOpenPluginUi}
++                />
++              ) : null}
++            </div>
++          </section>
+         </div>
+       </div>
+     </div>
+diff --git a/packages/ui/src/hooks/useAppPanels.ts b/packages/ui/src/hooks/useAppPanels.ts
+index d76cad81..94aece9b 100644
+--- a/packages/ui/src/hooks/useAppPanels.ts
++++ b/packages/ui/src/hooks/useAppPanels.ts
+@@ -86,6 +86,8 @@ import {
+ import { openPluginUiSidePane } from "@/plugin-ui/index.js";
+ import type { OpenPluginUiSideTabRequest } from "@/plugin-ui/contract.js";
+ import { logger } from "@/logger.js";
++import { toast } from "@/components/ui/toast.js";
++import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import { getPathLeaf, joinFilePath, toFileUrl } from "@/lib/path.js";
+ import { shouldOpenWorkflowArtifactInBrowser } from "@/lib/workflowArtifactOpen.js";
+ import { useWhiteboardStore } from "@/store/whiteboardStore.js";
+@@ -186,6 +188,7 @@ export function useAppPanels(options: {
+   const supportsEmbeddedBrowser = explicitSupportsEmbeddedBrowser ?? Boolean(isDesktop);
+   const activeWorkspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
+   const { zcodeAgentService, zcodeSessionService } = useServices();
++  const { intl } = useZCodeIntl();
+   const isOfficeMode = useIsOfficeMode();
+   const sidePaneMemoryKey = useMemo(
+     () =>
+@@ -1068,21 +1071,64 @@ export function useAppPanels(options: {
+     [commitOpenedSidePaneState, revealSidePaneForCurrentOwner],
+   );
+ 
++  // HBA fr12：草稿（新会话未发首条消息）点开应用插件面板时没有可绑定会话，按需补建一个
++  // deferred 托管会话（不进任务索引/侧栏，随 runtime 生命周期消亡），同一工作区复用同一个。
++  // 会话只作面板宿主绑定（资源读取/工具调用/投影），面板 tab 仍是项目级（fr8）。
++  const pluginUiHostSessionsRef = useRef(new Map<string, string>());
++  const resolvePluginUiHostSession = useCallback(async (): Promise<string | null> => {
++    const workspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
++    const existing = pluginUiHostSessionsRef.current.get(workspaceKey);
++    if (existing) return existing;
++    try {
++      const snapshot = await zcodeSessionService.createSession({
++        workspacePath: workspaceAbsPath,
++        ...(workspaceIdentity?.trim() ? { workspaceIdentity } : {}),
++        ...(workspaceRemoteSessionId ? { remoteSessionId: workspaceRemoteSessionId } : {}),
++        persistence: "deferred",
++      });
++      pluginUiHostSessionsRef.current.set(workspaceKey, snapshot.session.sessionId);
++      logger.info("[App] 已补建插件面板托管会话", {
++        sessionId: snapshot.session.sessionId,
++        workspaceKey,
++      });
++      return snapshot.session.sessionId;
++    } catch (error) {
++      logger.warn("[App] 补建插件面板托管会话失败", error);
++      return null;
++    }
++  }, [workspaceAbsPath, workspaceIdentity, workspaceRemoteSessionId, zcodeSessionService]);
++
+   const handleOpenPluginUi = useCallback(
+     (request: OpenPluginUiSideTabRequest) => {
+       const workspaceKey = request.workspaceIdentity?.trim() || request.workspacePath;
+-      revealSidePaneForCurrentOwner();
+-      commitOpenedSidePaneState((current) =>
+-        openPluginUiSidePane(current, { ...request, workspaceKey }),
+-      );
+-      logger.debug("[App] 打开插件 UI 右侧 tab", {
+-        parentSessionId: request.parentSessionId,
+-        toolCallId: request.toolCallId,
+-        pluginId: request.pluginId,
+-        workspaceKey,
++      const open = (parentSessionId: string) => {
++        revealSidePaneForCurrentOwner();
++        commitOpenedSidePaneState((current) =>
++          openPluginUiSidePane(current, { ...request, parentSessionId, workspaceKey }),
++        );
++        logger.debug("[App] 打开插件 UI 右侧 tab", {
++          parentSessionId,
++          toolCallId: request.toolCallId,
++          pluginId: request.pluginId,
++          workspaceKey,
++        });
++      };
++      if (request.parentSessionId) {
++        open(request.parentSessionId);
++        return;
++      }
++      // 草稿态：先补建托管会话再开 tab；失败走既有「需要会话」提示，不落半开 tab。
++      void resolvePluginUiHostSession().then((hostSessionId) => {
++        if (hostSessionId) {
++          open(hostSessionId);
++          return;
++        }
++        toast(intl.formatMessage({ id: "settings.plugins.store.ui.needsSession" }), {
++          variant: "warning",
++        });
+       });
+     },
+-    [commitOpenedSidePaneState, revealSidePaneForCurrentOwner],
++    [commitOpenedSidePaneState, intl, resolvePluginUiHostSession, revealSidePaneForCurrentOwner],
+   );
+ 
+   const handleOpenWorkflowRun = useCallback(
+diff --git a/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts b/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts
+index 0ea519e9..1a02abdb 100644
+--- a/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts
++++ b/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts
+@@ -26,9 +26,9 @@ export function useRecommendedUiPlugins(target: {
+   } = useServices();
+   const store = useScopedPluginManagementStore(service);
+   const state = store();
+-  const { recommendations, loading: configLoading } = useUiPluginRecommendations(
+-    target.sessionId !== null,
+-  );
++  // HBA fr12：条目在草稿态（新会话）也列出——推荐读取与目录初始化不再等正式会话，
++  // 此前的 sessionId 门属于「空会话整区隐藏」时代的遗留（读取本就 workspace 级）。
++  const { recommendations, loading: configLoading } = useUiPluginRecommendations(true);
+   const key = JSON.stringify([
+     target.workspacePath,
+     target.workspaceIdentity,
+@@ -47,7 +47,7 @@ export function useRecommendedUiPlugins(target: {
+     let active = true;
+     current.current = context;
+     setReady(undefined);
+-    if (service && target.sessionId !== null) {
++    if (service) {
+       void store
+         .getState()
+         .initialize({
+@@ -134,8 +134,7 @@ export function useRecommendedUiPlugins(target: {
+   };
+   return {
+     entries,
+-    loading:
+-      target.sessionId !== null && (configLoading || (Boolean(service) && ready !== context)),
++    loading: configLoading || (Boolean(service) && ready !== context),
+     resolveSurface,
+     prepare,
+     isBusy: (item: StorePluginItem) => isItemBusy(item, state),
+diff --git a/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx b/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx
+index ba509cb4..01c88541 100644
+--- a/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx
++++ b/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx
+@@ -19,7 +19,10 @@ export interface PluginUiLauncherItemsProps {
+   workspacePath: string;
+   workspaceIdentity?: string;
+   remoteSessionId?: string;
+-  /** 正式会话 id；草稿态为 null，此时不显示入口（面板是会话级，第一版不支持草稿）。 */
++  /**
++   * 正式会话 id；草稿态（新会话未发首条消息）为 null——条目照常列出，打开时由宿主
++   * 按需补建 deferred 托管会话（HBA fr12：应用插件区不再随空会话隐藏）。
++   */
+   sessionId: string | null;
+   onOpenPluginUi: (request: OpenPluginUiSideTabRequest) => void;
+   /** 菜单复用标准菜单项；空白页与内置应用共用 SidePaneLauncherRow。 */
+@@ -88,7 +91,8 @@ export function PluginUiLauncherItems(props: PluginUiLauncherItemsProps) {
+       </div>
+     );
+   }
+-  if (props.sessionId === null || entries.length === 0)
++  // HBA fr12：草稿态（sessionId=null）也列出条目，不再只留空态文案；仅确实无推荐条目才显示空态。
++  if (entries.length === 0)
+     return props.variant === "menu" ? null : (
+       <p className="text-ui-base text-foreground-subtle" data-testid="side-pane-ui-empty">
+         {intl.formatMessage({ id: "sidePane.launcher.empty" })}
+diff --git a/packages/ui/src/plugin-ui/contract.example.ts b/packages/ui/src/plugin-ui/contract.example.ts
+index 17b650f0..f085877b 100644
+--- a/packages/ui/src/plugin-ui/contract.example.ts
++++ b/packages/ui/src/plugin-ui/contract.example.ts
+@@ -13,14 +13,14 @@ export const examplePresentation: PluginUiPresentation = {
+   prefersBorder: true,
+ };
+ 
+-/** 内联卡片 / 面板入口请求打开侧栏时的载荷，以及据此创建的 tab。 */
++/** 内联卡片 / 面板入口请求打开侧栏时的载荷，以及据此创建的 tab（会话必须已解析，见 OpenScopedPluginUiSideTabRequest）。 */
+ export function exampleOpenSideTab(request: OpenPluginUiSideTabRequest): PluginUiSidePaneTab {
+   const scope = readPluginUiScopeRef(request);
+   if (!scope) throw new Error("request needs toolCallId or surfaceId");
+   return {
+     id: buildPluginUiSidePaneTabId(request),
+     type: "plugin-ui",
+-    parentSessionId: request.parentSessionId,
++    parentSessionId: request.parentSessionId ?? "",
+     ...(request.toolCallId ? { toolCallId: request.toolCallId } : {}),
+     ...(request.surfaceId ? { surfaceId: request.surfaceId } : {}),
+     ...(request.serverName ? { serverName: request.serverName } : {}),
+diff --git a/packages/ui/src/plugin-ui/contract.test.ts b/packages/ui/src/plugin-ui/contract.test.ts
+index d4dda173..5050b22e 100644
+--- a/packages/ui/src/plugin-ui/contract.test.ts
++++ b/packages/ui/src/plugin-ui/contract.test.ts
+@@ -100,6 +100,33 @@ describe("plugin-ui contract", () => {
+     expect(PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX).toBe(240);
+   });
+ 
++  it("HBA fr12：草稿（会话待宿主补建）不改变面板 tab id，工具卡片必须带会话", () => {
++    const surfaceRequest = {
++      workspacePath: "/repo",
++      parentSessionId: null,
++      pluginId: "p",
++      surfaceId: "panel",
++      serverName: "p",
++      resourceUri: "ui://p/panel.html",
++      title: "Panel",
++    };
++    // 面板 tab id 的会话段恒为 "*"：草稿打开与正式会话打开收敛到同一 tab。
++    expect(buildPluginUiSidePaneTabId(surfaceRequest)).toBe(
++      buildPluginUiSidePaneTabId({ ...surfaceRequest, parentSessionId: "s1" }),
++    );
++    // 工具卡片 id 嵌会话段，草稿空会话属调用方编程错误，直接拒绝。
++    expect(() =>
++      buildPluginUiSidePaneTabId({
++        workspacePath: "/repo",
++        parentSessionId: null,
++        pluginId: "p",
++        toolCallId: "c1",
++        resourceUri: "ui://p/widget",
++        title: "Widget",
++      }),
++    ).toThrow("parentSessionId");
++  });
++
+   it("4a-0 / S3：会话动作只剩 sendFollowUp，命令端口是 sendText + uploadAttachment（widgetState 不再经会话命令）", () => {
+     const port: PluginUiSessionCommandPort = {
+       sendText: async () => "sent",
+diff --git a/packages/ui/src/plugin-ui/contract.ts b/packages/ui/src/plugin-ui/contract.ts
+index 64b722ce..19e78e88 100644
+--- a/packages/ui/src/plugin-ui/contract.ts
++++ b/packages/ui/src/plugin-ui/contract.ts
+@@ -47,7 +47,11 @@ export type PluginUiOpenTarget =
+ export type OpenPluginUiSideTabRequest = PluginUiOpenTarget & {
+   /** 手动新建的文档窗口身份；恢复标签页时保持不变。 */
+   instanceId?: string;
+-  parentSessionId: string;
++  /**
++   * 绑定会话 id；草稿态（新会话未发首条消息）为 null——宿主建 tab 前补建 deferred 托管会话
++   * （不进任务索引/侧栏，同工作区复用），tab 落地时必为具体会话 id（HBA fr12）。
++   */
++  parentSessionId: string | null;
+   pluginId: string;
+   resourceUri: string;
+   title: string;
+@@ -184,11 +188,14 @@ export function buildPluginUiSurfaceKey(
+ export function buildPluginUiSidePaneTabId(request: OpenPluginUiSideTabRequest): string {
+   const scope = readPluginUiScopeRef(request);
+   if (!scope) throw new Error("plugin-ui side tab needs toolCallId or surfaceId");
++  // 工具卡片归对话，id 必须嵌具体会话 id；草稿态（会话待宿主补建）只出现在面板（surface）打开。
++  if (scope.kind === "toolCall" && !request.parentSessionId)
++    throw new Error("plugin-ui tool card side tab needs parentSessionId");
+   return [
+     "plugin-ui",
+     request.workspaceIdentity?.trim() || request.workspacePath,
+     // 面板（surface）跟随项目：同工作区跨会话共用一个 tab；工具卡片仍归对话（HBA fr7）。
+-    scope.kind === "surface" ? "*" : request.parentSessionId,
++    scope.kind === "surface" ? "*" : request.parentSessionId ?? "",
+     request.pluginId,
+     request.serverName ?? "",
+     request.resourceUri,
+diff --git a/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts b/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts
+index 32d74b43..0a9fe049 100644
+--- a/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts
++++ b/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts
+@@ -3,7 +3,12 @@ import { activateSidePaneTab } from "@/lib/workspaceSidePane.js";
+ import type { OpenPluginUiSideTabRequest, PluginUiSidePaneTab } from "../contract.js";
+ import { buildPluginUiSidePaneTabId, readPluginUiScopeRef } from "../contract.js";
+ 
++/**
++ * 建 tab 前的请求：parentSessionId 以交集收窄为具体会话 id（草稿打开由宿主补建托管会话，
++ * HBA fr12）。不能用 Omit——请求是 toolCall/surface 两形态的 union，Omit 会丢判别字段。
++ */
+ export type OpenScopedPluginUiSideTabRequest = OpenPluginUiSideTabRequest & {
++  parentSessionId: string;
+   workspaceKey: string;
+ };
+ 
+diff --git a/packages/ui/test/useAppPanelsBrowserViewLifecycle.test.ts b/packages/ui/test/useAppPanelsBrowserViewLifecycle.test.ts
+index d36690eb..e0e2b257 100644
+--- a/packages/ui/test/useAppPanelsBrowserViewLifecycle.test.ts
++++ b/packages/ui/test/useAppPanelsBrowserViewLifecycle.test.ts
+@@ -29,6 +29,13 @@ vi.mock("@/logger.js", () => ({
+   },
+ }));
+ 
++vi.mock("@/i18n/IntlProvider.js", () => ({
++  useZCodeIntl: () => ({
++    intl: { formatMessage: ({ id }: { id: string }) => id },
++    locale: "zh-CN",
++  }),
++}));
++
+ type ReadyHandler = Parameters<NonNullable<IPlatformService["onBrowserViewReady"]>>[0];
+ type ReadyPayload = Parameters<ReadyHandler>[0];
+ type VisibilityHandler = Parameters<NonNullable<IPlatformService["onBrowserViewVisibility"]>>[0];
+diff --git a/packages/ui/test/useAppPanelsInterfaceMode.test.ts b/packages/ui/test/useAppPanelsInterfaceMode.test.ts
+index 5fda3eac..783005aa 100644
+--- a/packages/ui/test/useAppPanelsInterfaceMode.test.ts
++++ b/packages/ui/test/useAppPanelsInterfaceMode.test.ts
+@@ -9,6 +9,12 @@ vi.mock("@/hooks/useInterfaceMode.js", () => ({ useIsOfficeMode: () => mode.gene
+ vi.mock("@/hooks/useServices.js", () => ({
+   useServices: () => ({ zcodeSessionService: { closeSession: vi.fn(async () => {}) } }),
+ }));
++vi.mock("@/i18n/IntlProvider.js", () => ({
++  useZCodeIntl: () => ({
++    intl: { formatMessage: ({ id }: { id: string }) => id },
++    locale: "zh-CN",
++  }),
++}));
+ 
+ function renderPanels() {
+   return renderHook(() =>
+diff --git a/packages/ui/test/useAppPanelsScope.test.ts b/packages/ui/test/useAppPanelsScope.test.ts
+index 1a83a558..6d16d70f 100644
+--- a/packages/ui/test/useAppPanelsScope.test.ts
++++ b/packages/ui/test/useAppPanelsScope.test.ts
+@@ -10,6 +10,12 @@ vi.mock("@/hooks/useServices.js", () => ({
+   useServices: () => ({ zcodeSessionService: { closeSession: vi.fn(async () => {}) } }),
+ }));
+ vi.mock("@/logger.js", () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
++vi.mock("@/i18n/IntlProvider.js", () => ({
++  useZCodeIntl: () => ({
++    intl: { formatMessage: ({ id }: { id: string }) => id },
++    locale: "zh-CN",
++  }),
++}));
+ 
+ const a = { workspaceIdentity: "ssh://one/repo", ownerTaskId: "a" as string | null };
+ const b = { ...a, ownerTaskId: "b" };
+diff --git a/packages/ui/test/useAppPanelsWorkflowArtifactOpen.test.ts b/packages/ui/test/useAppPanelsWorkflowArtifactOpen.test.ts
+index 8213f9f5..b28bac60 100644
+--- a/packages/ui/test/useAppPanelsWorkflowArtifactOpen.test.ts
++++ b/packages/ui/test/useAppPanelsWorkflowArtifactOpen.test.ts
+@@ -37,6 +37,13 @@ vi.mock("@/logger.js", () => ({
+   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+ }));
+ 
++vi.mock("@/i18n/IntlProvider.js", () => ({
++  useZCodeIntl: () => ({
++    intl: { formatMessage: ({ id }: { id: string }) => id },
++    locale: "zh-CN",
++  }),
++}));
++
+ const WORKSPACE_PATH = "/repo";
+ const SESSION_ID = "sess-a";
+ const REPORT_URL = "file:///repo/.zcode/workflow-runs/run-1/report.html";
+diff --git a/packages/ui/test/useRecommendedUiPlugins.test.ts b/packages/ui/test/useRecommendedUiPlugins.test.ts
+index a45494bb..847fc9bf 100644
+--- a/packages/ui/test/useRecommendedUiPlugins.test.ts
++++ b/packages/ui/test/useRecommendedUiPlugins.test.ts
+@@ -79,6 +79,19 @@ it("未安装和禁用仍展示，复用 user 安装与 workspace 启用，不
+   );
+   expect(result.current.entries[0]!.item.info?.enabled).toBe(true);
+ });
++it("HBA fr12：草稿态（sessionId=null）同样列出条目，安装/启用可用", async () => {
++  const service = setup();
++  const { result } = renderHook(() =>
++    useRecommendedUiPlugins({ workspacePath: "/workspace/a", sessionId: null }),
++  );
++  await waitFor(() => expect(result.current.entries).toHaveLength(1));
++  expect(result.current.loading).toBe(false);
++  expect(result.current.entries[0]!.item.installed).toBe(false);
++  await act(async () => result.current.prepare(result.current.entries[0]!.item));
++  expect(service.installPlugin).toHaveBeenCalledTimes(1);
++  expect(result.current.entries[0]!.item.installed).toBe(true);
++});
++
+ it("重复点击只写一次；失败保留推荐并可重试", async () => {
+   const service = setup();
+   const pending = Promise.withResolvers<{ diagnostics: { severity: string; message: string }[] }>();

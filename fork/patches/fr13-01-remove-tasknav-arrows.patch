@@ -1,0 +1,346 @@
+diff --git a/packages/ui/src/DesktopTopOverlay.tsx b/packages/ui/src/DesktopTopOverlay.tsx
+index 8360c880..6b6090c4 100644
+--- a/packages/ui/src/DesktopTopOverlay.tsx
++++ b/packages/ui/src/DesktopTopOverlay.tsx
+@@ -1,13 +1,7 @@
+ import { SidebarTooltipProvider } from "@/ControlHintTooltip.js";
+ import type { IPlatformService, UpdateStatePayload } from "@zcode/shared";
+ import { cn } from "@/components/lib/utils.js";
+-import {
+-  ArrowLeftIcon,
+-  ArrowRightIcon,
+-  MessageCirclePlus,
+-  PanelLeftClose,
+-  PanelLeftOpen,
+-} from "lucide-react";
++import { MessageCirclePlus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import { UpdateStatusButton } from "@/UpdateStatusButton.js";
+ import { DesktopTopOverlayActionButton } from "@/DesktopTopOverlayActionButton.js";
+@@ -30,20 +24,11 @@ interface DesktopTopOverlayProps {
+   updateState: UpdateStatePayload | null;
+   toggleSidebarShortcutLabel: string;
+   newTaskShortcutLabel: string;
+-  goBackShortcutLabel: string;
+-  goForwardShortcutLabel: string;
+-  canTaskNavBack: boolean;
+-  canTaskNavForward: boolean;
+-  canGoBack: boolean;
+-  canGoForward: boolean;
+   showNewTaskButton?: boolean;
+   appLogoUrl: string;
+   platform: IPlatformService;
+   onToggleSidebar: () => void;
+   onCreateTask: () => void;
+-  onGoBack: () => void;
+-  onGoForward: () => void;
+-  hideTaskNavigationButtons?: boolean;
+   newTaskDisabledReason?: string;
+ }
+ 
+@@ -60,20 +45,11 @@ export function DesktopTopOverlay({
+   updateState,
+   toggleSidebarShortcutLabel,
+   newTaskShortcutLabel,
+-  goBackShortcutLabel,
+-  goForwardShortcutLabel,
+-  canTaskNavBack,
+-  canTaskNavForward,
+-  canGoBack: _canGoBack,
+-  canGoForward: _canGoForward,
+   showNewTaskButton,
+   appLogoUrl: _appLogoUrl,
+   platform,
+   onToggleSidebar,
+   onCreateTask,
+-  onGoBack,
+-  onGoForward,
+-  hideTaskNavigationButtons = false,
+   newTaskDisabledReason,
+ }: DesktopTopOverlayProps) {
+   const { intl } = useZCodeIntl();
+@@ -84,8 +60,6 @@ export function DesktopTopOverlay({
+     id: "workspaceSidebar.toggleSidebar",
+   });
+   const newTaskTitle = intl.formatMessage({ id: "sidebar.newTask" });
+-  const taskBackTitle = intl.formatMessage({ id: "taskNav.back" });
+-  const taskForwardTitle = intl.formatMessage({ id: "taskNav.forward" });
+   const isNewTaskButtonVisible = showNewTaskButton ?? !isSidebarVisible;
+   const macTopOverlayPaddingStyle =
+     isMacDesktop && !isMacFullscreen && Number.isFinite(macWindowControlsLeftPaddingPx)
+@@ -166,31 +140,6 @@ export function DesktopTopOverlay({
+               </DesktopTopOverlayActionButton>
+             )}
+ 
+-            {/* 远程控制移动端左上角空间有限，任务前进/后退在这里会与主操作拥挤重叠。*/}
+-            {hideTaskNavigationButtons ? null : (
+-              <>
+-                <DesktopTopOverlayActionButton
+-                  title={taskBackTitle}
+-                  shortcut={goBackShortcutLabel}
+-                  ariaLabel={taskBackTitle}
+-                  testId="desktop-top-nav-back"
+-                  disabled={!canTaskNavBack}
+-                  onClick={onGoBack}
+-                >
+-                  <ArrowLeftIcon className="size-4" />
+-                </DesktopTopOverlayActionButton>
+-                <DesktopTopOverlayActionButton
+-                  title={taskForwardTitle}
+-                  shortcut={goForwardShortcutLabel}
+-                  ariaLabel={taskForwardTitle}
+-                  disabled={!canTaskNavForward}
+-                  onClick={onGoForward}
+-                >
+-                  <ArrowRightIcon className="size-4" />
+-                </DesktopTopOverlayActionButton>
+-              </>
+-            )}
+-
+             <div
+               aria-hidden={!isNewTaskButtonVisible}
+               className={cn(
+diff --git a/packages/ui/src/app-shell/types.ts b/packages/ui/src/app-shell/types.ts
+index 6960662d..ec8ae769 100644
+--- a/packages/ui/src/app-shell/types.ts
++++ b/packages/ui/src/app-shell/types.ts
+@@ -235,15 +235,9 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
+   sidebarContainerRef: RefObject<HTMLElement | null>;
+   toggleSidebarShortcutLabel: string;
+   newTaskShortcutLabel: string;
+-  goBackShortcutLabel: string;
+-  goForwardShortcutLabel: string;
+   toggleSidePaneShortcutLabel: string;
+   /** 「进入 / 退出完整视图」快捷键标签（仅桌面）。 */
+   toggleSidePaneFullViewShortcutLabel?: string;
+-  canGoBack: boolean;
+-  canGoForward: boolean;
+-  canTaskNavBack: boolean;
+-  canTaskNavForward: boolean;
+   isTerminalOpen: boolean;
+   isSidebarVisible: boolean;
+   isBrowserOpen: boolean;
+@@ -318,8 +312,6 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
+     targetWorkspaceIdentity?: string,
+     expectedUnreadAt?: number,
+   ) => void;
+-  handleTaskNavBack: () => void;
+-  handleTaskNavForward: () => void;
+   handleStartDraftInWorkspace: (
+     targetWorkspacePath: string,
+     targetWorkspaceIdentity?: string,
+diff --git a/packages/ui/src/app-shell/WorkspaceShellLayout.tsx b/packages/ui/src/app-shell/WorkspaceShellLayout.tsx
+index 36ffea24..b2b75c8c 100644
+--- a/packages/ui/src/app-shell/WorkspaceShellLayout.tsx
++++ b/packages/ui/src/app-shell/WorkspaceShellLayout.tsx
+@@ -328,14 +328,8 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
+   sidebarContainerRef,
+   toggleSidebarShortcutLabel,
+   newTaskShortcutLabel,
+-  goBackShortcutLabel,
+-  goForwardShortcutLabel,
+   toggleSidePaneShortcutLabel,
+   toggleSidePaneFullViewShortcutLabel,
+-  canGoBack,
+-  canGoForward,
+-  canTaskNavBack,
+-  canTaskNavForward,
+   isTerminalOpen,
+   isSidebarVisible,
+   isSidePaneOpen,
+@@ -381,8 +375,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
+   reloadSessionPending,
+   handleReloadSession,
+   handleSelectTask,
+-  handleTaskNavBack,
+-  handleTaskNavForward,
+   handleStartDraftInWorkspace,
+   handleOpenCommandCenter,
+   handleRefreshGit,
+@@ -1198,9 +1190,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
+   const showChatMainView = useCallback(() => {
+     onWorkspaceMainViewChange("chat");
+   }, [onWorkspaceMainViewChange]);
+-  const primaryNavigationBack =
+-    workspaceMainView === "plugin-store" ? showChatMainView : handleTaskNavBack;
+-  const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
+   useEffect(() => {
+     if (
+       isWebRemoteControlShell &&
+@@ -1971,12 +1960,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
+       isSidebarVisible={isSidebarVisible}
+       onToggleSidebar={handleToggleSidebar}
+       toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
+-      canGoBack={canPrimaryNavigationBack}
+-      canGoForward={canTaskNavForward}
+-      onGoBack={primaryNavigationBack}
+-      onGoForward={handleTaskNavForward}
+-      goBackShortcutLabel={goBackShortcutLabel}
+-      goForwardShortcutLabel={goForwardShortcutLabel}
+       onOpenCommandCenter={handleOpenCommandCenter}
+       onOpenAutomations={handleOpenAutomations}
+       automationsActive={workspaceMainView === "automations"}
+@@ -2749,20 +2732,11 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
+             updateState={updateState}
+             toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
+             newTaskShortcutLabel={newTaskShortcutLabel}
+-            goBackShortcutLabel={goBackShortcutLabel}
+-            goForwardShortcutLabel={goForwardShortcutLabel}
+-            canTaskNavBack={canPrimaryNavigationBack}
+-            canTaskNavForward={canTaskNavForward}
+-            canGoBack={canGoBack}
+-            canGoForward={canGoForward}
+             showNewTaskButton={showTopOverlayNewTaskButton}
+             appLogoUrl={appLogoUrl}
+             platform={platform}
+             onToggleSidebar={handleToggleSidebar}
+             onCreateTask={handleCreateTaskInChat}
+-            onGoBack={primaryNavigationBack}
+-            onGoForward={handleTaskNavForward}
+-            hideTaskNavigationButtons={simplifyHeaderForNarrowRemote}
+           />
+         </ScopedErrorBoundary>
+ 
+diff --git a/packages/ui/src/App.tsx b/packages/ui/src/App.tsx
+index c81152d3..e8a2b60a 100644
+--- a/packages/ui/src/App.tsx
++++ b/packages/ui/src/App.tsx
+@@ -135,8 +135,6 @@ export function App({
+   // 展示 label 统一从快捷键生效表取（用户改键后 tooltip 同步更新），不再硬编码键位。
+   const toggleSidebarShortcutLabel = useShortcutCommandLabel("toggleSidebar");
+   const newTaskShortcutLabel = useShortcutCommandLabel("newTask");
+-  const goBackShortcutLabel = useShortcutCommandLabel("navigateBack");
+-  const goForwardShortcutLabel = useShortcutCommandLabel("navigateForward");
+   const toggleTerminalShortcutLabel = useShortcutCommandLabel("toggleTerminal");
+   const toggleSidePaneShortcutLabel = useShortcutCommandLabel("toggleSidePane");
+   const toggleSidePaneFullViewShortcutLabel = useShortcutCommandLabel("toggleSidePaneFullView");
+@@ -894,8 +892,6 @@ export function App({
+     handleOpenPluginStore,
+     handleTaskNavBack,
+     handleTaskNavForward,
+-    canGoBack,
+-    canGoForward,
+     canTaskNavBack,
+     canTaskNavForward,
+   } = useWorkspaceTaskNavigation({
+@@ -1230,14 +1226,8 @@ export function App({
+           sidebarContainerRef={sidebarContainerRef}
+           toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
+           newTaskShortcutLabel={newTaskShortcutLabel}
+-          goBackShortcutLabel={goBackShortcutLabel}
+-          goForwardShortcutLabel={goForwardShortcutLabel}
+           toggleSidePaneShortcutLabel={toggleSidePaneShortcutLabel}
+           toggleSidePaneFullViewShortcutLabel={toggleSidePaneFullViewShortcutLabel}
+-          canGoBack={canGoBack}
+-          canGoForward={canGoForward}
+-          canTaskNavBack={canTaskNavBack}
+-          canTaskNavForward={canTaskNavForward}
+           isTerminalOpen={isTerminalOpen}
+           isSidebarVisible={isSidebarVisible}
+           isBrowserOpen={isBrowserOpen}
+@@ -1285,8 +1275,6 @@ export function App({
+           reloadSessionPending={reloadSessionPending}
+           handleReloadSession={handleReloadSession}
+           handleSelectTask={handleSelectTask}
+-          handleTaskNavBack={handleTaskNavBack}
+-          handleTaskNavForward={handleTaskNavForward}
+           handleStartDraftInWorkspace={handleStartDraftInWorkspace}
+           handleOpenCommandCenter={handleOpenQuickPick}
+           handleRefreshGit={handleRefreshGit}
+diff --git a/packages/ui/src/project-sidebar/contract.ts b/packages/ui/src/project-sidebar/contract.ts
+index 3809a8df..53df123b 100644
+--- a/packages/ui/src/project-sidebar/contract.ts
++++ b/packages/ui/src/project-sidebar/contract.ts
+@@ -132,12 +132,6 @@ export interface ProjectSidebarProps {
+   isSidebarVisible?: boolean;
+   onToggleSidebar?: () => void;
+   toggleSidebarShortcutLabel?: string;
+-  canGoBack?: boolean;
+-  canGoForward?: boolean;
+-  onGoBack?: () => void;
+-  onGoForward?: () => void;
+-  goBackShortcutLabel?: string;
+-  goForwardShortcutLabel?: string;
+   onOpenCommandCenter: () => void;
+   onOpenRepoWiki?: () => void;
+   repoWikiActive?: boolean;
+diff --git a/packages/ui/test/desktopLogoStyle.test.ts b/packages/ui/test/desktopLogoStyle.test.ts
+index 989f25e1..3fc7cebd 100644
+--- a/packages/ui/test/desktopLogoStyle.test.ts
++++ b/packages/ui/test/desktopLogoStyle.test.ts
+@@ -32,18 +32,10 @@ it.each([
+       updateState: null,
+       toggleSidebarShortcutLabel: "Ctrl+B",
+       newTaskShortcutLabel: "Ctrl+N",
+-      goBackShortcutLabel: "Alt+Left",
+-      goForwardShortcutLabel: "Alt+Right",
+-      canTaskNavBack: false,
+-      canTaskNavForward: false,
+-      canGoBack: false,
+-      canGoForward: false,
+       appLogoUrl: "/logo.svg",
+       platform: {} as ComponentProps<typeof DesktopTopOverlay>["platform"],
+       onToggleSidebar,
+       onCreateTask: vi.fn(),
+-      onGoBack: vi.fn(),
+-      onGoForward: vi.fn(),
+     }),
+   );
+   if (!isDesktop || isMacDesktop) {
+diff --git a/packages/ui/test/workspaceShellRemoteMobileLayout.test.ts b/packages/ui/test/workspaceShellRemoteMobileLayout.test.ts
+index 167e2665..e8d6d68d 100644
+--- a/packages/ui/test/workspaceShellRemoteMobileLayout.test.ts
++++ b/packages/ui/test/workspaceShellRemoteMobileLayout.test.ts
+@@ -286,10 +286,6 @@ function createWorkspaceShellProps() {
+     appLogoUrl: "",
+     browserNavigationRequest: null,
+     browserRestoreUrls: {},
+-    canGoBack: false,
+-    canGoForward: false,
+-    canTaskNavBack: false,
+-    canTaskNavForward: false,
+     gitState: {
+       datasets: {
+         staged: { sections: [] },
+@@ -300,8 +296,6 @@ function createWorkspaceShellProps() {
+         isRepository: false,
+       },
+     },
+-    goBackShortcutLabel: "",
+-    goForwardShortcutLabel: "",
+     handleActivateSidePaneTab: vi.fn(),
+     handleBrowserNavigationRequestHandled: vi.fn(),
+     handleBrowserPageMetadataChange: vi.fn(),
+@@ -317,8 +311,6 @@ function createWorkspaceShellProps() {
+     handleOpenAutomations: vi.fn(),
+     handleSelectTask: vi.fn(),
+     handleStartDraftInWorkspace: vi.fn(),
+-    handleTaskNavBack: vi.fn(),
+-    handleTaskNavForward: vi.fn(),
+     handleToggleBrowser: vi.fn(),
+     handleToggleGit: vi.fn(),
+     handleToggleSidePane: vi.fn(),
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 0000000..1111111 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -2826,7 +2826,5 @@
+   "chat.rewind.conflictConfirm":
+     "以下文件在该轮之后被外部修改过，强制回滚可能导致冲突：\n\n{paths}",
+-  "taskNav.back": "后退",
+-  "taskNav.forward": "前进",
+   "taskNav.noMoreBack": "没有更早的任务了",
+   "taskNav.noMoreForward": "没有更新的任务了",
+   "taskList.switchBlockedByModelRestart": "模型供应商切换中，暂时不能切换任务。",
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index 0000000..1111111 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -3020,7 +3020,5 @@
+   "chat.rewind.conflictConfirm":
+     "These files changed outside this turn. Force rewinding may create conflicts:\n\n{paths}",
+-  "taskNav.back": "Go back",
+-  "taskNav.forward": "Go forward",
+   "taskNav.noMoreBack": "No previous tasks",
+   "taskNav.noMoreForward": "No next tasks",
+   "taskList.switchBlockedByModelRestart":

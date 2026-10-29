@@ -1,0 +1,106 @@
+diff --git a/apps/zcode-cli/packages/adapters/src/mcp/pool.ts b/apps/zcode-cli/packages/adapters/src/mcp/pool.ts
+index 2f485e12..f8cc3f53 100644
+--- a/apps/zcode-cli/packages/adapters/src/mcp/pool.ts
++++ b/apps/zcode-cli/packages/adapters/src/mcp/pool.ts
+@@ -91,7 +91,12 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
+     }
+   };
+ 
+-  const scheduleClose = (entry: PoolEntry): void => {
++  // fr9-01: isolation=workspace 的 server 是工作区级共享服务(如带常驻面板、
++  // 管理派生进程树的插件 server),不随租约归零空闲回收——面板/会话开关导致 server
++  // 被杀会丢运行状态并连带回收其派生进程。这类 entry 仅走显式关闭路径
++  // (disconnectServer、connectConfiguredServers 的 replace 收敛、pool.close())。
++  const scheduleClose = (entry: PoolEntry, explicit = false): void => {
++    if (!explicit && entry.connectionContext.mcpIsolation === "workspace") return;
+     if (entry.closeTimer) return;
+     if (idleGraceMs <= 0) {
+       void closeEntry(entry);
+@@ -186,7 +191,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
+       return entry;
+     };
+ 
+-    const release = (serverName: string): void => {
++    const release = (serverName: string, explicit = false): void => {
+       const key = leased.get(serverName);
+       if (!key) return;
+       leased.delete(serverName);
+@@ -206,7 +211,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
+         refCount: entry.refs.size,
+         ...(sessionId ? { sessionId } : {}),
+       });
+-      if (entry.refs.size === 0) scheduleClose(entry);
++      if (entry.refs.size === 0) scheduleClose(entry, explicit);
+     };
+ 
+     const acquire = async (
+@@ -454,7 +459,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
+         }
+         const configuredNames = new Set(Object.keys(servers));
+         for (const serverName of [...leased.keys()]) {
+-          if (!configuredNames.has(serverName)) release(serverName);
++          if (!configuredNames.has(serverName)) release(serverName, true);
+         }
+         await Promise.all(
+           Object.entries(servers).map(([serverName, config]) =>
+@@ -473,8 +478,8 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
+       async disconnectServer(serverName: string): Promise<McpServerStatus | undefined> {
+         const key = leased.get(serverName);
+         const entry = key ? entries.get(key) : undefined;
+-        const status = entry ? (await entry.adapter.status())[serverName] : undefined;
+-        release(serverName);
++        const status = entry ? (await entry.adapter.status())[entry.serverName] : undefined;
++        release(serverName, true);
+         return status
+           ? {
+               ...status,
+diff --git a/apps/zcode-cli/packages/adapters/tests/mcp-connection-pool.test.ts b/apps/zcode-cli/packages/adapters/tests/mcp-connection-pool.test.ts
+index a756fc39..ba2368e5 100644
+--- a/apps/zcode-cli/packages/adapters/tests/mcp-connection-pool.test.ts
++++ b/apps/zcode-cli/packages/adapters/tests/mcp-connection-pool.test.ts
+@@ -152,7 +152,7 @@ describe("MCP connection pool isolation", () => {
+     await pool.close();
+   });
+ 
+-  it("shares only an explicitly workspace-isolated server in the same workspace", async () => {
++  it("shares a workspace-isolated server and keeps it alive after all leases close", async () => {
+     const created: Array<{
+       adapter: McpPort;
+       config: McpServerConfig;
+@@ -189,7 +189,36 @@ describe("MCP connection pool isolation", () => {
+     expect(created[0]?.adapter.close).not.toHaveBeenCalled();
+     await sessionB.close();
+     await Promise.resolve();
++    // fr9-01: workspace 级共享 server 常驻,不随租约归零空闲回收;仅显式路径关闭。
++    expect(created[0]?.adapter.close).not.toHaveBeenCalled();
++    await pool.close();
+     expect(created[0]?.adapter.close).toHaveBeenCalledOnce();
++  });
++
++  it("closes a workspace-isolated server on explicit disconnect", async () => {
++    const created: Array<{ adapter: McpPort }> = [];
++    const pool = createMcpConnectionPool({
++      createAdapter: ({ serverName }) => {
++        const adapter = createFakeAdapter(serverName);
++        created.push({ adapter });
++        return adapter;
++      },
++      idleGraceMs: 0,
++    });
++    const session = pool.acquireLease({ leaseId: "session-a" });
++    const config: McpServerConfig = {
++      command: "node",
++      isolation: "workspace",
++      type: "stdio",
++    };
++    await session.connectServer("browser_use", config, {
++      workingDirectory: "/workspace",
++      workspaceIdentity: "local-workspace-a",
++    });
++    await session.disconnectServer("browser_use");
++    await Promise.resolve();
++    expect(created[0]?.adapter.close).toHaveBeenCalledOnce();
++    await session.close();
+     await pool.close();
+   });
+ 

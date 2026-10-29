@@ -1,0 +1,93 @@
+diff --git a/packages/ui/src/GitBranchSwitcher.tsx b/packages/ui/src/GitBranchSwitcher.tsx
+index 1314165b..57a09e10 100644
+--- a/packages/ui/src/GitBranchSwitcher.tsx
++++ b/packages/ui/src/GitBranchSwitcher.tsx
+@@ -27,6 +27,8 @@ import {
+   GitBranchSwitchAssistDialog,
+ } from "@/git-branch-switcher/GitBranchDialogs.js";
+ import { GitGraphDialog } from "@/git-graph/GitGraphDialog.js";
++import { GitActionMenu } from "@/GitActionMenu.js";
++import { useGitPull } from "@/hooks/useGitPull.js";
+ import { useGitBranchSwitcher } from "@/hooks/useGitBranchSwitcher.js";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import {
+@@ -38,6 +40,7 @@ import {
+   shouldRestoreChatInputFocusAfterPickerClose,
+ } from "@/lib/pickerFocus.js";
+ import {
++  ArrowDownToLineIcon,
+   ChevronDownIcon,
+   GitBranchIcon,
+   GitGraph,
+@@ -78,6 +81,11 @@ export function GitBranchSwitcher({
+ }: GitBranchSwitcherProps) {
+   const { intl, locale } = useZCodeIntl();
+   const numberFormatter = new Intl.NumberFormat(locale);
++  // 与对话区右上角 git 面板同款：拉取 / 提交或推送 常驻分支弹层 footer。
++  const { pulling: gitPulling, runPull: runGitPull } = useGitPull({
++    workspacePath,
++    onPulled: onRefreshGit,
++  });
+   const commandListRef = useRef<HTMLDivElement | null>(null);
+   const [gitGraphDialogOpen, setGitGraphDialogOpen] = useState(false);
+   const {
+@@ -337,6 +345,33 @@ export function GitBranchSwitcher({
+             </Command>
+             {showFooterActions ? (
+               <div className="border-t border-border p-1">
++                <Button
++                  type="button"
++                  variant="ghost"
++                  size="lg"
++                  className="w-full justify-start px-2 text-foreground hover:bg-menu-hover hover:text-foreground"
++                  disabled={mutationPending || gitPulling}
++                  onClick={() => {
++                    void runGitPull();
++                  }}
++                >
++                  {gitPulling ? (
++                    <LoaderIcon className="size-4 animate-spin text-foreground-subtle" />
++                  ) : (
++                    <ArrowDownToLineIcon className="size-4 text-foreground-subtle" />
++                  )}
++                  {intl.formatMessage({ id: "git.action.pull" })}
++                </Button>
++                {/* 与右上角 git 面板一致的「提交或推送」入口；点击后收起弹层再开对话框。 */}
++                <div onClickCapture={() => setOpen(false)}>
++                  <GitActionMenu
++                    workspacePath={workspacePath}
++                    gitSummary={gitSummary}
++                    onRefreshGit={onRefreshGit}
++                    triggerLayout="status-row"
++                    className="w-full"
++                  />
++                </div>
+                 <Button
+                   type="button"
+                   variant="ghost"
+diff --git a/packages/ui/test/gitBranchSwitcher.test.ts b/packages/ui/test/gitBranchSwitcher.test.ts
+index 8f28c604..e8f1a1e0 100644
+--- a/packages/ui/test/gitBranchSwitcher.test.ts
++++ b/packages/ui/test/gitBranchSwitcher.test.ts
+@@ -7,6 +7,7 @@ vi.mock("lucide-react", () => {
+     createElement("svg", { "data-icon": name, ...props });
+ 
+   return {
++    ArrowDownToLineIcon: createIcon("arrow-down-to-line"),
+     ChevronDownIcon: createIcon("chevron-down"),
+     GitBranchIcon: createIcon("git-branch"),
+     GitGraph: createIcon("git-graph"),
+@@ -46,6 +47,13 @@ vi.mock("@/git-branch-switcher/GitBranchDialogs.js", () => ({
+   GitBranchSwitchAssistDialog: () => null,
+ }));
+ 
++vi.mock("@/GitActionMenu.js", () => ({
++  GitActionMenu: () =>
++    createElement("button", { "data-testid": "mock-git-action-menu" }, "commit-or-push"),
++}));
++vi.mock("@/hooks/useGitPull.js", () => ({
++  useGitPull: () => ({ pulling: false, runPull: vi.fn(async () => {}) }),
++}));
+ vi.mock("@/git-graph/GitGraphDialog.js", () => ({
+   GitGraphDialog: () => null,
+ }));

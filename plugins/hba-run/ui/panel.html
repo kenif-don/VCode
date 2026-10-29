@@ -5,36 +5,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HBA 运行面板</title>
 <style>
-  /* 双主题:默认(=深色)兜底独立打开场景;宿主经 hostContext.theme /
+  /* 双主题:色板消费宿主注入的 MCP Apps 标准样式变量(ZCode 主题 token,
+     见宿主 pluginUiStyleVariables.ts),兜底值 = ZCode 自身 zai-dark / zai-light
+     色值,独立打开时兜底即准;宿主经 hostContext.theme /
      host-context-changed 通知切换 documentElement[data-theme]。 */
   :root, [data-theme="dark"] {
-    --bg: #1e1f24;
-    --bg2: #26272e;
-    --bg3: #2e3038;
-    --console-bg: #141519;
-    --fg: #e6e6e6;
-    --fg-dim: #9a9aa2;
-    --accent: #4f8cff;
-    --accent-soft: rgba(79, 140, 255, 0.16);
-    --ok: #3fb96f;
-    --err: #e5534b;
-    --warn: #d4a72c;
-    --border: #3a3c45;
+    --bg: var(--color-background-primary, #161616);
+    --bg2: var(--color-background-secondary, #202020);
+    --fill: #2b2b2b;
+    --hover: var(--color-background-ghost, rgba(255, 255, 255, 0.05));
+    --selected: rgba(255, 255, 255, 0.1);
+    --console-bg: var(--color-background-primary, #161616);
+    --fg: var(--color-text-primary, #d4d4d4);
+    --fg-dim: var(--color-text-secondary, rgba(212, 212, 212, 0.6));
+    --accent: var(--color-ring-primary, #ffffff);
+    --primary: var(--color-background-inverse, #ffffff);
+    --primary-fg: var(--color-text-inverse, #000000);
+    --ok: var(--color-text-success, #46bf72);
+    --err: var(--color-text-danger, #ff5c5c);
+    --warn: var(--color-text-warning, #ff8a30);
+    --border: var(--color-border-primary, rgba(255, 255, 255, 0.1));
+    --border-hover: var(--color-border-secondary, rgba(255, 255, 255, 0.15));
     --mono: "Cascadia Code", Consolas, "Courier New", monospace;
+    color-scheme: dark;
   }
   [data-theme="light"] {
-    --bg: #FFFFFF;
-    --bg2: #F7F8FA;
-    --bg3: #EEF0F3;
-    --console-bg: #F3F4F6;
-    --fg: #1F2329;
-    --fg-dim: #6B7280;
-    --accent: #3B82F6;
-    --accent-soft: rgba(59, 130, 246, 0.12);
-    --ok: #16A34A;
-    --err: #DC2626;
-    --warn: #B45309;
-    --border: #E5E6EB;
+    --bg: var(--color-background-primary, #f8f8f8);
+    --bg2: var(--color-background-secondary, #ffffff);
+    --fill: #ffffff;
+    --hover: var(--color-background-ghost, rgba(13, 13, 13, 0.05));
+    --selected: rgba(13, 13, 13, 0.05);
+    --console-bg: var(--color-background-primary, #f8f8f8);
+    --fg: var(--color-text-primary, #262626);
+    --fg-dim: var(--color-text-secondary, rgba(38, 38, 38, 0.6));
+    --accent: var(--color-ring-primary, #000000);
+    --primary: var(--color-background-inverse, #000000);
+    --primary-fg: var(--color-text-inverse, #ffffff);
+    --ok: var(--color-text-success, #1e8a3e);
+    --err: var(--color-text-danger, #e03131);
+    --warn: var(--color-text-warning, #e07b00);
+    --border: var(--color-border-primary, rgba(13, 13, 13, 0.1));
+    --border-hover: var(--color-border-secondary, rgba(13, 13, 13, 0.15));
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
@@ -44,31 +56,7 @@
     font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
     display: flex;
     flex-direction: column;
-    min-width: 640px;
   }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 1px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    background: var(--bg3);
-    color: var(--fg-dim);
-    white-space: nowrap;
-  }
-  .badge.ok { color: var(--ok); }
-  .badge.err { color: var(--err); }
-  .badge.run { color: var(--accent); }
-  .badge.run::before {
-    content: "";
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: pulse 1.2s infinite;
-  }
-  @keyframes pulse { 50% { opacity: 0.25; } }
-
   main {
     flex: 1;
     display: flex;
@@ -76,7 +64,7 @@
   }
   aside {
     width: 268px;
-    min-width: 220px;
+    min-width: 140px;
     border-right: 1px solid var(--border);
     background: var(--bg2);
     display: flex;
@@ -85,6 +73,7 @@
   }
   aside .head, .section-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     padding: 8px 10px;
@@ -103,8 +92,8 @@
     border: 1px solid transparent;
     margin-bottom: 4px;
   }
-  .config-item:hover { background: var(--bg3); }
-  .config-item.selected { background: var(--bg3); border-color: var(--accent); }
+  .config-item:hover { background: var(--hover); }
+  .config-item.selected { background: var(--selected); border-color: var(--accent); }
   .config-item .name { font-weight: 600; word-break: break-all; }
   .config-item .cmd {
     color: var(--fg-dim);
@@ -143,7 +132,7 @@
   .form-grid label { color: var(--fg-dim); padding-top: 5px; }
   input[type=text], textarea {
     width: 100%;
-    background: var(--bg);
+    background: var(--fill);
     color: var(--fg);
     border: 1px solid var(--border);
     border-radius: 5px;
@@ -157,7 +146,7 @@
   .hint { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
 
   button {
-    background: var(--bg3);
+    background: var(--fill);
     color: var(--fg);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -165,9 +154,9 @@
     font-size: 12px;
     cursor: pointer;
   }
-  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:hover:not(:disabled) { border-color: var(--border-hover); }
   button:disabled { opacity: 0.45; cursor: default; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
   button.small { padding: 2px 8px; font-size: 11px; }
 
   /* 纯图标按钮(配置行 + 栏头工具):透明底,hover 才显边框,省横向空间 */
@@ -181,23 +170,10 @@
     line-height: 1.6;
     cursor: pointer;
   }
-  .icon-btn:hover:not(:disabled) { background: var(--bg3); border-color: var(--border); color: var(--fg); }
+  .icon-btn:hover:not(:disabled) { background: var(--hover); border-color: var(--border); color: var(--fg); }
   .icon-btn:disabled { opacity: 0.3; cursor: default; }
   .icon-btn.go:hover:not(:disabled) { color: var(--ok); border-color: var(--ok); }
   .icon-btn.stop:hover:not(:disabled) { color: var(--err); border-color: var(--err); }
-
-  #runs-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-  .run-chip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 5px 10px;
-    cursor: pointer;
-  }
-  .run-chip.current { border-color: var(--accent); }
 
   #console-box .body { display: flex; flex-direction: column; gap: 8px; }
   #console {
@@ -289,14 +265,14 @@
     border-radius: 6px;
     cursor: pointer;
   }
-  .ctx-menu button:hover { background: var(--bg3); border-color: var(--border); }
+  .ctx-menu button:hover { background: var(--hover); border-color: var(--border); }
 
   .toast {
     position: fixed;
     left: 50%;
     bottom: 26px;
     transform: translateX(-50%) translateY(8px);
-    background: var(--bg3);
+    background: var(--fill);
     color: var(--fg);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -333,13 +309,12 @@
         运行输出
         <span id="console-run-tag" class="tag"></span>
         <span class="spacer"></span>
-        <label class="hint"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
+        <label class="hint" title="贴底时自动跟随新输出;向上翻看或选中文字时暂停,回到底部自动恢复"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
         <button class="small" id="btn-clear">清空</button>
         <button class="small" id="btn-copy">复制</button>
       </div>
       <div class="body">
-        <div id="runs-bar"></div>
-        <div id="console"><div class="empty">选择一个运行查看输出</div></div>
+        <div id="console"><div class="empty">选择左侧配置查看输出</div></div>
       </div>
     </div>
   </section>
@@ -524,7 +499,8 @@ const App = {
   autoScroll: true,
   editingConfigId: null, // null = 弹窗处于「新建」模式;否则为被编辑配置 id
   pollTimer: null,
-  refreshTimer: null
+  refreshTimer: null,
+  consoleRenderedRun: null // 当前 #console DOM 对应的 runId(增量追加的同步标记)
 };
 
 // 独立打开(无宿主)时直接拒绝工具调用,给出可读错误而不是桥超时。
@@ -557,11 +533,91 @@ function envToLines(env) {
   return Object.entries(env || {}).map(([k, v]) => k + "=" + v).join("\n");
 }
 
-function stateBadge(run) {
-  if (run.state === "running") return '<span class="badge run">运行中</span>';
-  if (run.stopped && run.state === "exited") return '<span class="badge">已停止</span>';
-  if (run.state === "exited") return '<span class="badge ok">已完成</span>';
-  return '<span class="badge err">失败</span>';
+// ---- ANSI 色码解析 --------------------------------------------------------
+// 进程输出(vite/chalk 等)常带 SGR 色码,直接当文本渲染会显示成 [31m 这类乱码;
+// 这里解析成带内联样式的 span,其余转义序列一律剥掉。调色板随主题切换。
+const ANSI_PALETTE = {
+  // 与 ZCode 内置终端同款(--color-terminal-* 的 zai-dark / zai-light 值)
+  dark: ["#363636", "#ff5c5c", "#46bf72", "#ff8a30", "#4099ff", "#7b5ce5", "#42c8c8", "#adadad",
+         "#747474", "#ff9999", "#87d9a4", "#ffb26b", "#80beff", "#a888f2", "#8ee5e5", "#f8f8f8"],
+  light: ["#5c5c5c", "#e03131", "#1e8a3e", "#e07b00", "#0b7fff", "#9e77ed", "#0aa7a7", "#adadad",
+          "#888888", "#e03131", "#1e8a3e", "#e07b00", "#0066dd", "#9e77ed", "#0aa7a7", "#0d0d0d"]
+};
+
+function ansiPalette() {
+  return document.documentElement.dataset.theme === "light" ? ANSI_PALETTE.light : ANSI_PALETTE.dark;
+}
+
+function ansiColor256(n) {
+  if (n < 16) return ansiPalette()[n];
+  if (n >= 236) { const g = 8 + (n - 236) * 10; return `rgb(${g},${g},${g})`; }
+  n -= 16;
+  const f = (v) => (v ? 55 + v * 40 : 0);
+  return `rgb(${f(Math.floor(n / 36))},${f(Math.floor((n % 36) / 6))},${f(n % 6)})`;
+}
+
+function stripAnsi(s) {
+  return String(s)
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, "")
+    .replace(/\x1b\[[0-9;:?]*[A-Za-z]/g, "")
+    .replace(/\x1b[@-Z\\-_]/g, "");
+}
+
+function ansiToHtml(raw) {
+  const text = String(raw);
+  let out = "";
+  let last = 0;
+  let fg = "", bg = "", bold = false, dim = false, italic = false, underline = false;
+  const flush = (end) => {
+    if (end <= last) return;
+    const chunk = escapeHtml(text.slice(last, end)).replace(/\x1b/g, "");
+    const st = [];
+    if (fg) st.push("color:" + fg);
+    if (bg) st.push("background:" + bg);
+    if (bold) st.push("font-weight:600");
+    if (dim) st.push("opacity:.65");
+    if (italic) st.push("font-style:italic");
+    if (underline) st.push("text-decoration:underline");
+    out += st.length ? '<span style="' + st.join(";") + '">' + chunk + "</span>" : chunk;
+  };
+  const applySgr = (params) => {
+    const nums = (params || "0").split(";").map((x) => (x === "" ? 0 : parseInt(x, 10) || 0));
+    for (let i = 0; i < nums.length; i++) {
+      const c = nums[i];
+      if (c === 0) { fg = bg = ""; bold = dim = italic = underline = false; }
+      else if (c === 1) bold = true;
+      else if (c === 2) dim = true;
+      else if (c === 3) italic = true;
+      else if (c === 4) underline = true;
+      else if (c === 22) { bold = dim = false; }
+      else if (c === 23) italic = false;
+      else if (c === 24) underline = false;
+      else if (c >= 30 && c <= 37) fg = ansiPalette()[c - 30];
+      else if (c === 39) fg = "";
+      else if (c >= 40 && c <= 47) bg = ansiPalette()[c - 40];
+      else if (c === 49) bg = "";
+      else if (c >= 90 && c <= 97) fg = ansiPalette()[c - 90 + 8];
+      else if (c >= 100 && c <= 107) bg = ansiPalette()[c - 100 + 8];
+      else if (c === 38 || c === 48) {
+        let col = "";
+        if (nums[i + 1] === 5) { col = ansiColor256(nums[i + 2] || 0); i += 2; }
+        else if (nums[i + 1] === 2) {
+          col = `rgb(${nums[i + 2] || 0},${nums[i + 3] || 0},${nums[i + 4] || 0})`;
+          i += 4;
+        }
+        if (col) { if (c === 38) fg = col; else bg = col; }
+      }
+    }
+  };
+  const re = /\x1b\[([0-9;:?]*)m|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[[0-9;:?]*[A-Za-z]|\x1b[@-Z\\-_]/g;
+  let m;
+  while ((m = re.exec(text))) {
+    flush(m.index);
+    if (m[1] !== undefined) applySgr(m[1]);
+    last = re.lastIndex;
+  }
+  flush(text.length);
+  return out;
 }
 
 function toast(msg, isErr) {
@@ -576,6 +632,7 @@ function toast(msg, isErr) {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+  renderConsole(); // ANSI 调色板随主题切换,日志重上色
 }
 
 function systemTheme() {
@@ -633,51 +690,60 @@ function renderConfigs() {
   $("btn-del").disabled = !hasSel;
 }
 
-function renderRunsBar() {
-  const bar = $("runs-bar");
-  const live = App.runs.filter((r) => r.state === "running");
-  const recent = App.runs.filter((r) => r.state !== "running").slice(-5);
-  const items = [...live, ...recent];
-  if (!items.length) { bar.innerHTML = ""; return; }
-  bar.innerHTML = items.map((r) => `
-    <div class="run-chip ${r.runId === App.currentRunId ? "current" : ""}" data-run="${escapeHtml(r.runId)}">
-      ${stateBadge(r)}
-      <span>${escapeHtml(r.configName || r.command)}</span>
-      ${r.state === "running" ? `<button class="small" data-stop="${escapeHtml(r.runId)}">停止</button>` : ""}
-    </div>`).join("");
-  for (const el of bar.querySelectorAll(".run-chip")) {
-    el.addEventListener("click", (e) => {
-      if (e.target.dataset.stop) return;
-      selectRun(el.dataset.run);
-    });
-  }
-  for (const el of bar.querySelectorAll("[data-stop]")) {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      stopRun(el.dataset.stop).catch((err) => toast(err.message, true));
-    });
-  }
+function consoleLineEl(l) {
+  const div = document.createElement("div");
+  div.className = "l-" + (l.stream || "stdout");
+  div.innerHTML = ansiToHtml(l.text);
+  return div;
+}
+
+/**
+ * 日志区的「磁性跟随」规则:
+ *  - 仅当用户本来就贴底时才跟随新输出滚到底;翻上去看日志时不被拉回;
+ *  - 有未收起的选区(正在拖选/准备右键发送)时不滚动,避免拖拽终点被带走;
+ *  - 日志 DOM 增量追加而非整体重建,选区锚点不会中途被毁。
+ */
+function consoleFollowAllowed(box) {
+  if (!App.autoScroll) return false;
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) return false;
+  return box.scrollHeight - box.scrollTop - box.clientHeight <= 40;
 }
 
 function renderConsole() {
   const tag = $("console-run-tag");
   const box = $("console");
   const view = App.outputByRun[App.currentRunId];
-  tag.textContent = App.currentRunId ? App.currentRunId : "";
+  const run = App.runs.find((r) => r.runId === App.currentRunId);
+  tag.textContent = App.currentRunId
+    ? (run ? (run.configName || run.command) + " · " + App.currentRunId : App.currentRunId)
+    : "";
+  App.consoleRenderedRun = App.currentRunId;
   if (!view || !view.lines.length) {
-    box.innerHTML = '<div class="empty">暂无输出</div>';
+    box.innerHTML = '<div class="empty">' +
+      (App.currentRunId ? "暂无输出" : "选择左侧配置查看输出") + "</div>";
     return;
   }
   const frag = document.createDocumentFragment();
-  for (const l of view.lines) {
-    const div = document.createElement("div");
-    div.className = "l-" + (l.stream || "stdout");
-    div.textContent = l.text;
-    frag.appendChild(div);
-  }
+  for (const l of view.lines) frag.appendChild(consoleLineEl(l));
   box.innerHTML = "";
   box.appendChild(frag);
   if (App.autoScroll) box.scrollTop = box.scrollHeight;
+}
+
+/** 增量追加新行。整体重建会毁掉进行中的选区(表现为"选择从日志开头起选"),必须避免。 */
+function appendConsoleLines(newLines) {
+  const box = $("console");
+  if (App.consoleRenderedRun !== App.currentRunId) {
+    renderConsole(); // DOM 与当前运行不同步(切运行/清空后),退回整体渲染
+    return;
+  }
+  if (!newLines || !newLines.length) return;
+  const follow = consoleFollowAllowed(box);
+  const emptyEl = box.querySelector(".empty");
+  if (emptyEl) box.removeChild(emptyEl);
+  for (const l of newLines) box.appendChild(consoleLineEl(l));
+  if (follow) box.scrollTop = box.scrollHeight;
 }
 
 const previewShown = new Set();
@@ -744,13 +810,22 @@ async function saveModal() {
 function selectConfig(id) {
   App.selectedConfigId = id;
   renderConfigs();
+  // 运行列表条已移除:点配置行即把日志切到该配置最近一次运行的输出;
+  // 该配置没有运行记录时切到空日志,不残留其他配置的输出。
+  const run = App.runs.filter((r) => r.configId === id).pop();
+  if (run) {
+    if (run.runId !== App.currentRunId) selectRun(run.runId);
+  } else if (App.currentRunId) {
+    App.currentRunId = null;
+    renderConsole();
+    scheduleUiStateSave();
+  }
   scheduleUiStateSave();
 }
 
 function selectRun(runId) {
   App.currentRunId = runId;
   if (!App.outputByRun[runId]) App.outputByRun[runId] = { lines: [], since: 0 };
-  renderRunsBar();
   renderConsole();
   fetchOutput(runId).catch((e) => console.warn(e));
   scheduleUiStateSave();
@@ -762,20 +837,23 @@ async function refreshAll() {
 
 async function refreshConfigs() {
   const res = await callTool("run_config_list", {});
-  App.configs = res.configs || [];
+  const configs = res.configs || [];
+  const changed = JSON.stringify(configs) !== JSON.stringify(App.configs);
+  App.configs = configs;
+  const prevSelected = App.selectedConfigId;
   if (App.selectedConfigId && !App.configs.some((c) => c.id === App.selectedConfigId)) {
     App.selectedConfigId = null;
   }
   if (!App.selectedConfigId && App.configs.length) {
     App.selectedConfigId = App.configs[0].id;
   }
-  renderConfigs();
+  // 兜底轮询会高频调用本函数;数据没变就不重建 DOM,避免打断 hover/焦点
+  if (changed || prevSelected !== App.selectedConfigId) renderConfigs();
 }
 
 async function refreshRuns() {
   const res = await callTool("run_status", {});
   App.runs = res.runs || [];
-  renderRunsBar();
   // 运行态变化会翻转行内 ▶/■ 的可用性,配置列表也要重绘
   renderConfigs();
   maybeAutoPreview();
@@ -784,12 +862,20 @@ async function refreshRuns() {
 async function fetchOutput(runId) {
   const view = App.outputByRun[runId] || (App.outputByRun[runId] = { lines: [], since: 0 });
   const res = await callTool("run_output", { runId, since: view.since });
-  if (res.lines && res.lines.length) {
-    view.lines.push(...res.lines);
-    if (view.lines.length > 5000) view.lines.splice(0, view.lines.length - 5000);
+  const newLines = res.lines || [];
+  let truncated = false;
+  if (newLines.length) {
+    view.lines.push(...newLines);
+    if (view.lines.length > 5000) {
+      view.lines.splice(0, view.lines.length - 5000);
+      truncated = true;
+    }
   }
   view.since = res.nextSince !== undefined ? res.nextSince : view.since;
-  if (App.currentRunId === runId) renderConsole();
+  if (App.currentRunId !== runId) return;
+  // 没有新行时完全不碰 DOM:轮询每 1.2s 一次,重建会打断用户的选择
+  if (truncated) renderConsole();
+  else appendConsoleLines(newLines);
 }
 
 async function deleteConfig() {
@@ -865,14 +951,17 @@ async function copyText(text) {
 
 async function copyConsole() {
   const view = App.outputByRun[App.currentRunId];
-  const text = view ? view.lines.map((l) => l.text).join("\n") : "";
+  const text = view ? view.lines.map((l) => stripAnsi(l.text)).join("\n") : "";
   if (!text) return;
   await copyText(text);
 }
 
 function clearConsole() {
   if (!App.currentRunId) return;
-  App.outputByRun[App.currentRunId] = { lines: [], since: 0 };
+  const view = App.outputByRun[App.currentRunId];
+  // 清空只是清「我的视图」:必须保留 since 游标,否则下一次拉取会把
+  // 服务端环形缓冲区从头(seq 1)整个拉回来,表现为「清空无效」。
+  App.outputByRun[App.currentRunId] = { lines: [], since: view ? view.since : 0 };
   renderConsole();
   fetchOutput(App.currentRunId).catch(() => {});
 }
@@ -984,7 +1073,6 @@ async function restoreCurrentRun(runId) {
     // 运行记录已滚出历史,恢复不了就回落到空控制台
     App.currentRunId = null;
   }
-  renderRunsBar();
   renderConsole();
 }
 
@@ -994,7 +1082,9 @@ function scheduleRefresh() {
   if (App.refreshTimer) return;
   App.refreshTimer = setTimeout(() => {
     App.refreshTimer = null;
-    Promise.all([refreshRuns()])
+    // 配置列表必须一起刷:Agent 可经 run_config_* 工具改配置,
+    // 服务端 run_config_save/delete/duplicate 都会发 resources/updated
+    Promise.all([refreshConfigs(), refreshRuns()])
       .then(() => {
         if (App.currentRunId) return fetchOutput(App.currentRunId);
       })
@@ -1002,9 +1092,22 @@ function scheduleRefresh() {
   }, 250);
 }
 
+// 无活动进程时配置变更的兜底轮询:宿主不转发 resources/updated 时,
+// 面板也能在数秒内同步 Agent 经工具做的配置改动(见 batch-report 待联测项)。
+const CONFIG_POLL_MS = 5000;
+let lastConfigPollAt = 0;
+
+function pollConfigsThrottled() {
+  const now = Date.now();
+  if (now - lastConfigPollAt < CONFIG_POLL_MS) return;
+  lastConfigPollAt = now;
+  refreshConfigs().catch(() => {});
+}
+
 function startPolling() {
   if (App.pollTimer) return;
   App.pollTimer = setInterval(() => {
+    pollConfigsThrottled();
     const anyRunning = App.runs.some((r) => r.state === "running");
     if (!anyRunning) return;
     refreshRuns()

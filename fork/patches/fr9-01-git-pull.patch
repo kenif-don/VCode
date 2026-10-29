@@ -1,0 +1,530 @@
+diff --git a/packages/services/src/git/git.ts b/packages/services/src/git/git.ts
+index 42914548..bbc05ea3 100644
+--- a/packages/services/src/git/git.ts
++++ b/packages/services/src/git/git.ts
+@@ -20,6 +20,8 @@ import type {
+   GitPathMutationRequest,
+   GitPushRequest,
+   GitPushResult,
++  GitPullRequest,
++  GitPullResult,
+   GitRefreshRequest,
+   GitRefreshResult,
+   GitRepositoryRequest,
+@@ -52,6 +54,8 @@ export interface IGitService {
+   ): Promise<GitGenerateCommitMessageResult>;
+   commit(params: GitCommitRequest): Promise<GitCommitResult>;
+   push(params: GitPushRequest): Promise<GitPushResult>;
++  /** 拉取当前分支的远程更新：优先快进，无法快进时退化为合并拉取；结果以结构化 outcome/issue 返回。 */
++  pull(params: GitPullRequest): Promise<GitPullResult>;
+   getIdentity(params: GitRepositoryRequest): Promise<GitIdentity>;
+   refresh(params: GitRefreshRequest): Promise<GitRefreshResult>;
+ }
+diff --git a/packages/services/src/git/gitService.ts b/packages/services/src/git/gitService.ts
+index 5dd1fc91..a3726fd8 100644
+--- a/packages/services/src/git/gitService.ts
++++ b/packages/services/src/git/gitService.ts
+@@ -323,6 +323,11 @@ export function createGitService(options?: {
+       return result;
+     },
+ 
++    async pull(params) {
++      const result = await repo.pull(params.workspacePath);
++      return result;
++    },
++
+     async getIdentity(params) {
+       return await repo.getIdentity(params.workspacePath);
+     },
+diff --git a/packages/services/src/git/repo/gitCliRepo.ts b/packages/services/src/git/repo/gitCliRepo.ts
+index 176e4b35..64493b95 100644
+--- a/packages/services/src/git/repo/gitCliRepo.ts
++++ b/packages/services/src/git/repo/gitCliRepo.ts
+@@ -15,6 +15,9 @@ import type {
+   GitLocalBranch,
+   GitLocalBranchListResult,
+   GitWorkspaceRepositoryInfo,
++  GitPullIssueCode,
++  GitPullOutcome,
++  GitPullResult,
+   GitPushResult,
+ } from "@zcode/shared";
+ import { createServiceLogger } from "#src/logger/serviceLogger.js";
+@@ -31,6 +34,7 @@ import {
+ } from "../config.js";
+ import {
+   createGitCommandProvider,
++  type GitCommandExecutionResult,
+   type GitCommandProvider,
+ } from "../providers/gitCommandProvider.js";
+ import {
+@@ -502,6 +506,43 @@ function parseTrackingRemoteName(trackingBranchName: string | null): string | nu
+   return remoteName.length > 0 ? remoteName : null;
+ }
+ 
++type GitPullFailureKind = "local-changes" | "no-upstream" | "conflict" | "diverged" | "unknown";
++
++function classifyGitPullFailure(result: GitCommandExecutionResult): GitPullFailureKind {
++  const text = `${result.stderr}\n${result.stdout}`;
++  if (/would be overwritten|please commit your changes|stash them before/i.test(text)) {
++    return "local-changes";
++  }
++  if (/no tracking information|no upstream/i.test(text)) {
++    return "no-upstream";
++  }
++  if (/automatic merge failed|unmerged files|\bCONFLICT\b/i.test(text)) {
++    return "conflict";
++  }
++  if (/fast-forward|divergent/i.test(text)) {
++    return "diverged";
++  }
++  return "unknown";
++}
++
++function resolveGitPullIssue(
++  result: GitCommandExecutionResult,
++  label: string,
++): { issue: GitPullIssueCode; message: string } {
++  const detail =
++    result.stderr.trim() || `${label} failed with exit code ${result.exitCode ?? "unknown"}`;
++  switch (classifyGitPullFailure(result)) {
++    case "local-changes":
++      return { issue: "local-changes-blocked", message: detail };
++    case "no-upstream":
++      return { issue: "no-upstream", message: detail };
++    case "conflict":
++      return { issue: "merge-conflict", message: detail };
++    default:
++      return { issue: "error", message: detail };
++  }
++}
++
+ function parseRemoteList(stdout: string): string[] {
+   return stdout
+     .replace(/\r\n/g, "\n")
+@@ -672,6 +713,16 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
+     return parseRemoteList(result.stdout);
+   }
+ 
++  async function readHeadCommit(resolution: GitResolvedRepository): Promise<string | null> {
++    const result = await commandProvider.run({
++      cwd: resolution.repoRoot,
++      args: ["rev-parse", "HEAD"],
++      timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
++      maxOutputBytes: DEFAULT_GIT_OUTPUT_BYTES,
++    });
++    return result.exitCode === 0 ? result.stdout.trim() : null;
++  }
++
+   async function resolvePushRemote(status: GitStatusSnapshot): Promise<string> {
+     const resolution = ensureRepositoryAvailable(status.resolution, "push changes");
+     const branchName = status.summary.branchName?.trim() ?? "";
+@@ -1795,6 +1846,100 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
+       };
+     },
+ 
++    async pull(workspacePath: string): Promise<GitPullResult> {
++      const status = await this.getStatus(workspacePath);
++      const resolution = ensureRepositoryAvailable(status.resolution, "pull updates");
++      const branchName = status.summary.branchName?.trim() ?? "";
++      const trackingBranchName = status.summary.trackingBranchName?.trim() ?? null;
++      const remoteName = parseTrackingRemoteName(status.summary.trackingBranchName);
++      const base = {
++        branchName: status.summary.branchName,
++        trackingBranchName: status.summary.trackingBranchName,
++        remoteName,
++      };
++
++      if (status.summary.headRefType !== "branch" || branchName.length === 0) {
++        return {
++          ok: false,
++          outcome: null,
++          issue: "detached-head",
++          message: "Cannot pull while HEAD is detached.",
++          ...base,
++          summary: status.summary,
++        };
++      }
++
++      if (!trackingBranchName) {
++        return {
++          ok: false,
++          outcome: null,
++          issue: "no-upstream",
++          message: `Branch '${branchName}' has no upstream/tracking branch to pull from.`,
++          ...base,
++          summary: status.summary,
++        };
++      }
++
++      const headBefore = await readHeadCommit(resolution);
++      let outcome: GitPullOutcome | null = null;
++      let issue: GitPullIssueCode | null = null;
++      let message: string | null = null;
++
++      const ffResult = await commandProvider.run({
++        cwd: resolution.repoRoot,
++        args: ["pull", "--ff-only"],
++        // 关键业务逻辑：pull 走网络且可能触发 hook，与 push 同档使用更长超时与输出上限。
++        timeoutMs: DEFAULT_GIT_PUSH_TIMEOUT_MS,
++        maxOutputBytes: DEFAULT_GIT_PUSH_OUTPUT_BYTES,
++      });
++
++      if (ffResult.timedOut) {
++        issue = "error";
++        message = `git pull timed out after ${ffResult.timeoutMs ?? ffResult.durationMs}ms`;
++      } else if (ffResult.exitCode === 0) {
++        outcome = "fast-forwarded";
++      } else if (classifyGitPullFailure(ffResult) === "diverged") {
++        // 关键业务逻辑：无法快进（本地与远程分叉）时不硬失败，退化为合并拉取，
++        // 与 HBA web 的拉取语义保持一致；合并仍冲突时由 merge-conflict 结果上报。
++        const mergeResult = await commandProvider.run({
++          cwd: resolution.repoRoot,
++          args: ["pull", "--no-rebase", "--no-edit"],
++          timeoutMs: DEFAULT_GIT_PUSH_TIMEOUT_MS,
++          maxOutputBytes: DEFAULT_GIT_PUSH_OUTPUT_BYTES,
++        });
++        if (mergeResult.timedOut) {
++          issue = "error";
++          message = `git pull timed out after ${mergeResult.timeoutMs ?? mergeResult.durationMs}ms`;
++        } else if (mergeResult.exitCode === 0) {
++          outcome = "merged";
++        } else {
++          ({ issue, message } = resolveGitPullIssue(mergeResult, "git pull --no-rebase"));
++        }
++      } else {
++        ({ issue, message } = resolveGitPullIssue(ffResult, "git pull --ff-only"));
++      }
++
++      if (outcome === "fast-forwarded") {
++        const headAfter = await readHeadCommit(resolution);
++        if (headBefore && headAfter && headBefore === headAfter) {
++          outcome = "up-to-date";
++        }
++      }
++
++      invalidate(workspacePath);
++      const nextStatus = await this.getStatus(workspacePath);
++      return {
++        ok: outcome !== null,
++        outcome,
++        issue,
++        message,
++        branchName,
++        trackingBranchName: nextStatus.summary.trackingBranchName,
++        remoteName: remoteName ?? parseTrackingRemoteName(nextStatus.summary.trackingBranchName),
++        summary: nextStatus.summary,
++      };
++    },
++
+     async getIdentity(workspacePath: string): Promise<GitIdentity> {
+       const resolution = await this.resolveRepository(workspacePath);
+       if (!resolution.isGitAvailable || !resolution.isRepository) {
+diff --git a/packages/services/src/git/repo/gitCliTypes.ts b/packages/services/src/git/repo/gitCliTypes.ts
+index 8eafb470..5defb234 100644
+--- a/packages/services/src/git/repo/gitCliTypes.ts
++++ b/packages/services/src/git/repo/gitCliTypes.ts
+@@ -7,6 +7,7 @@ import type {
+   GitDiffResult,
+   GitIdentity,
+   GitLocalBranchListResult,
++  GitPullResult,
+   GitPushResult,
+   GitRepositorySummary,
+   GitWorkspaceRepositoryInfo,
+@@ -105,6 +106,7 @@ export interface GitCliRepo {
+     options?: { stagedOnly?: boolean },
+   ): Promise<{ commitHash: string }>;
+   push(workspacePath: string): Promise<GitPushResult>;
++  pull(workspacePath: string): Promise<GitPullResult>;
+   getIdentity(workspacePath: string): Promise<GitIdentity>;
+ }
+ 
+diff --git a/packages/shared/src/git.ts b/packages/shared/src/git.ts
+index 2c6d09a1..3a20cd74 100644
+--- a/packages/shared/src/git.ts
++++ b/packages/shared/src/git.ts
+@@ -284,6 +284,30 @@ export interface GitPushResult {
+   summary: GitRepositorySummary;
+ }
+ 
++/** pull 成功后的更新方式：无更新 / 快进(fast-forward) / 产生了合并提交。 */
++export type GitPullOutcome = "up-to-date" | "fast-forwarded" | "merged";
++
++export type GitPullIssueCode =
++  | "detached-head"
++  | "no-upstream"
++  | "local-changes-blocked"
++  | "merge-conflict"
++  | "error";
++
++export interface GitPullRequest extends GitRepositoryRequest {}
++
++export interface GitPullResult {
++  ok: boolean;
++  outcome: GitPullOutcome | null;
++  issue: GitPullIssueCode | null;
++  /** issue 为 merge-conflict / error 时的原始细节，供展示与排查。 */
++  message: string | null;
++  branchName: string | null;
++  trackingBranchName: string | null;
++  remoteName: string | null;
++  summary: GitRepositorySummary;
++}
++
+ export interface GitRefreshResult {
+   summary: GitRepositorySummary;
+   identity: GitIdentity | null;
+diff --git a/packages/ui/src/GitPane.tsx b/packages/ui/src/GitPane.tsx
+index 2e993ad1..8c7177de 100644
+--- a/packages/ui/src/GitPane.tsx
++++ b/packages/ui/src/GitPane.tsx
+@@ -5,7 +5,7 @@ import type { GitChangeSourceId, GitDiffResult } from "@zcode/shared";
+ import { TID_GIT_PANE } from "@zcode/shared/test-ids";
+ import { cn } from "@/components/lib/utils.js";
+ import { Button } from "@/components/ui/button.js";
+-import { FileTextIcon, GitForkIcon, RefreshCw } from "lucide-react";
++import { ArrowDownToLine, FileTextIcon, GitForkIcon, LoaderIcon, RefreshCw } from "lucide-react";
+ import {
+   Select,
+   SelectContent,
+@@ -15,6 +15,7 @@ import {
+ } from "@/components/ui/select.js";
+ import { type GitPaneFileChange, type GitPaneRepositoryState } from "@/hooks/useGitRepository.js";
+ import { useServices } from "@/hooks/useServices.js";
++import { useGitPull } from "@/hooks/useGitPull.js";
+ import type { CreateTaskRequest } from "@/app-shell/types.js";
+ import { GitWorktreeDialog } from "@/GitWorktreeDialog.js";
+ import { useFileContextActions } from "@/hooks/useFileContextActions.js";
+@@ -96,6 +97,10 @@ export function GitPane({
+   const resolvedTheme = resolveTheme(theme);
+   const [expandedPath, setExpandedPath] = useState<string | null>(null);
+   const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
++  const { pulling: gitPulling, runPull: runGitPull } = useGitPull({
++    workspacePath,
++    onPulled: onRefresh,
++  });
+   const [diffStateByKey, setDiffStateByKey] = useState<Record<string, GitDiffLoadState>>({});
+   const diffGenerationRef = useRef(0);
+   const pendingDiffKeysRef = useRef(new Set<string>());
+@@ -470,6 +475,22 @@ export function GitPane({
+         </Select>
+ 
+         <div className="flex items-center gap-2">
++          <Button
++            type="button"
++            variant="ghost"
++            size="lg"
++            disabled={gitPulling}
++            onClick={() => {
++              void runGitPull();
++            }}
++          >
++            {gitPulling ? (
++              <LoaderIcon className="size-3.5 animate-spin" />
++            ) : (
++              <ArrowDownToLine className="size-3.5" />
++            )}
++            {intl.formatMessage({ id: "git.action.pull" })}
++          </Button>
+           <Button
+             type="button"
+             variant="ghost"
+diff --git a/packages/ui/src/hooks/useGitPull.ts b/packages/ui/src/hooks/useGitPull.ts
+new file mode 100644
+index 00000000..a057393a
+--- /dev/null
++++ b/packages/ui/src/hooks/useGitPull.ts
+@@ -0,0 +1,76 @@
++import { useCallback, useState } from "react";
++import type { GitPullResult } from "@zcode/shared";
++import { toast } from "@/components/ui/toast.js";
++import { useOptionalServices } from "@/hooks/useServices.js";
++import { useZCodeIntl } from "@/i18n/IntlProvider.js";
++import { getErrorMessage } from "@/lib/errorMessage.js";
++import { logger } from "@/logger.js";
++
++/**
++ * 「拉取最新更新」动作：状态面板 Git 区块与 GitPane 头部共用。
++ * 快进/合并/无更新的结果映射为友好 toast，冲突与失败原因按服务层 issue 分类提示。
++ * 服务访问器用 optional 读取：无 ServiceProvider 的宿主/测试环境渲染不报错，动作触发时再降级提示。
++ */
++export function useGitPull(options: { workspacePath: string; onPulled?: () => void }) {
++  const { workspacePath, onPulled } = options;
++  const services = useOptionalServices();
++  const { intl } = useZCodeIntl();
++  const [pulling, setPulling] = useState(false);
++
++  const runPull = useCallback(async (): Promise<GitPullResult | null> => {
++    if (pulling) {
++      return null;
++    }
++    const gitService = services?.gitService;
++    if (!gitService) {
++      toast(intl.formatMessage({ id: "git.pull.error.failed" }, { error: "git-service-unavailable" }));
++      return null;
++    }
++    setPulling(true);
++    try {
++      const result = await gitService.pull({ workspacePath });
++      logger.info("[GitPull] 拉取完成", {
++        workspacePath,
++        ok: result.ok,
++        outcome: result.outcome,
++        issue: result.issue,
++        branchName: result.branchName,
++      });
++      if (result.ok) {
++        const messageId =
++          result.outcome === "merged"
++            ? "git.pull.toast.merged"
++            : result.outcome === "up-to-date"
++              ? "git.pull.toast.upToDate"
++              : "git.pull.toast.fastForwarded";
++        toast(intl.formatMessage({ id: messageId }));
++      } else {
++        const issueMessageId =
++          result.issue === "detached-head"
++            ? "git.pull.error.detachedHead"
++            : result.issue === "no-upstream"
++              ? "git.pull.error.noUpstream"
++              : result.issue === "local-changes-blocked"
++                ? "git.pull.error.localChangesBlocked"
++                : result.issue === "merge-conflict"
++                  ? "git.pull.error.mergeConflict"
++                  : "git.pull.error.failed";
++        toast(
++          intl.formatMessage({ id: issueMessageId }, { error: result.message ?? "" }),
++        );
++      }
++      onPulled?.();
++      return result;
++    } catch (error: unknown) {
++      const message = getErrorMessage(error);
++      logger.warn("[GitPull] 拉取失败", { workspacePath, error: message });
++      toast(intl.formatMessage({ id: "git.pull.error.failed" }, { error: message }));
++      onPulled?.();
++      return null;
++    } finally {
++      setPulling(false);
++    }
++  }, [services, intl, onPulled, pulling, workspacePath]);
++
++  return { pulling, runPull };
++}
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index bbf2ffe6..26037dfa 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -1750,6 +1750,16 @@ const enUS: Record<string, string> = {
+   "sidePane.time.hoursAgo": "{count}h ago",
+   "sidePane.time.daysAgo": "{count}d ago",
+   "git.action.refresh": "Refresh",
++  "git.action.pull": "Pull",
++  "git.pull.toast.upToDate": "Already up to date",
++  "git.pull.toast.fastForwarded": "Pulled the latest updates",
++  "git.pull.toast.merged": "Merged the latest remote commits",
++  "git.pull.error.detachedHead": "Cannot pull while HEAD is detached. Switch back to a branch first.",
++  "git.pull.error.noUpstream": "The current branch has no upstream branch to pull from.",
++  "git.pull.error.localChangesBlocked": "Local uncommitted changes would be overwritten. Commit or stash them first.",
++  "git.pull.error.mergeConflict":
++    "Merge conflicts occurred while pulling. Review the conflicted files or ask the agent to resolve the merge.",
++  "git.pull.error.failed": "Pull failed: {error}",
+   "git.action.stage": "Stage",
+   "git.action.unstage": "Unstage",
+   "git.action.discard": "Discard",
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 4f0c62ff..acc67306 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -1621,6 +1621,15 @@ const zhCN: Record<string, string> = {
+   "sidePane.time.hoursAgo": "{count} 小时前",
+   "sidePane.time.daysAgo": "{count} 天前",
+   "git.action.refresh": "刷新",
++  "git.action.pull": "拉取",
++  "git.pull.toast.upToDate": "已是最新，无需拉取",
++  "git.pull.toast.fastForwarded": "已拉取最新更新",
++  "git.pull.toast.merged": "已合并远程分支的最新提交",
++  "git.pull.error.detachedHead": "游离 HEAD 状态下无法拉取，请先切回分支。",
++  "git.pull.error.noUpstream": "当前分支没有跟踪远程分支，无法拉取。",
++  "git.pull.error.localChangesBlocked": "本地有未提交修改会被拉取覆盖，请先提交或暂存后再拉取。",
++  "git.pull.error.mergeConflict": "拉取合并产生冲突，可在审查面板查看冲突文件，或让智能体协助合并。",
++  "git.pull.error.failed": "拉取失败：{error}",
+   "git.action.stage": "暂存",
+   "git.action.unstage": "取消暂存",
+   "git.action.discard": "丢弃",
+diff --git a/packages/ui/src/v4/ConversationStatusPanel.tsx b/packages/ui/src/v4/ConversationStatusPanel.tsx
+index f272d19a..19ace6c6 100644
+--- a/packages/ui/src/v4/ConversationStatusPanel.tsx
++++ b/packages/ui/src/v4/ConversationStatusPanel.tsx
+@@ -13,6 +13,7 @@ import {
+ } from "react";
+ import {
+   ActivityIcon,
++  ArrowDownToLineIcon,
+   ArrowRightIcon,
+   BotIcon,
+   CheckCircle2Icon,
+@@ -25,6 +26,7 @@ import {
+   FileDiffIcon,
+   GoalIcon,
+   ListChecksIcon,
++  LoaderIcon,
+   Maximize2Icon,
+   Minimize2Icon,
+   PauseIcon,
+@@ -75,6 +77,7 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+ import { formatBackgroundTaskElapsedLabel } from "@/BackgroundTaskElapsedLabel.js";
+ import { GitActionMenu } from "@/GitActionMenu.js";
+ import { GitBranchSwitcher } from "@/GitBranchSwitcher.js";
++import { useGitPull } from "@/hooks/useGitPull.js";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import type {
+   OpenPlanDetailSideTabRequest,
+@@ -384,12 +387,17 @@ function GitStatusSection({
+   useVerticalFloatingPanels: boolean;
+ }) {
+   const { intl } = useZCodeIntl();
++  const { pulling: gitPulling, runPull: runGitPull } = useGitPull({
++    workspacePath,
++    onPulled: onRefreshGit,
++  });
+   const git = model.git;
+   if (!git || !gitSummary || !onRefreshGit) {
+     return null;
+   }
+   const hasChanges = git.added + git.removed > 0;
+   const canOpenReview = Boolean(onOpenGitReview && gitSummary.isRepository);
++  const canPull = gitSummary.isRepository && !gitPulling;
+ 
+   return (
+     <StatusSection
+@@ -446,6 +454,28 @@ function GitStatusSection({
+           popoverSide={useVerticalFloatingPanels ? "bottom" : "left"}
+           showFooterActions
+         />
++        <button
++          type="button"
++          disabled={!canPull}
++          className={cn(
++            "flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-ui-base text-[var(--color-foreground)] transition-colors",
++            canPull
++              ? "hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-input-border-focused)]"
++              : "cursor-default opacity-50",
++          )}
++          onClick={() => {
++            void runGitPull();
++          }}
++        >
++          {gitPulling ? (
++            <LoaderIcon className="size-4 shrink-0 animate-spin text-[var(--color-foreground)]" />
++          ) : (
++            <ArrowDownToLineIcon className="size-4 shrink-0 text-[var(--color-foreground)]" />
++          )}
++          <span className="min-w-0 flex-1 truncate">
++            {intl.formatMessage({ id: "git.action.pull" })}
++          </span>
++        </button>
+         <GitActionMenu
+           workspacePath={workspacePath}
+           workspaceIdentity={workspaceIdentity}

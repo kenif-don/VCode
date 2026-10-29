@@ -1,0 +1,753 @@
+diff --git a/packages/services/src/file/file.ts b/packages/services/src/file/file.ts
+index 9eaccde2..e2f00fd5 100644
+--- a/packages/services/src/file/file.ts
++++ b/packages/services/src/file/file.ts
+@@ -83,10 +83,10 @@ export interface IFileService {
+    */
+   deletePath(params: { path: string; recursive?: boolean }): Promise<void>;
+   /**
+-   * 重命名/移动条目。newPath 目标已存在时抛错（不静默覆盖），
+-   * 供文件树重命名按钮/菜单调用，newPath 由 UI 拼同目录新名称后传入。
++   * 重命名条目（同目录内改名）。UI 只传新名称，目标路径由服务端拼接，
++   * 避免 UI 拼路径踩 Windows/远程 Linux 分隔符差异；目标已存在时抛错（不静默覆盖）。
+    */
+-  renamePath(params: { path: string; newPath: string }): Promise<void>;
++  renamePath(params: { path: string; newName: string }): Promise<{ newPath: string }>;
+ }
+ 
+ export const IFileService = createServiceDescriptor<IFileService>(ServiceChannels.File);
+diff --git a/packages/services/src/file/fileService.ts b/packages/services/src/file/fileService.ts
+index 1f8e09ce..ace20e42 100644
+--- a/packages/services/src/file/fileService.ts
++++ b/packages/services/src/file/fileService.ts
+@@ -1,8 +1,8 @@
+ /* eslint-disable max-lines */
+ import type { Dirent } from "node:fs";
+-import { mkdir, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
++import { mkdir, open, readFile, readdir, realpath, rename, rm, rmdir, stat } from "node:fs/promises";
+ import { homedir } from "node:os";
+-import { extname, join, relative, sep } from "node:path";
++import { dirname, extname, join, relative, sep } from "node:path";
+ import type {
+   FileBinaryPreview,
+   FileEntry,
+@@ -646,23 +646,40 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
+       }
+       const targetStat = await stat(params.path);
+       if (targetStat.isDirectory() && params.recursive !== true) {
+-        // 非空目录必须显式 recursive 才删，避免误传路径把整棵子树静默清掉。
+-        throw new Error(`Directory delete requires recursive: ${params.path}`);
++        // 非空目录必须显式 recursive 才删，避免误传路径把整棵子树静默清掉；
++        // 空目录走 rmdir 正常删除（rm 对任何目录不带 recursive 都报 EISDIR）。
++        const entries = await readdir(params.path);
++        if (entries.length > 0) {
++          throw new Error(`Directory delete requires recursive: ${params.path}`);
++        }
++        await rmdir(params.path);
++        return;
+       }
+       await rm(params.path, { recursive: params.recursive === true });
+     },
+-    async renamePath(params: { path: string; newPath: string }): Promise<void> {
+-      if (!params.path.trim() || !params.newPath.trim()) {
+-        throw new Error("Rename source and target paths are required.");
++    async renamePath(params: { path: string; newName: string }): Promise<{ newPath: string }> {
++      const newName = params.newName.trim();
++      if (!params.path.trim() || !newName) {
++        throw new Error("Rename source and new name are required.");
++      }
++      // 文件树重命名是同目录改名；名称里出现任一路径分隔符都视为误输入。
++      if (newName === "." || newName === ".." || /[\\/]/.test(newName)) {
++        throw new Error(`Invalid rename target name: ${params.newName}`);
+       }
++      const newPath = join(dirname(params.path), newName);
+       // POSIX rename 会静默覆盖同名目标；文件树重命名是原地改名，覆盖属于事故而非预期。
+-      const targetExists = await stat(params.newPath)
+-        .then(() => true)
+-        .catch(() => false);
+-      if (targetExists) {
+-        throw new Error(`Rename target already exists: ${params.newPath}`);
++      // 大小写不敏感文件系统（Windows/macOS）上改大小写会 stat 命中自身，按同文件放行。
++      const targetStat = await stat(newPath).catch(() => null);
++      if (targetStat) {
++        const sourceStat = await stat(params.path);
++        const isSameFile =
++          targetStat.ino !== 0 && targetStat.ino === sourceStat.ino && targetStat.dev === sourceStat.dev;
++        if (!isSameFile) {
++          throw new Error(`Rename target already exists: ${newPath}`);
++        }
+       }
+-      await rename(params.path, params.newPath);
++      await rename(params.path, newPath);
++      return { newPath };
+     },
+   };
+ }
+diff --git a/packages/services/test/fileService.test.ts b/packages/services/test/fileService.test.ts
+index b7ea66ee..2aef7660 100644
+--- a/packages/services/test/fileService.test.ts
++++ b/packages/services/test/fileService.test.ts
+@@ -1150,4 +1150,123 @@ describe("fileService", () => {
+       });
+     });
+   });
++
++  // ── deletePath / renamePath ─────────────────────────────────────
++
++  describe("deletePath", () => {
++    it("deletes a file and reports missing target as failure", async () => {
++      const rootPath = makeTempDir("zcode-delete-file-");
++      const filePath = join(rootPath, "a.txt");
++      writeFileSync(filePath, "hello");
++
++      const service = createFileService();
++      await service.deletePath({ path: filePath });
++      expect(existsSync(filePath)).toBe(false);
++
++      // 目标已不存在时如实抛错，上层据此提示而不是静默成功。
++      await expect(service.deletePath({ path: filePath })).rejects.toThrow();
++    });
++
++    it("refuses non-empty directory delete without recursive", async () => {
++      const rootPath = makeTempDir("zcode-delete-dir-");
++      const emptyDir = join(rootPath, "empty");
++      const fullDir = join(rootPath, "full");
++      mkdirSync(emptyDir);
++      mkdirSync(fullDir);
++      writeFileSync(join(fullDir, "a.txt"), "hello");
++
++      const service = createFileService();
++      await service.deletePath({ path: emptyDir });
++      expect(existsSync(emptyDir)).toBe(false);
++
++      await expect(service.deletePath({ path: fullDir })).rejects.toThrow(/recursive/);
++      expect(existsSync(fullDir)).toBe(true);
++    });
++
++    it("deletes a non-empty directory when recursive is set", async () => {
++      const rootPath = makeTempDir("zcode-delete-recursive-");
++      const fullDir = join(rootPath, "full");
++      mkdirSync(join(fullDir, "nested"), { recursive: true });
++      writeFileSync(join(fullDir, "nested", "a.txt"), "hello");
++
++      const service = createFileService();
++      await service.deletePath({ path: fullDir, recursive: true });
++      expect(existsSync(fullDir)).toBe(false);
++    });
++
++    it("rejects empty path", async () => {
++      const service = createFileService();
++      await expect(service.deletePath({ path: "  " })).rejects.toThrow();
++    });
++  });
++
++  describe("renamePath", () => {
++    it("renames a file in place and returns the new path", async () => {
++      const rootPath = makeTempDir("zcode-rename-file-");
++      const filePath = join(rootPath, "old.txt");
++      writeFileSync(filePath, "hello");
++
++      const service = createFileService();
++      const { newPath } = await service.renamePath({ path: filePath, newName: "new.txt" });
++      expect(newPath).toBe(join(rootPath, "new.txt"));
++      expect(existsSync(filePath)).toBe(false);
++      expect(readFileSync(newPath, "utf-8")).toBe("hello");
++    });
++
++    it("renames a directory including its content", async () => {
++      const rootPath = makeTempDir("zcode-rename-dir-");
++      const dirPath = join(rootPath, "old-dir");
++      mkdirSync(dirPath);
++      writeFileSync(join(dirPath, "a.txt"), "hello");
++
++      const service = createFileService();
++      const { newPath } = await service.renamePath({ path: dirPath, newName: "new-dir" });
++      expect(newPath).toBe(join(rootPath, "new-dir"));
++      expect(readFileSync(join(newPath, "a.txt"), "utf-8")).toBe("hello");
++    });
++
++    it("allows case-only rename of the same file", async () => {
++      const rootPath = makeTempDir("zcode-rename-case-");
++      const filePath = join(rootPath, "a.txt");
++      writeFileSync(filePath, "hello");
++
++      const service = createFileService();
++      const { newPath } = await service.renamePath({ path: filePath, newName: "A.txt" });
++      expect(newPath).toBe(join(rootPath, "A.txt"));
++      expect(readFileSync(newPath, "utf-8")).toBe("hello");
++    });
++
++    it("refuses to overwrite an existing target", async () => {
++      const rootPath = makeTempDir("zcode-rename-overwrite-");
++      writeFileSync(join(rootPath, "a.txt"), "a");
++      writeFileSync(join(rootPath, "b.txt"), "b");
++
++      const service = createFileService();
++      await expect(
++        service.renamePath({ path: join(rootPath, "a.txt"), newName: "b.txt" }),
++      ).rejects.toThrow(/already exists/);
++      // 两个文件都必须原样保留。
++      expect(readFileSync(join(rootPath, "a.txt"), "utf-8")).toBe("a");
++      expect(readFileSync(join(rootPath, "b.txt"), "utf-8")).toBe("b");
++    });
++
++    it("rejects names containing path separators or dot segments", async () => {
++      const rootPath = makeTempDir("zcode-rename-invalid-");
++      const filePath = join(rootPath, "a.txt");
++      writeFileSync(filePath, "hello");
++
++      const service = createFileService();
++      await expect(service.renamePath({ path: filePath, newName: "sub/b.txt" })).rejects.toThrow(
++        /Invalid/,
++      );
++      await expect(service.renamePath({ path: filePath, newName: "sub\\b.txt" })).rejects.toThrow(
++        /Invalid/,
++      );
++      await expect(service.renamePath({ path: filePath, newName: ".." })).rejects.toThrow(
++        /Invalid/,
++      );
++      await expect(service.renamePath({ path: filePath, newName: "  " })).rejects.toThrow();
++      expect(existsSync(filePath)).toBe(true);
++    });
++  });
+ });
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index bbf2ffe6..580c4e9c 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -2321,6 +2321,15 @@ const enUS: Record<string, string> = {
+   "workspaceFileTree.openInBrowser": "Open in built-in browser",
+   "workspaceFileTree.openFailed": "Could not open this item",
+   "workspaceFileTree.addToChat": "Add to chat",
++  "workspaceFileTree.rename": "Rename",
++  "workspaceFileTree.renamePlaceholder": "Enter a new name",
++  "workspaceFileTree.renameFailed": "Rename failed",
++  "workspaceFileTree.deleteConfirmTitle": "Delete \"{name}\"?",
++  "workspaceFileTree.deleteConfirmFileDescription":
++    "This will delete the file from disk. This cannot be undone.",
++  "workspaceFileTree.deleteConfirmDirectoryDescription":
++    "This will delete the folder and all of its contents from disk. This cannot be undone.",
++  "workspaceFileTree.deleteFailed": "Delete failed",
+   "workspaceFileTree.gitStatus.ignored": "Ignored",
+ 
+   // SSH dialog
+@@ -3019,8 +3038,6 @@ const enUS: Record<string, string> = {
+   "chat.turnNavigator.userFallback": "User query",
+   "chat.rewind.conflictConfirm":
+     "These files changed outside this turn. Force rewinding may create conflicts:\n\n{paths}",
+-  "taskNav.back": "Go back",
+-  "taskNav.forward": "Go forward",
+   "taskNav.noMoreBack": "No previous tasks",
+   "taskNav.noMoreForward": "No next tasks",
+   "taskList.switchBlockedByModelRestart":
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 4f0c62ff..517910a1 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -2152,6 +2152,14 @@ const zhCN: Record<string, string> = {
+   "workspaceFileTree.openInBrowser": "用内置浏览器打开",
+   "workspaceFileTree.openFailed": "无法打开该条目",
+   "workspaceFileTree.addToChat": "添加到聊天",
++  "workspaceFileTree.rename": "重命名",
++  "workspaceFileTree.renamePlaceholder": "输入新名称",
++  "workspaceFileTree.renameFailed": "重命名失败",
++  "workspaceFileTree.deleteConfirmTitle": "删除“{name}”？",
++  "workspaceFileTree.deleteConfirmFileDescription": "此操作会将文件从磁盘删除，且无法撤销。",
++  "workspaceFileTree.deleteConfirmDirectoryDescription":
++    "此操作会将文件夹及其全部内容从磁盘删除，且无法撤销。",
++  "workspaceFileTree.deleteFailed": "删除失败",
+   "workspaceFileTree.gitStatus.ignored": "已忽略",
+ 
+   // SSH 对话框
+@@ -2825,8 +2842,6 @@ const zhCN: Record<string, string> = {
+   "chat.turnNavigator.userFallback": "用户输入",
+   "chat.rewind.conflictConfirm":
+     "以下文件在该轮之后被外部修改过，强制回滚可能导致冲突：\n\n{paths}",
+-  "taskNav.back": "后退",
+-  "taskNav.forward": "前进",
+   "taskNav.noMoreBack": "没有更早的任务了",
+   "taskNav.noMoreForward": "没有更新的任务了",
+   "taskList.switchBlockedByModelRestart": "模型供应商切换中，暂时不能切换任务。",
+diff --git a/packages/ui/src/workspace-file-tree/WorkspaceFileTree.tsx b/packages/ui/src/workspace-file-tree/WorkspaceFileTree.tsx
+index eb9112a3..e6219cff 100644
+--- a/packages/ui/src/workspace-file-tree/WorkspaceFileTree.tsx
++++ b/packages/ui/src/workspace-file-tree/WorkspaceFileTree.tsx
+@@ -31,6 +31,8 @@ import {
+ } from "@/components/ui/dropdown-menu.js";
+ import { toast } from "@/components/ui/toast.js";
+ import { usePlatform } from "@/hooks/usePlatform.js";
++import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
++import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import {
+   TID_WORKSPACE_FILE_TREE_PANEL,
+@@ -69,6 +71,7 @@ import {
+   WorkspaceFileTreeList,
+ } from "@/workspace-file-tree/WorkspaceFileTreeList.js";
+ import { WorkspaceFileTreeStickyFolders } from "@/workspace-file-tree/WorkspaceFileTreeStickyFolders.js";
++import { WorkspaceFileTreeRenameDialog } from "@/workspace-file-tree/WorkspaceFileTreeRenameDialog.js";
+ import {
+   createWorkspaceFileTreeRowsFromSearchEntries,
+   getWorkspaceFileSearchDirectoryRevealPaths,
+@@ -109,6 +112,11 @@ export function WorkspaceFileTree({
+   const [showChangedOnly, setShowChangedOnly] = useState(false);
+   const [showScrollBottomMask, setShowScrollBottomMask] = useState(false);
+   const [hasScrollableFileTree, setHasScrollableFileTree] = useState(false);
++  // 重命名弹窗状态集中在这里（而非行组件）：虚拟列表滚动会让行卸载，
++  // 弹窗挂在行上会随之消失；删除确认走全局 ConfirmDialogStore，无此问题。
++  const [renameTarget, setRenameTarget] = useState<WorkspaceFileTreeRow | null>(null);
++  const [renameValue, setRenameValue] = useState("");
++  const requestConfirmation = useConfirmDialog();
+   const handleListRef = useCallback((node: HTMLDivElement | null) => {
+     listRef.current = node;
+     if (node) {
+@@ -259,6 +267,8 @@ export function WorkspaceFileTree({
+       openFailed: intl.formatMessage({ id: "workspaceFileTree.openFailed" }),
+       openWith: intl.formatMessage({ id: "workspaceFileTree.openWith" }),
+       reveal: fileManagerLabel,
++      rename: intl.formatMessage({ id: "workspaceFileTree.rename" }),
++      delete: intl.formatMessage({ id: "common.delete" }),
+     }),
+     [fileManagerLabel, intl],
+   );
+@@ -463,6 +473,86 @@ export function WorkspaceFileTree({
+     }
+   }, [workspacePath]);
+ 
++  // 服务走 useWorkspaceServices：远程（SSH/WSL）工作区自动路由到远端 host 的文件服务。
++  const { fileService } = useWorkspaceServices(
++    workspacePath,
++    workspaceRemoteSessionId,
++    workspaceIdentity,
++  );
++  const handleRenameRow = useCallback((row: WorkspaceFileTreeRow) => {
++    setRenameValue(row.name);
++    setRenameTarget(row);
++  }, []);
++  const handleRenameConfirm = useCallback(async () => {
++    const target = renameTarget;
++    if (!target) {
++      return;
++    }
++    const newName = renameValue.trim();
++    if (!newName || newName === target.name) {
++      // 名称未变视为取消；非法名（含分隔符等）由服务层拒绝并统一走失败提示。
++      setRenameTarget(null);
++      return;
++    }
++    try {
++      const { newPath } = await fileService.renamePath({ path: target.path, newName });
++      setRenameTarget(null);
++      // 重命名预览中的文件后，把预览切到新路径，避免留在失效旧路径上。
++      if (activePreviewPath && areWorkspaceFilePathsEqual(activePreviewPath, target.path)) {
++        onOpenPreview?.(createCodeViewerSourceForWorkspaceFile(newPath));
++      }
++    } catch (error) {
++      logger.warn("[WorkspaceFileTree] 重命名失败", {
++        path: target.path,
++        newName,
++        error: error instanceof Error ? error.message : String(error),
++      });
++      toast(
++        `${intl.formatMessage({ id: "workspaceFileTree.renameFailed" })}: ${
++          error instanceof Error ? error.message : String(error)
++        }`,
++      );
++    }
++  }, [activePreviewPath, fileService, intl, onOpenPreview, renameTarget, renameValue]);
++  const handleDeleteRow = useCallback(
++    async (row: WorkspaceFileTreeRow) => {
++      const confirmed = await requestConfirmation({
++        title: intl.formatMessage(
++          { id: "workspaceFileTree.deleteConfirmTitle" },
++          { name: row.name },
++        ),
++        description: intl.formatMessage({
++          id:
++            row.type === "directory"
++              ? "workspaceFileTree.deleteConfirmDirectoryDescription"
++              : "workspaceFileTree.deleteConfirmFileDescription",
++        }),
++        confirmLabel: intl.formatMessage({ id: "common.delete" }),
++        confirmVariant: "destructive",
++      });
++      if (!confirmed) {
++        return;
++      }
++      try {
++        await fileService.deletePath({
++          path: row.path,
++          recursive: row.type === "directory",
++        });
++      } catch (error) {
++        logger.warn("[WorkspaceFileTree] 删除失败", {
++          path: row.path,
++          error: error instanceof Error ? error.message : String(error),
++        });
++        toast(
++          `${intl.formatMessage({ id: "workspaceFileTree.deleteFailed" })}: ${
++            error instanceof Error ? error.message : String(error)
++          }`,
++        );
++      }
++    },
++    [fileService, intl, requestConfirmation],
++  );
++
+   const handleToggleDirectory = useCallback(
+     (row: WorkspaceFileTreeRow) => {
+       if (row.type !== "directory") {
+@@ -762,6 +852,8 @@ export function WorkspaceFileTree({
+             onRevealRow={handleRevealStickyFolderRow}
+             onOpenPreview={handleOpenPreview}
+             onOpenBrowserUrl={onOpenBrowserUrl}
++            onRename={handleRenameRow}
++            onDelete={handleDeleteRow}
+             onKeyDown={handleRowKeyDown}
+           />
+           <WorkspaceFileTreeList
+@@ -792,10 +884,24 @@ export function WorkspaceFileTree({
+             onToggleDirectory={handleDirectoryAction}
+             onOpenPreview={handleOpenPreview}
+             onOpenBrowserUrl={onOpenBrowserUrl}
++            onRename={handleRenameRow}
++            onDelete={handleDeleteRow}
+             onKeyDown={handleRowKeyDown}
+           />
+         </div>
+       </div>
++      <WorkspaceFileTreeRenameDialog
++        open={renameTarget !== null}
++        value={renameValue}
++        onOpenChange={(open) => {
++          if (!open) {
++            setRenameTarget(null);
++          }
++        }}
++        onChange={setRenameValue}
++        onCancel={() => setRenameTarget(null)}
++        onConfirm={() => void handleRenameConfirm()}
++      />
+     </section>
+   );
+ }
+diff --git a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeList.tsx b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeList.tsx
+index 3f456619..2456e8d2 100644
+--- a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeList.tsx
++++ b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeList.tsx
+@@ -71,6 +71,8 @@ export function WorkspaceFileTreeList({
+   onToggleDirectory,
+   onOpenPreview,
+   onOpenBrowserUrl,
++  onRename,
++  onDelete,
+   onKeyDown,
+ }: {
+   rootError: Error | null;
+@@ -94,6 +96,8 @@ export function WorkspaceFileTreeList({
+   onToggleDirectory: (row: WorkspaceFileTreeRow) => void;
+   onOpenPreview: (row: WorkspaceFileTreeRow) => void;
+   onOpenBrowserUrl?: (url: string) => void;
++  onRename?: (row: WorkspaceFileTreeRow) => void;
++  onDelete?: (row: WorkspaceFileTreeRow) => void;
+   onKeyDown: (
+     event: KeyboardEvent<HTMLDivElement>,
+     row: WorkspaceFileTreeRow,
+@@ -155,6 +159,8 @@ export function WorkspaceFileTreeList({
+       onToggleDirectory={onToggleDirectory}
+       onOpenPreview={onOpenPreview}
+       onOpenBrowserUrl={onOpenBrowserUrl}
++      onRename={onRename}
++      onDelete={onDelete}
+       onKeyDown={onKeyDown}
+     />
+   );
+diff --git a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRenameDialog.tsx b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRenameDialog.tsx
+new file mode 100644
+index 00000000..fe15b3f9
+--- /dev/null
++++ b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRenameDialog.tsx
+@@ -0,0 +1,99 @@
++import { useRef } from "react";
++import { Button } from "@/components/ui/button.js";
++import {
++  Dialog,
++  DialogContent,
++  DialogFooter,
++  DialogHeader,
++  DialogTitle,
++} from "@/components/ui/dialog.js";
++import { Input } from "@/components/ui/input.js";
++import { useZCodeIntl } from "@/i18n/IntlProvider.js";
++import { isImeComposingKeyEvent } from "@/lib/imeComposition.js";
++import { logger } from "@/logger.js";
++
++/** 文件树条目重命名弹窗。文案独立于 taskList.rename，IME Enter 只确认候选不触发提交。 */
++export function WorkspaceFileTreeRenameDialog({
++  open,
++  value,
++  onOpenChange,
++  onChange,
++  onCancel,
++  onConfirm,
++}: {
++  open: boolean;
++  value: string;
++  onOpenChange: (open: boolean) => void;
++  onChange: (value: string) => void;
++  onCancel: () => void;
++  onConfirm: () => void;
++}) {
++  const { intl } = useZCodeIntl();
++  const compositionActiveRef = useRef(false);
++
++  return (
++    <Dialog open={open} onOpenChange={onOpenChange}>
++      <DialogContent className="max-w-md overflow-hidden rounded-2xl p-0">
++        <div className="flex min-w-0 flex-col gap-6 p-6">
++          <DialogHeader className="space-y-2">
++            <DialogTitle>{intl.formatMessage({ id: "workspaceFileTree.rename" })}</DialogTitle>
++          </DialogHeader>
++          <div className="flex min-w-0 flex-col space-y-4">
++            <Input
++              value={value}
++              size="lg"
++              placeholder={intl.formatMessage({
++                id: "workspaceFileTree.renamePlaceholder",
++              })}
++              onChange={(event) => {
++                onChange(event.target.value);
++              }}
++              onCompositionEnd={() => {
++                compositionActiveRef.current = false;
++              }}
++              onCompositionStart={() => {
++                compositionActiveRef.current = true;
++              }}
++              onKeyDown={(event) => {
++                if (event.key === "Enter") {
++                  if (
++                    isImeComposingKeyEvent({
++                      compositionActive: compositionActiveRef.current,
++                      nativeEvent: event.nativeEvent,
++                    })
++                  ) {
++                    logger.debug("[WorkspaceFileTree] ignore rename enter during IME", {
++                      valueLength: value.length,
++                    });
++                    return;
++                  }
++                  event.preventDefault();
++                  onConfirm();
++                }
++              }}
++            />
++          </div>
++          <DialogFooter className="flex items-center justify-end gap-3">
++            <Button
++              type="button"
++              variant="secondary"
++              size="lg"
++              className="h-10 min-w-0 px-5"
++              onClick={onCancel}
++            >
++              {intl.formatMessage({ id: "common.cancel" })}
++            </Button>
++            <Button
++              type="button"
++              size="lg"
++              className="h-10 min-w-0 px-5"
++              onClick={onConfirm}
++            >
++              {intl.formatMessage({ id: "common.confirm" })}
++            </Button>
++          </DialogFooter>
++        </div>
++      </DialogContent>
++    </Dialog>
++  );
++}
+diff --git a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRowView.tsx b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRowView.tsx
+index e93c159d..13646c20 100644
+--- a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRowView.tsx
++++ b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeRowView.tsx
+@@ -2,7 +2,8 @@ import { SidebarNativeTooltip, ControlHintTooltip } from "@/ControlHintTooltip.j
+ /* eslint-disable max-lines -- 文件树行集中维护拖拽、打开方式、Git 状态与上下文菜单交互。 */
+ import type { EditorInfo, OpenInEditorRemoteTarget } from "@zcode/shared";
+ import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
+-import { AlertCircle, ChevronRight, LoaderCircle } from "lucide-react";
++import { useRef } from "react";
++import { AlertCircle, ChevronRight, LoaderCircle, Pencil, Trash2 } from "lucide-react";
+ import { TID_WORKSPACE_FILE_TREE_ROW, testId } from "@zcode/shared/test-ids";
+ import { cn } from "@/components/lib/utils.js";
+ import {
+@@ -72,6 +73,8 @@ export function WorkspaceFileTreeRowView({
+   onToggleDirectory,
+   onOpenPreview,
+   onOpenBrowserUrl,
++  onRename,
++  onDelete,
+   onKeyDown,
+ }: {
+   layout?: "absolute" | "static";
+@@ -92,9 +95,13 @@ export function WorkspaceFileTreeRowView({
+   onToggleDirectory: (row: WorkspaceFileTreeRow) => void;
+   onOpenPreview: (row: WorkspaceFileTreeRow) => void;
+   onOpenBrowserUrl?: (url: string) => void;
++  onRename?: (row: WorkspaceFileTreeRow) => void;
++  onDelete?: (row: WorkspaceFileTreeRow) => void;
+   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
+ }) {
+   const platform = usePlatform();
++  // 悬浮按钮位于可拖拽行内部：按钮按下期间抑制行拖拽，避免点按钮抖动触发拖拽手势。
++  const suppressRowDragRef = useRef(false);
+   const { isDragging, setIsDragging } = useWorkspaceFileTreeRowDragState();
+   const fileActions = useFileContextActions({
+     canOpenLocalFileManager,
+@@ -237,7 +244,7 @@ export function WorkspaceFileTreeRowView({
+           onKeyDown(event, row);
+         }}
+         onDragStart={(event) => {
+-          if (isDeletedFile) {
++          if (isDeletedFile || suppressRowDragRef.current) {
+             event.preventDefault();
+             return;
+           }
+@@ -254,6 +261,7 @@ export function WorkspaceFileTreeRowView({
+           dispatchWorkspaceFileDragState(true);
+         }}
+         onDragEnd={() => {
++          suppressRowDragRef.current = false;
+           setIsDragging(false);
+           dispatchWorkspaceFileDragState(false);
+         }}
+@@ -328,6 +336,50 @@ export function WorkspaceFileTreeRowView({
+         ) : row.error ? (
+           <AlertCircle className="ml-2 size-3 shrink-0 text-warning" />
+         ) : null}
++        {/* 行内悬浮操作：默认透明占位不改变行宽，hover/键盘聚焦时浮现；
++            浮现时覆盖右侧 Git 徽标（与 VS Code 文件树一致），删除仅对真实存在的条目开放。 */}
++        {!isDeletedFile && (onRename || onDelete) ? (
++          <span
++            className="pointer-events-none absolute inset-y-0 right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/file-tree-row:pointer-events-auto group-hover/file-tree-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
++            onMouseDown={() => {
++              suppressRowDragRef.current = true;
++            }}
++            onMouseUp={() => {
++              suppressRowDragRef.current = false;
++            }}
++          >
++            {onRename ? (
++              <button
++                type="button"
++                className="flex size-5 items-center justify-center rounded-md text-foreground-subtlest hover:bg-surface-hover hover:text-foreground"
++                aria-label={contextMenuLabels.rename}
++                title={contextMenuLabels.rename}
++                onClick={(event) => {
++                  event.preventDefault();
++                  event.stopPropagation();
++                  onRename(row);
++                }}
++              >
++                <Pencil className="size-3" />
++              </button>
++            ) : null}
++            {onDelete ? (
++              <button
++                type="button"
++                className="flex size-5 items-center justify-center rounded-md text-foreground-subtlest hover:bg-destructive hover:text-destructive-foreground"
++                aria-label={contextMenuLabels.delete}
++                title={contextMenuLabels.delete}
++                onClick={(event) => {
++                  event.preventDefault();
++                  event.stopPropagation();
++                  onDelete(row);
++                }}
++              >
++                <Trash2 className="size-3" />
++              </button>
++            ) : null}
++          </span>
++        ) : null}
+       </div>
+     </SidebarNativeTooltip>
+   );
+@@ -390,6 +442,21 @@ export function WorkspaceFileTreeRowView({
+             {contextMenuLabels.copyRelativePath}
+           </ContextMenuItem>
+           <ContextMenuSeparator />
++          {onRename ? (
++            <ContextMenuItem disabled={isDeletedFile} onSelect={() => onRename(row)}>
++              {contextMenuLabels.rename}
++            </ContextMenuItem>
++          ) : null}
++          {onDelete ? (
++            <ContextMenuItem
++              variant="destructive"
++              disabled={isDeletedFile}
++              onSelect={() => onDelete(row)}
++            >
++              {contextMenuLabels.delete}
++            </ContextMenuItem>
++          ) : null}
++          <ContextMenuSeparator />
+           <ContextMenuItem onSelect={() => dispatchWorkspaceFileAddToChat(workspaceFilePayload)}>
+             {contextMenuLabels.addToChat}
+           </ContextMenuItem>
+diff --git a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeStickyFolders.tsx b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeStickyFolders.tsx
+index a809d0a9..2d9226f5 100644
+--- a/packages/ui/src/workspace-file-tree/WorkspaceFileTreeStickyFolders.tsx
++++ b/packages/ui/src/workspace-file-tree/WorkspaceFileTreeStickyFolders.tsx
+@@ -29,6 +29,8 @@ export function WorkspaceFileTreeStickyFolders({
+   onRevealRow,
+   onOpenPreview,
+   onOpenBrowserUrl,
++  onRename,
++  onDelete,
+   onKeyDown,
+ }: {
+   items: WorkspaceFileTreeStickyFolderItem[];
+@@ -45,6 +47,8 @@ export function WorkspaceFileTreeStickyFolders({
+   onRevealRow: (item: WorkspaceFileTreeStickyFolderItem) => void;
+   onOpenPreview: (row: WorkspaceFileTreeRow) => void;
+   onOpenBrowserUrl?: (url: string) => void;
++  onRename?: (row: WorkspaceFileTreeRow) => void;
++  onDelete?: (row: WorkspaceFileTreeRow) => void;
+   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
+ }) {
+   if (items.length === 0) {
+@@ -86,6 +90,8 @@ export function WorkspaceFileTreeStickyFolders({
+               onToggleDirectory={handleToggle}
+               onOpenPreview={onOpenPreview}
+               onOpenBrowserUrl={onOpenBrowserUrl}
++              onRename={onRename}
++              onDelete={onDelete}
+               onKeyDown={onKeyDown}
+             />
+           );
+diff --git a/packages/ui/src/workspace-file-tree/types.ts b/packages/ui/src/workspace-file-tree/types.ts
+index 7adb0a75..bfe0e4ee 100644
+--- a/packages/ui/src/workspace-file-tree/types.ts
++++ b/packages/ui/src/workspace-file-tree/types.ts
+@@ -37,6 +37,8 @@ export interface WorkspaceFileTreeContextMenuLabels {
+   openFailed: string;
+   openWith: string;
+   reveal: string;
++  rename: string;
++  delete: string;
+ }
+ 
+ export interface WorkspaceFileTreeEditorState {
+diff --git a/packages/web/src/main.tsx b/packages/web/src/main.tsx
+index 0709a438..e0f342a8 100644
+--- a/packages/web/src/main.tsx
++++ b/packages/web/src/main.tsx
+@@ -860,6 +860,8 @@ export function createHomeOnlyWebRemoteControlServices(): RootServices {
+         "fileService.applyWorkspaceFileSearchIgnoreTransform",
+       ),
+       writeWorkspaceFileSearchIgnore: unsupported("fileService.writeWorkspaceFileSearchIgnore"),
++      deletePath: unsupported("fileService.deletePath"),
++      renamePath: unsupported("fileService.renamePath"),
+     },
+     mediaPreviewService:
+       createUnsupportedHomeOnlyService<NonNullable<RootServices["mediaPreviewService"]>>(
