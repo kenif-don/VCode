@@ -111,8 +111,8 @@
     flex-direction: column;
     min-width: 0;
     overflow: hidden;
-    padding: 10px 12px;
-    gap: 10px;
+    padding: 0;
+    gap: 0;
   }
   .card {
     background: var(--bg2);
@@ -120,9 +120,10 @@
     border-radius: 8px;
     overflow: hidden;
   }
-  #console-box { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  #console-box .body { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-  .card .body { padding: 10px 12px; }
+  /* 日志区无内外间距:卡片铺满工作区,日志贴边(需求:取消日志区上下左右间距) */
+  #console-box { flex: 1; display: flex; flex-direction: column; min-height: 0; border: none; border-radius: 0; }
+  #console-box .body { flex: 1; display: flex; flex-direction: column; gap: 0; min-height: 0; padding: 0; }
+  .card .body { padding: 0; }
   .form-grid {
     display: grid;
     grid-template-columns: 90px 1fr;
@@ -159,6 +160,24 @@
   button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
   button.small { padding: 2px 8px; font-size: 11px; }
 
+  /* 标题区 = 运行配置下拉框:选中项即当前标题,可切换查看不同配置日志 */
+  #cfg-select {
+    font: inherit;
+    font-weight: 600;
+    color: var(--fg);
+    background: var(--fill);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    min-width: 60px;
+    max-width: 240px;
+    cursor: pointer;
+    outline: none;
+  }
+  #cfg-select:hover { border-color: var(--border-hover); }
+  #cfg-select:focus { border-color: var(--accent); }
+  #cfg-select:disabled { opacity: 0.5; cursor: default; }
+
   /* 纯图标按钮(配置行 + 栏头工具):透明底,hover 才显边框,省横向空间 */
   .icon-btn {
     background: transparent;
@@ -175,15 +194,15 @@
   .icon-btn.go:hover:not(:disabled) { color: var(--ok); border-color: var(--ok); }
   .icon-btn.stop:hover:not(:disabled) { color: var(--err); border-color: var(--err); }
 
-  #console-box .body { display: flex; flex-direction: column; gap: 8px; }
+  #console-box .body { display: flex; flex-direction: column; gap: 0; }
   #console {
     flex: 1;
     background: var(--console-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 0;
+    border-radius: 0;
     font-family: var(--mono);
     font-size: 12px;
-    padding: 8px 10px;
+    padding: 0;
     min-height: 200px;
     overflow: auto;
     white-space: pre-wrap;
@@ -306,7 +325,10 @@
   <section id="work">
     <div class="card" id="console-box">
       <div class="section-head">
-        运行输出
+        <select id="cfg-select" title="切换运行配置,查看不同配置的日志"></select>
+        <button class="small primary" id="btn-h-start" title="启动当前配置" disabled>启动</button>
+        <button class="small" id="btn-h-restart" title="重启当前配置(先停止再启动)" hidden>重启</button>
+        <button class="small" id="btn-h-stop" title="停止当前配置" hidden>停止</button>
         <span id="console-run-tag" class="tag"></span>
         <span class="spacer"></span>
         <label class="hint" title="贴底时自动跟随新输出;向上翻看或选中文字时暂停,回到底部自动恢复"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
@@ -314,7 +336,7 @@
         <button class="small" id="btn-copy">复制</button>
       </div>
       <div class="body">
-        <div id="console"><div class="empty">选择左侧配置查看输出</div></div>
+        <div id="console"><div class="empty">选择配置查看输出</div></div>
       </div>
     </div>
   </section>
@@ -362,7 +384,7 @@
 
 <!-- 日志右键菜单 -->
 <div id="ctx-menu" class="ctx-menu" hidden>
-  <button data-act="send">添加到对话</button>
+  <button data-act="insert">插入到输入框</button>
   <button data-act="copy">复制</button>
 </div>
 
@@ -382,7 +404,9 @@
  *     ui/notifications/host-context-changed 通知推送(部分增量,可能只含 theme);
  *   - 之后走标准 MCP:tools/call、resources/read、resources/subscribe,
  *     服务端以 notifications/resources/updated 推送状态变化;
- *   - ui/message 请求可把文本以用户身份发进会话(宿主可能弹确认框)。
+ *   - 日志插入输入框优先 ui/insert-input-text(VCode 扩展,文本进输入框不发送),
+ *     老宿主降级 ui/update-model-context(插件上下文附到对话输入区);
+ *     ui/message(以用户身份发送,宿主可能弹确认框)已不再使用。
  * ======================================================================== */
 const Bridge = (() => {
   const pending = new Map();
@@ -647,8 +671,28 @@ function runningRunOf(configId) {
   return App.runs.find((r) => r.configId === configId && r.state === "running") || null;
 }
 
+/** 标题区:配置下拉框(选中项即标题)+ 按运行态切换 启动 / 重启+停止。 */
+function renderConsoleHead() {
+  const sel = $("cfg-select");
+  const prev = App.selectedConfigId || "";
+  sel.innerHTML = App.configs.length
+    ? App.configs.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join("")
+    : '<option value="">暂无配置</option>';
+  sel.value = prev;
+  if (sel.value !== prev) sel.selectedIndex = 0;
+  const has = !!App.selectedConfigId;
+  const running = has && !!runningRunOf(App.selectedConfigId);
+  $("btn-h-start").hidden = running;
+  $("btn-h-restart").hidden = !running;
+  $("btn-h-stop").hidden = !running;
+  $("btn-h-start").disabled = !has;
+  $("btn-h-restart").disabled = !has;
+  $("btn-h-stop").disabled = !has;
+}
+
 function renderConfigs() {
   const box = $("config-items");
+  renderConsoleHead();
   if (!App.configs.length) {
     box.innerHTML = '<div class="empty">暂无配置,点「＋」创建</div>';
     $("btn-dup").disabled = true;
@@ -671,7 +715,7 @@ function renderConfigs() {
   }).join("");
   for (const el of box.querySelectorAll(".config-item")) {
     const id = el.dataset.id;
-    el.addEventListener("click", () => selectConfig(id));
+    el.addEventListener("click", () => selectConfig(id).catch((e) => toast(e.message, true)));
     // 双击行 = 打开编辑弹窗(与 ✎ 等价,避免误触直接跑命令)
     el.addEventListener("dblclick", () => openModal(id));
     for (const btn of el.querySelectorAll("[data-act]")) {
@@ -721,7 +765,7 @@ function renderConsole() {
   App.consoleRenderedRun = App.currentRunId;
   if (!view || !view.lines.length) {
     box.innerHTML = '<div class="empty">' +
-      (App.currentRunId ? "暂无输出" : "选择左侧配置查看输出") + "</div>";
+      (App.currentRunId ? "暂无输出" : "选择配置查看输出") + "</div>";
     return;
   }
   const frag = document.createDocumentFragment();
@@ -807,15 +851,32 @@ async function saveModal() {
 
 // ---- 动作 ------------------------------------------------------------------
 
-function selectConfig(id) {
+async function selectConfig(id) {
   App.selectedConfigId = id;
   renderConfigs();
-  // 运行列表条已移除:点配置行即把日志切到该配置最近一次运行的输出;
-  // 该配置没有运行记录时切到空日志,不残留其他配置的输出。
+  // 切换配置即换日志:优先该配置最近一次活运行;没有活运行则回放最近一次历史日志;
+  // 两者都没有才切空日志,不残留其他配置的输出。
   const run = App.runs.filter((r) => r.configId === id).pop();
   if (run) {
     if (run.runId !== App.currentRunId) selectRun(run.runId);
-  } else if (App.currentRunId) {
+    scheduleUiStateSave();
+    return;
+  }
+  try {
+    const res = await callTool("run_history", { limit: 50 });
+    // 等待期间用户可能已切走:只在仍选中该配置时应用,避免旧查询覆盖新选择
+    if (App.selectedConfigId !== id) return;
+    const entry = (res.history || []).find((h) => h.configId === id);
+    if (entry) {
+      selectRun(entry.id);
+      scheduleUiStateSave();
+      return;
+    }
+  } catch (e) {
+    /* 历史不可用时按无日志处理 */
+  }
+  if (App.selectedConfigId !== id) return;
+  if (App.currentRunId) {
     App.currentRunId = null;
     renderConsole();
     scheduleUiStateSave();
@@ -966,30 +1027,44 @@ function clearConsole() {
   fetchOutput(App.currentRunId).catch(() => {});
 }
 
-// ---- 日志右键「添加到对话」 ------------------------------------------------
+// ---- 日志右键「插入到输入框」 ----------------------------------------------
+// 旧实现走 ui/message(以用户身份发送),宿主会弹「插件想以你的身份发送消息」确认框。
+// 现改为直接插入会话输入框,不发送、不弹框:
+//   1) ui/insert-input-text(VCode 扩展桥方法):文本进输入框,用户改完自己发;
+//   2) 老宿主降级 ui/update-model-context:以「插件上下文」附在对话输入区,同样不弹框,
+//      发送时内容与正文一并送达模型;
+//   3) 两者都不可用(独立模式/无 composer)才退到剪贴板。
 
 function hideCtxMenu() {
   $("ctx-menu").hidden = true;
 }
 
-async function sendSelectionToChat(text) {
+async function insertSelectionToInput(text) {
   const payload = "【运行输出摘录 · " + (App.currentRunId || "未知运行") + "】\n" + text;
   if (window.parent === window || !Bridge.connected) {
     // 独立模式没有宿主可以代发,降级为复制到剪贴板
     await copyText(payload);
-    toast("独立模式:无法发送到会话,已复制到剪贴板");
+    toast("独立模式:无法插入输入框,已复制到剪贴板");
     return;
   }
   try {
-    const res = await Bridge.request("ui/message", {
-      role: "user",
+    await Bridge.request("ui/insert-input-text", { text: payload });
+    toast("已插入到输入框");
+    return;
+  } catch (e) {
+    /* 老宿主没有该桥方法(-32601),继续降级 */
+  }
+  try {
+    await Bridge.request("ui/update-model-context", {
       content: [{ type: "text", text: payload }]
     });
-    if (res && res.isError) toast("宿主拒绝了消息发送(isError)", true);
-    else toast("已添加到对话");
+    toast("已添加到对话输入区(宿主不支持直插文本,以插件上下文附上)");
+    return;
   } catch (e) {
-    toast("发送失败: " + e.message, true);
+    /* 没有 composer 接住等,继续降级 */
   }
+  await copyText(payload);
+  toast("宿主不支持插入输入框,已复制到剪贴板");
 }
 
 function setupCtxMenu() {
@@ -1010,7 +1085,7 @@ function setupCtxMenu() {
       const sel = String(window.getSelection() || "");
       hideCtxMenu();
       if (!sel.trim()) return;
-      if (btn.dataset.act === "send") sendSelectionToChat(sel).catch((e) => toast(e.message, true));
+      if (btn.dataset.act === "insert") insertSelectionToInput(sel).catch((e) => toast(e.message, true));
       else copyText(sel).then(() => toast("已复制选中文本")).catch(() => toast("复制失败", true));
     });
   }
@@ -1137,6 +1212,20 @@ async function init() {
     if (App.autoScroll) renderConsole();
     scheduleUiStateSave();
   });
+  // 标题区:下拉框切换配置(换日志)+ 按运行态显示的 启动 / 重启 / 停止
+  $("cfg-select").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id) selectConfig(id).catch((err) => toast(err.message, true));
+  });
+  $("btn-h-start").addEventListener("click", () => {
+    if (App.selectedConfigId) startRunOf(App.selectedConfigId).catch((e) => toast(e.message, true));
+  });
+  $("btn-h-restart").addEventListener("click", () => {
+    if (App.selectedConfigId) restartConfig(App.selectedConfigId).catch((e) => toast(e.message, true));
+  });
+  $("btn-h-stop").addEventListener("click", () => {
+    if (App.selectedConfigId) stopConfig(App.selectedConfigId).catch((e) => toast(e.message, true));
+  });
   $("btn-aside-hide").addEventListener("click", () => {
     document.body.classList.add("aside-hidden");
     scheduleUiStateSave();
@@ -1153,6 +1242,9 @@ async function init() {
     if (e.key === "Escape" && !$("cfg-modal").hidden) closeModal();
   });
   setupCtxMenu();
+
+  // 先落一次标题区状态(无配置=下拉占位+按钮禁用),避免首帧三个按钮齐亮
+  renderConsoleHead();
 
   if (window.parent === window) {
     return; // standalone preview mode: no host bridge

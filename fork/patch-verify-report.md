@@ -231,3 +231,21 @@ pnpm run bundle:desktop -- --os win --arch x64   # 可选:完整打包
 - 验证:新用例过;plugins.test 80 项中 79 过 1 失败(失败的"injects explicit VCode proxy env"在改动前基线即红,与本补丁无关);mcp-connection-pool 17/17;主仓全量 typecheck 0 错 + adapters 包 tsc 0 错。**盲区教训:fr11-01 的池测试直构 config 注入 isolation,未覆盖插件 manifest→resolvePluginMcpServers 解析链,导致"池层修了但插件层丢字段"漏网。**
 - 生效:需随下一次打包(修复在 zcode-cli 运行时,热部署不了);插件侧(panel.html/server.mjs 后续批次)已按热部署配方替换 `~/.zcode/cli/plugins/cache/zcode-plugins-official/hba-run/0.1.0/`。
 - 复现:按台账顺序叠 fr11-01 后 `git apply fr11-02-plugins-mcp-isolation-passthrough.patch`,跑 plugins/mcp-connection-pool 测试。
+
+
+## 附:fr4-01 插件 UI 直插输入框(ui/insert-input-text)+ 运行面板四项(2026-10-29)
+
+- 用户诉求(运行面板四项):①日志右键「添加到对话」弹「插件想以你的身份发送消息」确认框,要求能直插输入框就直插、不要再弹框;②日志区上下左右间距取消;③日志区标题后加 重启/启动/停止 按钮(已启动显示 重启/停止,未启动显示 启动);④标题区改运行配置下拉框,选中项即标题,可切换查看不同日志。
+- ①根因与方案:插件桥(MCP Apps)只有 `ui/message`(以用户身份发送,无手势时宿主弹可编辑确认框),没有「插入输入框」通道;宿主内部虽有 `requestComposerTextInsert` 机制(Lexical `appendText`/`focus`)但未暴露给插件。故新增 VCode 扩展桥方法 `ui/insert-input-text { text }`(仿 `ui/set-widget-state` 的 `bridge.setRequestHandler` 注册方式):端口层注册 → `createPluginUiInteractions.onInsertInputText` 经 window CustomEvent `zcode/plugin-ui-insert-input-text`(cancelable,preventDefault=已接住,与 workspaceFileDrag「加入对话」事件同构)→ `ConversationComposer` 监听(仅接 sessionId 匹配本 composer 的请求;`appendText` 追加末尾+光标随尾+草稿持久化+焦点回输入框)。不涉及 main/preload;能力声明未加,页面以 -32601 探测降级。
+- 触碰文件(7):
+  - 新增 `packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts`(事件契约:常量/Detail/dispatch/isEvent)
+  - `packages/ui/src/plugin-ui/index.ts`(导出)
+  - `packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts`(`PluginUiInteractionCallbacks.onInsertInputText` + `ui/insert-input-text` 处理器注册,loose schema `text: string.min(1)`)
+  - `packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts`(onInsertInputText → dispatch;无 composer 接住回 -32601)
+  - `packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts` + `pluginUiHostTypes.ts`(latest ref 转接 + interactions Pick 类型扩展,缺一不可——否则回调到不了端口层)
+  - `packages/ui/src/v4/ConversationComposer.tsx`(插入事件监听 effect,独立于 listenAddToChatEvents:触发方刚点过面板,composer 此刻多半失焦,恰恰要在失焦时插入并把焦点要回来)
+- 验证:`git apply --check` 零冲突**双向通过**(纯净基线 ba0bdaa6 与当前开发树各验一次;与 fr5-02 在 ConversationComposer 的两处改动 [行 82/2470 附近] 无上下文交集,无顺序依赖,任意顺序可叠);`tsc -b packages/ui` 基线/打补丁双跑均 exit 0;反向验证:向新增文件注入 `const __typecheckProbe: number = "deliberate-error"` 如期 TS2322(证明 typecheck 覆盖补丁代码),回滚后恢复;`git apply --reverse` 干净回退,基线树零残留。
+- 插件侧(hba-run,热部署,已生效):panel.html「插入到输入框」三级策略——`ui/insert-input-text` 直插 → 老宿主降级 `ui/update-model-context`(插件上下文附到对话输入区,发送时与正文一并送达模型)→ 剪贴板;**全程不弹框,不再使用 `ui/message`**。②日志区贴边(work/body/console padding、console 边框与圆角清零);③标题行 启动/重启/停止 按 `runningRunOf(选中配置)` 切换(首帧默认态:重启/停止隐藏);④标题换 `#cfg-select` 配置下拉,切换即换日志(优先活运行,无活运行回放该配置最近一次历史日志:run_history→run_output,带切换竞态防护)。
+- 插件测试:`node --test tests/run/test-server.mjs` 12/12(server.mjs 本批未改);独立模式浏览器实测截图:日志区四边贴边、下拉框+按钮状态切换正确。
+- 生效:直插输入框需随下一次打包(宿主桥方法,热部署不了);当前 r14 安装包上自动降级为「插件上下文」附入(仍不弹框)。插件已按热部署配方替换 `~/.zcode/cli/plugins/cache/zcode-plugins-official/hba-run/0.1.0/ui/panel.html`,并同步打包种子 `apps/zcode-cli/packages/hba-run-plugin/{ui/panel.html,server.mjs,README.md}`(server.mjs 种子原缺 GBK 解码/漏杀修复,一并拉齐,防下次打包重新播种回滚)与本机 `resources/glm/packages/hba-run-plugin/`。
+- 复现:`git apply fork/patches/fr4-01-plugin-ui-insert-input-text.patch`(纯净基线可直接叠,无顺序依赖);重开运行面板,日志区选中文字右键「插入到输入框」。

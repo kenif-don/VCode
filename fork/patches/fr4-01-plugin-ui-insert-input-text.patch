@@ -1,0 +1,230 @@
+diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts b/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts
+index 04050c1..2a1b1e8 100644
+--- a/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts
++++ b/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts
+@@ -35,7 +35,10 @@ export interface UsePluginUiHostInput {
+   /** false 时不创建沙箱（如侧栏已接管同一作用域）；默认 true。 */
+   enabled?: boolean;
+   /** 会话交互回调：缺省时对应请求回 -32601，能力声明也不带该项。 */
+-  interactions?: Pick<PluginUiHostControllerDeps, "onSendFollowUpMessage" | "onUpdateModelContext">;
++  interactions?: Pick<
++    PluginUiHostControllerDeps,
++    "onSendFollowUpMessage" | "onUpdateModelContext" | "onInsertInputText"
++  >;
+ }
+ 
+ export interface UsePluginUiHostResult {
+diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts b/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts
+index 37a2e4e..561d18a 100644
+--- a/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts
++++ b/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts
+@@ -8,6 +8,7 @@ import {
+   buildPluginUiFollowUpPrompt,
+ } from "../domain/pluginUiFollowUp.js";
+ import { readPluginUiImageBlocks } from "../domain/pluginUiImageBlocks.js";
++import { dispatchPluginUiInsertInputText } from "../domain/pluginUiInsertInputText.js";
+ import { dispatchPluginUiModelContextAdd } from "./pluginUiModelContextEvents.js";
+ 
+ import { type PluginUiSessionScope } from "@/plugin-ui/contract.js";
+@@ -49,11 +50,15 @@ function scopeMarker(scope: PluginUiScopeRef): string {
+  * - sendFollowUpMessage：有用户手势直接以用户身份发送；无手势弹可编辑确认框，取消回 -32000。
+  *   ：structuredContent 以 ```json 块拼在文本后面；来源只进 metadata `source`。
+  * - updateModelContext：投递到当前会话 composer 的插件上下文块；没有 composer 接住回 -32601。
++ * - insertInputText：把文本插进当前会话输入框末尾（不发送、不弹框）；没有 composer 接住回 -32601。
+  * widgetState 由窗口页面管理器唯一写入。
+  */
+ export function createPluginUiInteractions(
+   input: PluginUiInteractionScope,
+-): Pick<PluginUiHostControllerDeps, "onSendFollowUpMessage" | "onUpdateModelContext"> {
++): Pick<
++  PluginUiHostControllerDeps,
++  "onSendFollowUpMessage" | "onUpdateModelContext" | "onInsertInputText"
++> {
+   const marker = scopeMarker(input.scope);
+   const source = { kind: "pluginUi" as const, pluginId: input.pluginId, toolCallId: marker };
+   return {
+@@ -107,5 +112,15 @@ export function createPluginUiInteractions(
+       if (!delivered)
+         throw rpcError(JSON_RPC_UNAVAILABLE, "No composer is listening for model context");
+     },
++    async onInsertInputText(payload) {
++      // 插入目标是当前会话的 composer（面板 fr8 绑当前活跃会话）；事件未被任何 composer
++      // 接住（草稿 composer 不接、会话不在本窗口等）时回 -32601，页面侧据此降级。
++      const delivered = dispatchPluginUiInsertInputText({
++        sessionId: input.sessionId,
++        text: payload.text,
++      });
++      if (!delivered)
++        throw rpcError(JSON_RPC_UNAVAILABLE, "No composer is listening for text insert");
++    },
+   };
+ }
+diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts b/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
+index 533a97a..22d9706 100644
+--- a/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
++++ b/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
+@@ -270,6 +270,10 @@ export function createPage(
+         latest.current.interactions?.onUpdateModelContext
+           ? latest.current.interactions.onUpdateModelContext(payload)
+           : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
++      onInsertInputText: (payload) =>
++        latest.current.interactions?.onInsertInputText
++          ? latest.current.interactions.onInsertInputText(payload)
++          : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
+       onUpdateWidgetState: async (widgetState) => {
+         setPluginUiWidgetState(surfaceKey, widgetState);
+       },
+diff --git a/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts b/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts
+index a096265..a78e7b5 100644
+--- a/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts
++++ b/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts
+@@ -27,6 +27,11 @@ export interface PluginUiInteractionCallbacks {
+   }): Promise<void>;
+   /** 页面 `ui/set-widget-state { widgetState }`；宿主同步写内存 store 后回包。 */
+   onUpdateWidgetState?(widgetState: unknown): Promise<void>;
++  /**
++   * 页面 `ui/insert-input-text { text }`（VCode 扩展）：把文本插进当前会话输入框末尾，
++   * 不发送、不弹框；没有 composer 接住时回 -32601 供页面降级。
++   */
++  onInsertInputText?(payload: { text: string }): Promise<void>;
+   /** `ui/download-file`；逐项保存，取消 / 失败回 `{ isError: true }`。 */
+   onDownloadFile?(contents: McpAppsDownloadFileItem[]): Promise<{ isError?: boolean }>;
+ }
+@@ -43,6 +48,7 @@ const pluginUiMessageParamsSchema = z
+   })
+   .loose();
+ const pluginUiSetWidgetStateParamsSchema = z.object({ widgetState: z.unknown() }).loose();
++const pluginUiInsertInputTextParamsSchema = z.object({ text: z.string().min(1) }).loose();
+ 
+ /** 回调抛出的带 `code` 的错误（-32601 / -32000 / -32602）翻译成 JSON-RPC 错误，其余按内部错误处理。 */
+ function toProtocolError(error: unknown): unknown {
+@@ -132,4 +138,19 @@ export function wirePluginUiInteractions(
+       return {};
+     },
+   );
++  bridge.setRequestHandler(
++    "ui/insert-input-text",
++    { params: pluginUiInsertInputTextParamsSchema, result: EmptyResultSchema },
++    async (rawParams) => {
++      if (!currentHandle()) throw new Error("MCP App instance was closed");
++      if (!deps.onInsertInputText) throw unsupported("ui/insert-input-text");
++      const params = rawParams as z.infer<typeof pluginUiInsertInputTextParamsSchema>;
++      try {
++        await deps.onInsertInputText({ text: params.text });
++      } catch (error) {
++        throw toProtocolError(error);
++      }
++      return {};
++    },
++  );
+ }
+diff --git a/packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts b/packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts
+new file mode 100644
+index 0000000..e9edf59
+--- /dev/null
++++ b/packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts
+@@ -0,0 +1,35 @@
++/**
++ * 插件 UI「插入到输入框」(VCode 扩展桥方法 `ui/insert-input-text`)的 composer 侧契约。
++ *
++ * 与 workspaceFileDrag 的「加入对话」事件同构:宿主渲染进程内的 window CustomEvent,
++ * composer 以 preventDefault 表示已接住。区别于 `ui/message`(以用户身份发送,无手势时
++ * 宿主弹「插件想以你的身份发送消息」确认框):本通道只把文本插进当前会话输入框末尾,
++ * 不发送、不弹框,由用户自己编辑后发送。
++ */
++
++export const PLUGIN_UI_INSERT_INPUT_TEXT_EVENT = "zcode/plugin-ui-insert-input-text";
++
++export interface PluginUiInsertInputTextDetail {
++  /** 目标会话(面板 fr8 绑当前活跃会话);composer 仅接住自己会话的插入请求。 */
++  sessionId: string;
++  /** 要插入的文本,追加到输入框末尾(光标跟随到末尾)。 */
++  text: string;
++}
++
++export function isPluginUiInsertInputTextEvent(
++  event: Event,
++): event is CustomEvent<PluginUiInsertInputTextDetail> {
++  return event.type === PLUGIN_UI_INSERT_INPUT_TEXT_EVENT;
++}
++
++/** 返回 true 表示有 composer 接住;false 时调用方应回 -32601 供页面降级。 */
++export function dispatchPluginUiInsertInputText(detail: PluginUiInsertInputTextDetail): boolean {
++  if (typeof window === "undefined") {
++    return false;
++  }
++  const event = new CustomEvent<PluginUiInsertInputTextDetail>(
++    PLUGIN_UI_INSERT_INPUT_TEXT_EVENT,
++    { cancelable: true, detail },
++  );
++  return !window.dispatchEvent(event);
++}
+diff --git a/packages/ui/src/plugin-ui/index.ts b/packages/ui/src/plugin-ui/index.ts
+index 0978983..a27dc24 100644
+--- a/packages/ui/src/plugin-ui/index.ts
++++ b/packages/ui/src/plugin-ui/index.ts
+@@ -26,6 +26,12 @@ export {
+   parsePromptPluginUiContexts,
+   type PluginUiModelContext,
+ } from "./domain/pluginUiModelContext.js";
++export {
++  PLUGIN_UI_INSERT_INPUT_TEXT_EVENT,
++  dispatchPluginUiInsertInputText,
++  isPluginUiInsertInputTextEvent,
++  type PluginUiInsertInputTextDetail,
++} from "./domain/pluginUiInsertInputText.js";
+ export {
+   PluginUiWorkspaceProvider,
+   PluginUiSessionProvider,
+diff --git a/packages/ui/src/v4/ConversationComposer.tsx b/packages/ui/src/v4/ConversationComposer.tsx
+index fdd93a6..dac5e0a 100644
+--- a/packages/ui/src/v4/ConversationComposer.tsx
++++ b/packages/ui/src/v4/ConversationComposer.tsx
+@@ -171,7 +171,9 @@ import {
+ import { useCodeCommentContexts } from "@/v4/composer/useCodeCommentContexts.js";
+ import { useWebElementContexts } from "@/v4/composer/useWebElementContexts.js";
+ import {
++  PLUGIN_UI_INSERT_INPUT_TEXT_EVENT,
+   PluginUiModelContextChip,
++  isPluginUiInsertInputTextEvent,
+   usePluginUiContextImages,
+   usePluginUiModelContexts,
+ } from "@/plugin-ui/index.js";
+@@ -1868,6 +1870,37 @@ function ConversationComposerImpl({
+     };
+   }, [listenAddToChatEvents, updateText, workspaceIdentity, workspacePath]);
+ 
++  // ── 插件 UI「插入到输入框」事件（ui/insert-input-text）→ 文本追加进 composer，不发送 ──
++  // 不随 listenAddToChatEvents 走：触发方（插件面板）刚点过自己，composer 此刻多半失焦，
++  // 但插入恰恰要在此时发生，插入后再把焦点交回 composer 续写。
++  useEffect(() => {
++    if (typeof window === "undefined") {
++      return;
++    }
++    const handlePluginUiInsertInputText = (event: Event) => {
++      if (!isPluginUiInsertInputTextEvent(event)) {
++        return;
++      }
++      // 只接住绑定到本 composer 会话的插入请求（草稿态 sessionId=null 不接）。
++      if (event.detail.sessionId !== sessionId) {
++        return;
++      }
++      const inputApi = inputApiRef.current;
++      if (!inputApi || disabled) {
++        return;
++      }
++      event.preventDefault();
++      inputApi.appendText(event.detail.text);
++      updateText(inputApi.getMarkdown());
++      scheduleDraftPersist();
++      requestComposerFocus();
++    };
++    window.addEventListener(PLUGIN_UI_INSERT_INPUT_TEXT_EVENT, handlePluginUiInsertInputText);
++    return () => {
++      window.removeEventListener(PLUGIN_UI_INSERT_INPUT_TEXT_EVENT, handlePluginUiInsertInputText);
++    };
++  }, [disabled, requestComposerFocus, scheduleDraftPersist, sessionId, updateText]);
++
+   // 动态 placeholder（旧 chatViewPlaceholder 语义）：无历史 → newTask；
+   // 有历史空闲 → followUpAsk；有历史处理中 → followUpQueue；
+   // 完整视图浮窗（单行）运行中 → 「工作中 {时长}」，与流式消息同值同格式。
