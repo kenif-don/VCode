@@ -1,0 +1,1154 @@
+diff --git a/packages/shared/src/test-ids.ts b/packages/shared/src/test-ids.ts
+index efc8fe86..0ac300e4 100644
+--- a/packages/shared/src/test-ids.ts
++++ b/packages/shared/src/test-ids.ts
+@@ -199,6 +199,8 @@ export const TID_SSH_CONFIG_IMPORT = "remote-ssh-config-import";
+ export const TID_SSH_CONFIG_ALIAS_CHIP = "remote-ssh-config-alias-chip";
+ /** 新建连接表单头部的实时目标预览。 */
+ export const TID_REMOTE_NEW_CONNECTION_PREVIEW = "remote-new-connection-preview";
++/** 新建连接表单的自定义名称输入框（连接成功后作设备名与线路名）。 */
++export const TID_REMOTE_CUSTOM_NAME_INPUT = "remote-custom-name-input";
+ /** SSH 密码输入框 */
+ export const TID_SSH_PASSWORD_INPUT = "ssh-password-input";
+ /** SSH 私钥路径输入框 */
+diff --git a/packages/ui/src/RemoteConnectionDialogContent.tsx b/packages/ui/src/RemoteConnectionDialogContent.tsx
+index bb388470..0fdc0430 100644
+--- a/packages/ui/src/RemoteConnectionDialogContent.tsx
++++ b/packages/ui/src/RemoteConnectionDialogContent.tsx
+@@ -17,7 +17,7 @@ import type {
+   ISkillSyncService,
+   IZCodeAgentService,
+ } from "@zcode/services";
+-import { TID_SSH_CONFIG_IMPORT } from "@zcode/shared/test-ids";
++import { TID_REMOTE_CUSTOM_NAME_INPUT, TID_SSH_CONFIG_IMPORT } from "@zcode/shared/test-ids";
+ import {
+   AlertTriangleIcon,
+   ArrowLeftIcon,
+@@ -169,8 +169,10 @@ export function RemoteConnectionSettingsStep({
+   fieldErrors = [],
+   validationAttempt = 0,
+   connectLabel,
++  customName = "",
+   loading,
+   onBack,
++  onCustomNameChange,
+   onHostChange,
+   onPortChange,
+   onUsernameChange,
+@@ -227,6 +229,9 @@ export function RemoteConnectionSettingsStep({
+   /** 每次提交校验失败递增，用于把焦点移到第一个出错字段。 */
+   validationAttempt?: number;
+   connectLabel?: string;
++  /** 自定义名称（可选）：连接成功后用作设备名与本次连接的线路名；未提供 setter 时不渲染该字段。 */
++  customName?: string;
++  onCustomNameChange?: (value: string) => void;
+   loading: boolean;
+   onBack: () => void;
+   onHostChange: (value: string) => void;
+@@ -345,6 +350,38 @@ export function RemoteConnectionSettingsStep({
+           </div>
+         ) : null}
+ 
++        {/* 自定义名称：添加时一次命名设备与本次连接（默认名称连接后才产生，事后还得去设置改）。
++            Server 类型的表单自带「显示名称」，不重复出字段。 */}
++        {onCustomNameChange && kind !== "server" ? (
++          <div>
++            <label
++              htmlFor="remote-connection-custom-name"
++              className="mb-1.5 block text-ui-sm text-remote-foreground-muted"
++            >
++              {intl.formatMessage({ id: "remote.customName" })}
++            </label>
++            <Input
++              id="remote-connection-custom-name"
++              size="lg"
++              className="h-9 text-ui-base"
++              value={customName}
++              onChange={(event) => onCustomNameChange(event.currentTarget.value)}
++              placeholder={intl.formatMessage({ id: "remote.customNamePlaceholder" })}
++              aria-describedby="remote-connection-custom-name-hint"
++              data-testid={TID_REMOTE_CUSTOM_NAME_INPUT}
++              disabled={loading}
++              maxLength={100}
++              autoComplete="off"
++            />
++            <p
++              id="remote-connection-custom-name-hint"
++              className="mt-1 text-pretty text-ui-sm text-remote-foreground-muted"
++            >
++              {intl.formatMessage({ id: "remote.customNameHint" })}
++            </p>
++          </div>
++        ) : null}
++
+         <RemoteConnectionFields
+           focusCredentials={focusCredentials}
+           autoFocusHost={!focusCredentials}
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index b8049ae9..f36dd655 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -2480,6 +2480,10 @@
+   "remote.renameDevice": "Device name",
+   "remote.renameDeviceHint":
+     "Give it a memorable name on first connect; change it anytime in Settings · Remote devices",
++  "remote.customName": "Custom name",
++  "remote.customNamePlaceholder": "e.g. Staging server",
++  "remote.customNameHint":
++    "Leave empty to keep the default name. Applied as the device and connection name once connected; change it later in Settings · Remote devices",
+   "remote.quickOpen": "Quick open",
+   "remote.connectionLogLines": "{count} line(s)",
+   "remote.errorPanel.uploadFailedTitle": "Asset upload failed",
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 19be7c7c..5fa33757 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -2304,6 +2304,10 @@
+   "remote.errorRetry": "重试",
+   "remote.renameDevice": "设备名称",
+   "remote.renameDeviceHint": "首次连接建议改个好记的名字，随时可在 设置 · 远程设备 修改",
++  "remote.customName": "自定义名称",
++  "remote.customNamePlaceholder": "例如：测试服务器",
++  "remote.customNameHint":
++    "留空使用默认名称；连接成功后将同时用作设备名与连接名，之后也可在 设置 · 远程设备 修改",
+   "remote.quickOpen": "快速打开",
+   "remote.connectionLogLines": "{count} 行",
+   "remote.errorPanel.uploadFailedTitle": "资源上传失败",
+diff --git a/packages/ui/src/project-sidebar/ProjectEditor.tsx b/packages/ui/src/project-sidebar/ProjectEditor.tsx
+index 6fd53024..b52599f4 100644
+--- a/packages/ui/src/project-sidebar/ProjectEditor.tsx
++++ b/packages/ui/src/project-sidebar/ProjectEditor.tsx
+@@ -457,9 +457,8 @@
+               </div>
+             ) : (
+               <>
+-                {/* 创建项目只选文件夹：项目名由服务按文件夹自动命名（saveProject 未传 name 时取 defaultName/目录名），
+-                    设备（本地/远程）也不在弹框内二次选择——远程走菜单「新建远程连接」。
+-                    编辑既有项目与远程固定目录确认仍保留名字输入。 */}
++                {/* 创建项目不填项目名：由服务按文件夹自动命名（saveProject 未传 name 时取 defaultName/目录名）；
++                    设备（本机/远程服务器）仍在弹框内选择。编辑既有项目与远程固定目录确认保留名字输入。 */}
+                 {project || fixedFolder ? (
+                   <div className="grid min-w-0 gap-1.5">
+                     <label htmlFor="project-name" className={FIELD_LABEL}>
+@@ -486,7 +485,7 @@
+                     ) : null}
+                   </div>
+                 ) : null}
+-                {devices && project ? (
++                {devices ? (
+                   <div className="grid min-w-0 gap-1.5">
+                     <label htmlFor="project-device" className={FIELD_LABEL}>
+                       {msg("device")}
+diff --git a/packages/ui/src/remote-connection-flow/index.ts b/packages/ui/src/remote-connection-flow/index.ts
+index 2c4cff4d..5dc43b64 100644
+--- a/packages/ui/src/remote-connection-flow/index.ts
++++ b/packages/ui/src/remote-connection-flow/index.ts
+@@ -20,6 +20,7 @@ import {
+   ZCODE_VERSION,
+   type ConnectionProfile,
+   type SourceServerRunningTask,
++  type SourceServerManagementSnapshot,
+   type RemoteTarget,
+ } from "@zcode/shared";
+ import { useCancelPendingRemoteConnection } from "@/hooks/useCancelPendingRemoteConnection.js";
+@@ -205,6 +206,9 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
+   );
+   const [recognizedDeviceName, setRecognizedDeviceName] = useState<string | undefined>();
+   const [recognizedSourceServerId, setRecognizedSourceServerId] = useState<string | undefined>();
++  /** 新建连接表单的自定义名称；连接成功后一次写入设备名与本次线路名，省得事后再去设置里改。 */
++  const [customName, setCustomName] = useState("");
++  const customNameRef = useRef("");
+   const [
+     remoteConversationWorkspaceBySourceServerId,
+     setRemoteConversationWorkspaceBySourceServerId,
+@@ -648,6 +652,46 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
+     [applySourceManagementSnapshot, confirmDialog, intl, sourceManagement, upgradeLoading],
+   );
+ 
++  /**
++   * 自定义名称一次写入：设备名（renameSource，侧栏/设备下拉展示的就是它）与
++   * 本次连接的线路名（renameProfile，设置·远程设备里那条连接的名字）都设为该名称，
++   * 免得添加完还要去 设置·远程设备 手动改一次。名称留空时不做任何事。
++   */
++  const applyCustomName = async (
++    sourceServerId: string,
++    target: RemoteTarget,
++    snapshot: SourceServerManagementSnapshot,
++    requested: string,
++    isCurrent: () => boolean,
++  ) => {
++    if (!sourceManagement) return;
++    let next = snapshot;
++    const server = next.servers.find((candidate) => candidate.sourceServerId === sourceServerId);
++    if (server && server.displayName !== requested) {
++      next = await sourceManagement.renameSource(sourceServerId, requested);
++      if (!isCurrent()) return;
++    }
++    const profile =
++      (target.kind !== "server"
++        ? next.profiles.find(
++            (candidate) =>
++              candidate.lifecycleState !== "retired" &&
++              profileMatchesRemoteTarget(candidate, target),
++          )
++        : undefined) ?? findPreferredSourceConnectionProfile(next, sourceServerId);
++    if (profile && (profile.displayName ?? profile.transport) !== requested) {
++      next = await sourceManagement.renameProfile(profile.profileId, requested);
++      if (!isCurrent()) return;
++    }
++    applySourceManagementSnapshot(next);
++    setRecognizedDeviceName(
++      next.servers.find((candidate) => candidate.sourceServerId === sourceServerId)?.displayName,
++    );
++    // 名称已被本次连接消费；清空避免下一次连接沿用同一名称。
++    customNameRef.current = "";
++    setCustomName("");
++  };
++
+   const startRemoteConnection = async (
+     target: RemoteTarget,
+     confirmSourceServerInstall = false,
+@@ -749,6 +793,23 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
+                 (server) => server.sourceServerId === connectedSourceServerId,
+               )?.displayName,
+             );
++            // 自定义名称在添加时一次写好（设备名 + 本次线路名）；失败只记日志不打断连接，
++            // 输入框保留内容，目录步/设置·远程设备 的改名入口仍可兜底。
++            const requestedName = customNameRef.current.trim();
++            if (requestedName && sourceManagement) {
++              try {
++                await applyCustomName(
++                  connectedSourceServerId,
++                  nextTarget,
++                  nextSnapshot,
++                  requestedName,
++                  () => activeRequestIdRef.current === requestId,
++                );
++              } catch (cause) {
++                logger.warn("[RemoteConnectionFlow] 自定义名称写入失败", cause);
++              }
++              if (discardStaleResult()) return;
++            }
+           }
+         } catch {
+           // 设备名仅用于展示；快照读取失败时保留连接结果，不打断流程。
+@@ -1903,6 +1964,11 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
+         completion === "device-management"
+           ? intl.formatMessage({ id: "remote.addAndConnect" })
+           : undefined,
++      customName: customName,
++      onCustomNameChange: (value: string) => {
++        customNameRef.current = value;
++        setCustomName(value);
++      },
+       kind: kind,
+       host: host,
+       port: port,
+diff --git a/packages/ui/test/projectCreation.test.ts b/packages/ui/test/projectCreation.test.ts
+index 43c3a073..a9c38fd1 100644
+--- a/packages/ui/test/projectCreation.test.ts
++++ b/packages/ui/test/projectCreation.test.ts
+@@ -163,11 +163,13 @@
+     }),
+   );
+ }
+-it("opens a folder-only form and creates a local project without name/device fields", async () => {
++it("opens a create form without a name field but with device selection and auto-names on save", async () => {
+   const { service } = await setup();
+-  // 创建项目弹框只选文件夹：项目名输入与设备选择不再出现，名称由服务按目录自动命名。
++  // 创建项目弹框不填项目名（服务按目录自动命名）；设备（本机/远程服务器）下拉仍在。
+   expect(screen.queryByTestId("virtual-project-name")).toBeNull();
+-  expect(screen.queryByTestId("virtual-project-device")).toBeNull();
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
++  );
+   fireEvent.click(screen.getByTestId("virtual-project-save"));
+   await waitFor(() =>
+     expect(service.saveProject).toHaveBeenCalledWith(
+@@ -224,6 +226,78 @@
+     expect(props.onCreateTask).not.toHaveBeenCalled();
+   },
+ );
++it("selects an added device without connecting and persists only after explicit create", async () => {
++  const { service, remoteService, props } = await setup();
++  await selectDevice("remote:server:source");
++  expect(props.onConnectRemote).not.toHaveBeenCalled();
++  expect(service.saveProject).not.toHaveBeenCalled();
++  fireEvent.click(screen.getByTestId("virtual-project-browse"));
++  fireEvent.click(await screen.findByText("choose-root"));
++  expect(service.saveProject).not.toHaveBeenCalled();
++  fireEvent.click(screen.getByTestId("virtual-project-save"));
++  fireEvent.click(await screen.findByTestId("project-folder-trust-confirm"));
++  await waitFor(() =>
++    expect(remoteService.addEntry).toHaveBeenCalledWith(
++      expect.objectContaining({ hostId: "remote:server:source", expectedMembershipId: "member" }),
++    ),
++  );
++  expect(service.saveProject).toHaveBeenCalledWith(
++    expect.objectContaining({
++      hostId: "remote:server:source",
++      roots: ["/source/selected"],
++    }),
++  );
++  expect(service.saveProject).toHaveBeenCalledWith(
++    expect.not.objectContaining({ name: expect.anything() }),
++  );
++  await waitFor(() =>
++    expect(props.onCreateTask).toHaveBeenCalledExactlyOnceWith({
++      projectId: "project",
++      hostId: "remote:server:source",
++      taskGroupId: "group",
++      initialComposerDraft: { sourceWorkspaceKey: "/draft", draft: { text: "" }, attachments: [] },
++    }),
++  );
++});
++it("keeps folders when device switch is rejected and clears folders only after confirmation", async () => {
++  const { service } = await setup();
++  fireEvent.click(screen.getByTestId("virtual-project-browse"));
++  fireEvent.click(await screen.findByText("choose-root"));
++  state.confirm.mockResolvedValueOnce(false);
++  await selectDevice("remote:server:source");
++  await waitFor(() => expect(state.confirm).toHaveBeenCalledTimes(1));
++  expect(screen.getByTitle("/source/selected")).toBeTruthy();
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
++  );
++  await selectDevice("remote:server:source");
++  await waitFor(() => expect(screen.queryByTitle("/source/selected")).toBeNull());
++  expect(service.saveProject).not.toHaveBeenCalled();
++});
++it("keeps the offline default, waits for explicit connection, and retains draft after cancellation", async () => {
++  state.devices[0]!.aggregatedStatus = "offline";
++  const { props } = await setup("remote:server:source");
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain("offline");
++  fireEvent.click(screen.getByRole("button", { name: "project.connectAndBrowse" }));
++  await waitFor(() => expect(props.onOpenRemoteWorkspace).toHaveBeenCalledOnce());
++  const first = props.onOpenRemoteWorkspace.mock.calls[0]![0];
++  expect(first).toMatchObject({
++    completion: "device-management",
++    preferredSourceServerId: "source",
++    returnTarget: expect.objectContaining({ kind: "connect-device" }),
++  });
++  await act(async () => first.returnTarget.finish({ kind: "cancelled" }));
++  // 取消后创建草稿仍在：设备选择与表单原样保留。
++  expect((await screen.findByTestId("virtual-project-device")).textContent).toContain("offline");
++  fireEvent.click(screen.getByRole("button", { name: "project.connectAndBrowse" }));
++  await act(async () =>
++    props.onOpenRemoteWorkspace.mock.calls[1]![0].returnTarget.finish({
++      kind: "connected",
++      sourceServerId: "source",
++    }),
++  );
++  expect(await screen.findByText("choose-root")).toBeTruthy();
++});
+ it("retries local registration without creating a second remote project", async () => {
+   const { service, remoteService } = await setup("remote:server:source");
+   remoteService.addEntry.mockRejectedValueOnce(new Error("registration failed"));
+@@ -250,10 +324,21 @@
+   expect(screen.queryByTitle("/late/old-draft")).toBeNull();
+   expect(service.saveProject).not.toHaveBeenCalled();
+ });
+-it("does not expose device selection on any create form", async () => {
++it("a snapshot refresh does not replace the user's chosen device", async () => {
++  const { rerender, props } = await setup("remote:server:source");
++  await selectDevice("local");
++  state.devices[0]!.aggregatedStatus = "offline";
++  await act(async () => state.refresh?.());
++  rerender(createElement(ProjectCreation, props as never));
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
++  );
++});
++it("does not expose desktop device management on a shared Host form", async () => {
+   const { rerender, props } = await setup();
+   rerender(createElement(ProjectCreation, { ...props, allowDeviceManagement: false } as never));
+-  expect(screen.queryByTestId("virtual-project-device")).toBeNull();
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  expect(screen.queryByRole("option", { name: "project.addRemoteDevice" })).toBeNull();
+ });
+ it("admits a recognized device without an open project only on explicit creation", async () => {
+   const { service, remoteService } = await setup("remote:server:source");
+@@ -313,226 +398,211 @@
+   expect(state.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "project.restore" }));
+ });
+ 
+-it.each([
+-  ["zh-CN", "remote-project.host-removed", "此设备已从项目列表移除，请重新选择设备。"],
+-  [
+-    "en-US",
+-    "remote-project.host-removed",
+-    "This device was removed from the project list. Select a device again.",
+-  ],
+-  ["zh-CN", "project.connection-unavailable", "此设备不可用，请在设置中重新连接。"],
+-  [
+-    "en-US",
+-    "project.connection-unavailable",
+-    "This device is unavailable. Reconnect it in settings.",
+-  ],
+-  ["zh-CN", "permission denied: /project", "permission denied: /project"],
+-  ["en-US", "permission denied: /project", "permission denied: /project"],
+-] as const)("shows project save errors in %s: %s", async (locale, code, message) => {
+-  state.locale = locale;
+-  const { service } = await setup();
+-  service.saveProject.mockRejectedValueOnce(new Error(code));
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
+-  expect((await screen.findByRole("alert")).textContent).toContain(message);
+-  expect((await screen.findByRole("alert")).textContent).not.toContain("remote-project.");
++it("lists recognized devices only, without discovering candidates or promoting unrecognized profiles", async () => {
++  await setup();
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  expect(await screen.findByRole("option", { name: /Saved device/ })).toBeTruthy();
++  expect(screen.getAllByRole("option")).toHaveLength(3);
++  expect(
++    screen.queryByRole("option", { name: /Unrecognized profile|Discovery candidate/ }),
++  ).toBeNull();
+ });
+ 
+-it("waits for explicit acknowledgement before browsing and remembers it across forms", async () => {
+-  state.boundaryVersion = 0;
+-  const acknowledgement = Promise.withResolvers<boolean>();
+-  state.confirm.mockImplementationOnce(() => acknowledgement.promise);
+-  const { unmount } = await setup("remote:server:source");
++it("returns from device settings into the same draft and confirms before replacing its folders", async () => {
++  const { rerender, props, service } = await setup();
++  const open = vi.fn();
++  rerender(createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: open } as never));
+   fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  await waitFor(() =>
+-    expect(state.confirm).toHaveBeenCalledWith(
+-      expect.objectContaining({ presentation: "source-server-boundary" }),
+-    ),
++  fireEvent.click(await screen.findByText("choose-root"));
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
++  expect(open).toHaveBeenCalledOnce();
++  expect(screen.queryByTestId("virtual-project-browse")).toBeNull();
++  const intent = open.mock.calls[0]![0];
++  expect(intent.completion).toBe("device-management");
++  state.confirm.mockResolvedValueOnce(false);
++  await act(async () =>
++    intent.returnTarget.finish({ kind: "connected", sourceServerId: "source" }),
++  );
++  expect(screen.getByTitle("/source/selected")).toBeTruthy();
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
+   );
+-  expect(state.markBoundary).not.toHaveBeenCalled();
+-  expect(screen.queryByTestId("virtual-project-directory-browser")).toBeNull();
+-  await act(async () => acknowledgement.resolve(true));
+-  await screen.findByTestId("virtual-project-directory-browser");
+-  expect(state.markBoundary).toHaveBeenCalledWith({ remoteBoundaryIntroAcknowledgedVersion: 1 });
+-  unmount();
+-  await setup("remote:server:source");
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  await screen.findByTestId("virtual-project-directory-browser");
+-  expect(state.confirm).toHaveBeenCalledTimes(1);
+-  expect(state.markBoundary).toHaveBeenCalledTimes(1);
++  expect(state.confirm).toHaveBeenCalledOnce();
++  expect(service.saveProject).not.toHaveBeenCalled();
+ });
+ 
+-it("does not consume the remote continuity hint in a local directory browser", async () => {
+-  state.boundaryVersion = 0;
+-  await setup();
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  expect(await screen.findByText("choose-root")).toBeTruthy();
+-  expect(screen.queryByTestId("remote-boundary-hint")).toBeNull();
+-  expect(state.markBoundary).not.toHaveBeenCalled();
++it.each(["connected", "cancelled"] as const)(
++  "switches the draft device only once after %s and ignores a late return",
++  async (kind) => {
++    const { props, rerender, service, unmount } = await setup();
++    const open = vi.fn();
++    rerender(createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: open } as never));
++    fireEvent.click(screen.getByTestId("virtual-project-device"));
++    fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
++    const target = open.mock.calls[0]![0].returnTarget;
++    expect(target.isCurrent()).toBe(true);
++    await act(async () => target.finish({ kind, sourceServerId: "source" }));
++    expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++      kind === "connected" ? "Saved device" : "project.thisComputer",
++    );
++    expect(target.isCurrent()).toBe(false);
++    expect(service.saveProject).not.toHaveBeenCalled();
++    unmount();
++    await setup();
++    await act(async () => target.finish({ kind: "connected", sourceServerId: "source" }));
++    expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++      "project.thisComputer",
++    );
++  },
++);
++
++it("does not hide the draft when the current device operation cannot accept a new origin", async () => {
++  const { props, rerender } = await setup();
++  rerender(
++    createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: () => false } as never),
++  );
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
++  expect(screen.getByTestId("virtual-project-browse")).toBeTruthy();
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
++  );
+ });
+ 
+-it("does not mark the remote hint read when its setting read fails or returns after closing", async () => {
+-  state.readBoundary.mockRejectedValueOnce(new Error("read unavailable"));
+-  const first = await setup("remote:server:source");
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  await waitFor(() => expect(state.readBoundary).toHaveBeenCalled());
+-  expect(state.markBoundary).not.toHaveBeenCalled();
+-  first.unmount();
+-  const pending = Promise.withResolvers<{ remoteBoundaryIntroAcknowledgedVersion: number }>();
+-  state.readBoundary.mockReturnValueOnce(pending.promise);
+-  const second = await setup("remote:server:source");
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  second.unmount();
+-  await act(async () => pending.resolve({ remoteBoundaryIntroAcknowledgedVersion: 0 }));
+-  expect(state.markBoundary).not.toHaveBeenCalled();
++it("does not revive an abandoned draft when device addition finishes later", async () => {
++  const { props, rerender, unmount } = await setup();
++  const open = vi.fn();
++  rerender(createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: open } as never));
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
++  const target = open.mock.calls[0]![0].returnTarget;
++  unmount();
++  await setup();
++  expect(target.isCurrent()).toBe(false);
++  await act(async () => target.finish({ kind: "connected", sourceServerId: "source" }));
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
++  );
+ });
+ 
+-it("does not consume a delayed hint when the project directory is suspended", async () => {
+-  const pending = Promise.withResolvers<{ remoteBoundaryIntroAcknowledgedVersion: number }>();
+-  state.readBoundary.mockReturnValueOnce(pending.promise);
+-  const props = {
+-    project: null,
+-    host: { id: "remote:server:source" },
+-    projects: [],
+-    service: { readDirectory: async () => ({ path: "/", entries: [] }) },
+-    onClose: vi.fn(),
+-    onSaved: vi.fn(),
++it("adds the selected existing identity without creating a project and preserves the creation draft on return", async () => {
++  const { service, remoteService } = await setup("remote:server:source");
++  const project = {
++    id: "existing-one",
++    hostId: "remote:server:source",
++    name: "Original project",
++    nameOverridden: true,
++    roots: [{ rootPath: "/same/directory", position: 0, isPrimary: true }],
++    deleted: false,
++    pinned: false,
++    position: 0,
++    createdAt: 1,
++    updatedAt: 1,
+   };
+-  const { rerender } = render(createElement(ProjectEditor, props as never));
++  service.readTree.mockResolvedValue({
++    projects: [project, { ...project, id: "existing-two", name: "Same directory second identity" }],
++    tasks: [],
++  });
+   fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  await waitFor(() => expect(state.readBoundary).toHaveBeenCalled());
+-  rerender(createElement(ProjectEditor, { ...props, suspended: true } as never));
+-  await act(async () => pending.resolve({ remoteBoundaryIntroAcknowledgedVersion: 0 }));
+-  expect(state.markBoundary).not.toHaveBeenCalled();
+-});("opens a folder-only form and creates a local project without name/device fields", async () => {
+-  const { service } = await setup();
+-  // 创建项目弹框只选文件夹：项目名输入与设备选择不再出现，名称由服务按目录自动命名。
+-  expect(screen.queryByTestId("virtual-project-name")).toBeNull();
+-  expect(screen.queryByTestId("virtual-project-device")).toBeNull();
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
++  fireEvent.click(await screen.findByText("choose-root"));
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  expect(await screen.findByText("Original project")).toBeTruthy();
++  expect(screen.getAllByText("/same/directory")).toHaveLength(2);
++  fireEvent.click(screen.getByTestId("remote-project-back"));
++  expect(screen.getByTitle("/source/selected")).toBeTruthy();
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  fireEvent.click(await screen.findByText("Same directory second identity"));
+   await waitFor(() =>
+-    expect(service.saveProject).toHaveBeenCalledWith(
+-      expect.objectContaining({ defaultName: "project.new", roots: [] }),
+-    ),
++    expect(remoteService.addEntry).toHaveBeenCalledWith({
++      hostId: "remote:server:source",
++      expectedMembershipId: "member",
++      project: {
++        projectId: "existing-two",
++        name: "Same directory second identity",
++        roots: project.roots,
++      },
++    }),
+   );
+-  expect(service.saveProject).toHaveBeenCalledWith(
+-    expect.not.objectContaining({ name: expect.anything() }),
++  expect(service.saveProject).not.toHaveBeenCalled();
++});
++
++it("keeps the existing-project intent through an offline connection without browsing folders", async () => {
++  state.devices[0]!.aggregatedStatus = "offline";
++  const { service, props } = await setup("remote:server:source");
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  await waitFor(() => expect(props.onOpenRemoteWorkspace).toHaveBeenCalledOnce());
++  expect(props.onOpenRemoteWorkspace.mock.calls[0]![0].returnTarget.kind).toBe("connect-device");
++  await act(async () =>
++    props.onOpenRemoteWorkspace.mock.calls[0]![0].returnTarget.finish({
++      kind: "connected",
++      sourceServerId: "source",
++    }),
+   );
++  expect(await screen.findByTestId("remote-project-back")).toBeTruthy();
++  expect(screen.queryByText("choose-root")).toBeNull();
++  expect(service.saveProject).not.toHaveBeenCalled();
+ });
+-it("selects the saved project only after directory refresh and preserves the draft group", async () => {
+-  const { props } = await setup();
+-  let finish!: () => void;
+-  props.onSaved.mockImplementation(
++
++it("discards a delayed existing-project list after returning and switching devices", async () => {
++  const { service, remoteService } = await setup("remote:server:source");
++  let finish!: (tree: Awaited<ReturnType<IProjectService["readTree"]>>) => void;
++  service.readTree.mockImplementationOnce(
+     () =>
+-      new Promise<void>((resolve) => {
++      new Promise((resolve) => {
+         finish = resolve;
+       }),
+   );
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
+-  await waitFor(() => expect(props.onSaved).toHaveBeenCalledOnce());
+-  expect(props.onCreateTask).not.toHaveBeenCalled();
+-  await act(async () => finish());
+-  expect(props.onCreateTask).toHaveBeenCalledExactlyOnceWith({
+-    projectId: "project",
+-    hostId: "local",
+-    taskGroupId: "group",
+-    initialComposerDraft: { sourceWorkspaceKey: "/draft", draft: { text: "" }, attachments: [] },
+-  });
+-});
+-it.each(["existing", "save", "refresh", "draft", "workspace", "failure"])(
+-  "does not select a created project after %s invalidates the draft",
+-  async (boundary) => {
+-    if (boundary === "existing") useZCodeSessionStore.getState().setActiveTaskId("/draft", "task");
+-    const { props, service, rerender } = await setup();
+-    if (boundary === "save")
+-      service.saveProject.mockImplementationOnce(async () => {
+-        useZCodeSessionStore.getState().setActiveTaskId("/draft", "task");
+-        return { id: "project", hostId: "local", name: "Draft", roots: [] };
+-      });
+-    props.onSaved.mockImplementation(async () => {
+-      if (boundary === "refresh") useZCodeSessionStore.getState().setActiveTaskId("/draft", "task");
+-      if (boundary === "draft") useZCodeSessionStore.getState().startDraft("/draft");
+-      if (boundary === "workspace")
+-        rerender(createElement(ProjectCreation, { ...props, workspacePath: "/other" } as never));
+-    });
+-    if (boundary === "failure") service.saveProject.mockRejectedValueOnce(new Error("save failed"));
+-    fireEvent.click(screen.getByTestId("virtual-project-save"));
+-    await waitFor(() =>
+-      boundary === "failure"
+-        ? expect(screen.getByRole("alert").textContent).toContain("save failed")
+-        : expect(props.onClose).toHaveBeenCalled(),
+-    );
+-    expect(props.onCreateTask).not.toHaveBeenCalled();
+-  },
+-);
+-it("retries local registration without creating a second remote project", async () => {
+-  const { service, remoteService } = await setup("remote:server:source");
+-  remoteService.addEntry.mockRejectedValueOnce(new Error("registration failed"));
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  fireEvent.click(await screen.findByText("choose-root"));
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
+-  fireEvent.click(await screen.findByTestId("project-folder-trust-confirm"));
+-  expect((await screen.findByRole("alert")).textContent).toContain("registration failed");
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
+-  await waitFor(() => expect(remoteService.addEntry).toHaveBeenCalledTimes(2));
+-  expect(service.saveProject).toHaveBeenCalledTimes(1);
+-});
+-it("ignores a native picker result after the draft is closed", async () => {
+-  let finish!: (paths: string[]) => void;
+-  state.select = () =>
+-    new Promise((resolve) => {
+-      finish = resolve;
+-    });
+-  const { unmount, service } = await setup();
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  unmount();
+-  await setup();
+-  await act(async () => finish(["/late/old-draft"]));
+-  expect(screen.queryByTitle("/late/old-draft")).toBeNull();
+-  expect(service.saveProject).not.toHaveBeenCalled();
+-});
+-it("does not expose device selection on any create form", async () => {
+-  const { rerender, props } = await setup();
+-  rerender(createElement(ProjectCreation, { ...props, allowDeviceManagement: false } as never));
+-  expect(screen.queryByTestId("virtual-project-device")).toBeNull();
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  fireEvent.click(await screen.findByTestId("remote-project-back"));
++  await selectDevice("local");
++  await act(async () => finish({ projects: [], tasks: [] }));
++  expect(screen.queryByTestId("remote-project-back")).toBeNull();
++  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
++    "project.thisComputer",
++  );
++  expect(remoteService.addEntry).not.toHaveBeenCalled();
+ });
+-it("admits a recognized device without an open project only on explicit creation", async () => {
++
++it("can add a read-only legacy project while the new-project action stays unavailable", async () => {
+   const { service, remoteService } = await setup("remote:server:source");
+-  Object.assign(state.devices[0]!, {
+-    profiles: [
+-      {
+-        sourceServerId: "source",
+-        lifecycleState: "active",
+-        target: { kind: "ssh", host: "device.example.com", username: "dev" },
+-      },
+-    ],
+-  });
+-  remoteService.readDirectory.mockResolvedValue({ entries: [], hosts: [] });
++  const project = {
++    id: "legacy-project",
++    hostId: "remote:server:source",
++    name: "Legacy original",
++    nameOverridden: true,
++    roots: [{ rootPath: "/original", position: 0, isPrimary: true }],
++    deleted: false,
++    pinned: false,
++    position: 0,
++    createdAt: 1,
++    updatedAt: 1,
++  };
++  service.readTree.mockResolvedValue({ projects: [project], tasks: [], legacySingleRoot: true });
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  expect(await screen.findByText("Legacy original")).toBeTruthy();
++  expect(screen.queryByTestId("remote-project-new")).toBeNull();
++  fireEvent.click(screen.getByTestId("remote-project-back"));
+   fireEvent.click(screen.getByTestId("virtual-project-browse"));
+   fireEvent.click(await screen.findByText("choose-root"));
+-  expect(remoteService.saveHost).not.toHaveBeenCalled();
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
+-  fireEvent.click(await screen.findByTestId("project-folder-trust-confirm"));
++  expect((screen.getByTestId("virtual-project-save") as HTMLButtonElement).disabled).toBe(true);
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  fireEvent.click(await screen.findByText("Legacy original"));
+   await waitFor(() => expect(remoteService.addEntry).toHaveBeenCalledOnce());
+-  expect(remoteService.saveHost).toHaveBeenCalledWith({
+-    id: "remote:server:source",
+-    target: { kind: "ssh", host: "device.example.com", username: "dev" },
+-  });
+-  expect(remoteService.saveHost.mock.invocationCallOrder[0]).toBeLessThan(
+-    service.saveProject.mock.invocationCallOrder[0]!,
+-  );
++  expect(service.saveProject).not.toHaveBeenCalled();
+ });
+ 
+-it("preserves the remote restore prompt using the selected device's authoritative projects", async () => {
+-  const { service } = await setup("remote:server:source");
++it("does not register an existing project after its pending selection is cancelled", async () => {
++  const { service, remoteService } = await setup("remote:server:source");
+   service.readTree.mockResolvedValue({
+     projects: [
+       {
+-        id: "deleted",
++        id: "existing",
+         hostId: "remote:server:source",
+-        name: "Previous",
++        name: "Original",
+         nameOverridden: true,
+-        roots: [{ rootPath: "/source/selected", position: 0, isPrimary: true }],
+-        deleted: true,
++        roots: [],
++        deleted: false,
+         pinned: false,
+         position: 0,
+         createdAt: 1,
+@@ -541,16 +611,53 @@
+     ],
+     tasks: [],
+   });
+-  fireEvent.click(screen.getByTestId("virtual-project-browse"));
+-  fireEvent.click(await screen.findByText("choose-root"));
+-  fireEvent.click(screen.getByTestId("virtual-project-save"));
+-  fireEvent.click(await screen.findByTestId("project-folder-trust-confirm"));
+-  await waitFor(() =>
+-    expect(service.saveProject).toHaveBeenCalledWith(
+-      expect.objectContaining({ restoreProjectId: "deleted" }),
+-    ),
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  await screen.findByText("Original");
++  let finish!: (directory: {
++    hosts: { id: string; membershipId: string }[];
++    entries: never[];
++  }) => void;
++  remoteService.readDirectory.mockImplementationOnce(
++    () =>
++      new Promise((resolve) => {
++        finish = resolve;
++      }),
+   );
+-  expect(state.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "project.restore" }));
++  fireEvent.click(screen.getByText("Original"));
++  fireEvent.click(screen.getByTestId("remote-project-back"));
++  await act(async () =>
++    finish({ hosts: [{ id: "remote:server:source", membershipId: "member" }], entries: [] }),
++  );
++  expect(remoteService.addEntry).not.toHaveBeenCalled();
++  expect(remoteService.saveHost).not.toHaveBeenCalled();
++});
++
++it("background cancellation leaves the project draft hidden until its original tab is active", async () => {
++  const { props, unmount } = await setup();
++  unmount();
++  const { TabStoreProvider, useTabStoreApi } = await import("@/store/TabStoreProvider.js");
++  let tabs!: ReturnType<typeof useTabStoreApi>;
++  function Harness() {
++    tabs = useTabStoreApi();
++    const [ready, setReady] = useState(false);
++    useEffect(() => {
++      tabs.getState().addTab("/project-origin");
++      setReady(true);
++    }, []);
++    return ready ? createElement(ProjectCreation, props as never) : null;
++  }
++  render(createElement(TabStoreProvider, null, createElement(Harness)));
++  fireEvent.click(await screen.findByTestId("virtual-project-browse"));
++  fireEvent.click(await screen.findByText("choose-root"));
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
++  const request = props.onOpenRemoteWorkspace.mock.calls[0]![0];
++  const origin = tabs.getState().activeTabId!;
++  act(() => tabs.getState().openSettingsTab());
++  await act(async () => request.returnTarget.finish({ kind: "cancelled", background: true }));
++  expect(screen.queryByTestId("virtual-project-browse")).toBeNull();
++  act(() => tabs.getState().activateTab(origin));
++  expect(await screen.findByTitle("/source/selected")).toBeTruthy();
+ });
+ 
+ it.each([
+@@ -577,6 +684,68 @@
+   expect((await screen.findByRole("alert")).textContent).not.toContain("remote-project.");
+ });
+ 
++it.each([
++  ["zh-CN", "remote-project.host-removed", "此设备已从项目列表移除，请重新选择设备。"],
++  [
++    "en-US",
++    "remote-project.host-removed",
++    "This device was removed from the project list. Select a device again.",
++  ],
++  ["zh-CN", "permission denied: /project", "permission denied: /project"],
++  ["en-US", "permission denied: /project", "permission denied: /project"],
++] as const)("shows existing-project errors in %s: %s", async (locale, code, message) => {
++  state.locale = locale;
++  const { service, remoteService } = await setup("remote:server:source");
++  service.readTree.mockResolvedValue({
++    projects: [{ id: "existing", hostId: "remote:server:source", name: "Original", roots: [] }],
++    tasks: [],
++  } as never);
++  remoteService.addEntry.mockRejectedValueOnce(new Error(code));
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  fireEvent.click(await screen.findByText("Original"));
++  expect((await screen.findByRole("alert")).textContent).toContain(message);
++  expect((await screen.findByRole("alert")).textContent).not.toContain("remote-project.");
++});
++
++it("keeps shared Host devices without Source management or device-add permissions", async () => {
++  state.hasManagement = false;
++  const { props, rerender, service } = await setup("remote:server:source");
++  rerender(
++    createElement(ProjectCreation, {
++      ...props,
++      allowDeviceManagement: false,
++      directory: {
++        entries: [],
++        hosts: [
++          {
++            id: "remote:server:source",
++            membershipId: "member",
++            kind: "ssh",
++            connectionStatus: "online",
++            target: { kind: "ssh", host: "device.example.com", username: "dev" },
++          },
++        ],
++      },
++    } as never),
++  );
++  fireEvent.click(screen.getByTestId("virtual-project-device"));
++  const remote = await screen.findByRole("option", { name: /device.example.com/ });
++  expect(screen.getAllByRole("option")).toHaveLength(2);
++  expect(screen.queryByRole("option", { name: "project.addRemoteDevice" })).toBeNull();
++  fireEvent.click(remote);
++  fireEvent.click(screen.getByTestId("virtual-project-browse"));
++  fireEvent.click(await screen.findByText("choose-root"));
++  expect(screen.getByTitle("/source/selected")).toBeTruthy();
++  expect(props.onOpenRemoteWorkspace).not.toHaveBeenCalled();
++  expect(service.saveProject).not.toHaveBeenCalled();
++  fireEvent.click(screen.getByTestId("virtual-project-existing"));
++  expect(await screen.findByTestId("remote-project-back")).toBeTruthy();
++  expect(service.readTree).toHaveBeenCalledWith({
++    hostId: "remote:server:source",
++    includeDeleted: true,
++  });
++});
++
+ it("waits for explicit acknowledgement before browsing and remembers it across forms", async () => {
+   state.boundaryVersion = 0;
+   const acknowledgement = Promise.withResolvers<boolean>();
+diff --git a/packages/ui/test/projectEditorLayout.test.ts b/packages/ui/test/projectEditorLayout.test.ts
+index 01565749..5016732b 100644
+--- a/packages/ui/test/projectEditorLayout.test.ts
++++ b/packages/ui/test/projectEditorLayout.test.ts
+@@ -40,7 +40,8 @@
+   const onBrowseExisting = vi.fn(async () => true);
+   render(
+     createElement(ProjectEditor, {
+-      // 创建弹框已精简为仅选文件夹（仅目录选择）；名字/设备/已有项目入口属于编辑弹框契约。
++      // 创建弹框无名字输入（服务按目录自动命名）；名字输入只属于编辑/远程固定目录契约。
++      // 设备选择与「已有项目」入口在创建态仍然保留。
+       project: edit
+         ? ({
+             id: "p",
+@@ -75,6 +76,14 @@
+   expect(before(device, browse)).toBe(true);
+ });
+ 
++it("create form orders device before folders and has no name field", () => {
++  editor("local", { edit: false });
++  expect(screen.queryByTestId("virtual-project-name")).toBeNull();
++  const device = screen.getByTestId("virtual-project-device");
++  const browse = screen.getByTestId("virtual-project-browse");
++  expect(before(device, browse)).toBe(true);
++});
++
+ it("shows a status dot for every remote device and text only when it is not online", async () => {
+   editor();
+   const trigger = screen.getByTestId("virtual-project-device");
+@@ -102,12 +111,12 @@
+ });
+ 
+ it("remote existing-project entry returns focus after browsing", async () => {
+-  const { onBrowseExisting } = editor();
++  const { onBrowseExisting } = editor("remote:offline", { edit: false });
+   const entry = screen.getByTestId("virtual-project-existing");
+   expect(entry.textContent).toBe("添加到侧栏");
+   expect(entry.closest("p")?.textContent).toContain("这台设备上已有项目？");
+   expect(before(screen.getByTestId("virtual-project-device"), entry)).toBe(true);
+-  expect(before(screen.getByTestId("virtual-project-name"), entry)).toBe(true);
++  expect(before(entry, screen.getByTestId("virtual-project-browse"))).toBe(true);
+ 
+   fireEvent.click(entry);
+   await waitFor(() => expect(onBrowseExisting).toHaveBeenCalledOnce());
+diff --git a/packages/ui/test/projectEditorOwner.test.ts b/packages/ui/test/projectEditorOwner.test.ts
+index b579c9c6..300cb2c2 100644
+--- a/packages/ui/test/projectEditorOwner.test.ts
++++ b/packages/ui/test/projectEditorOwner.test.ts
+@@ -93,5 +93,6 @@ it("does not close a replacement draft when an earlier entry registration finish
+   render(createElement(ProjectEditor, props));
+   await act(async () => registration.resolve());
+   expect(onClose).not.toHaveBeenCalled();
+-  expect(screen.getByTestId("virtual-project-name")).toBeTruthy();
++  // 创建态无名字输入（服务按目录自动命名）；用保存按钮探针确认替换草稿的表单仍开着。
++  expect(screen.getByTestId("virtual-project-save")).toBeTruthy();
+ });
+diff --git a/packages/ui/test/projectFolderTrust.test.ts b/packages/ui/test/projectFolderTrust.test.ts
+index 80a9006e..7ce3551f 100644
+--- a/packages/ui/test/projectFolderTrust.test.ts
++++ b/packages/ui/test/projectFolderTrust.test.ts
+@@ -50,7 +50,6 @@ async function requestTrust() {
+ 
+ it("shows all selected paths and does not register a Host or save until explicit trust", async () => {
+   const { props, saveProject } = setup();
+-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Review me" } });
+   const dialog = await requestTrust();
+   for (const path of paths) expect(within(dialog).getByText(path)).toBeTruthy();
+   expect(within(dialog).getByText("project.thisComputer")).toBeTruthy();
+@@ -60,8 +59,12 @@ it("shows all selected paths and does not register a Host or save until explicit
+   expect(props.onBeforeSave).not.toHaveBeenCalled();
+   fireEvent.click(screen.getByTestId("project-folder-trust-confirm"));
+   await waitFor(() => expect(saveProject).toHaveBeenCalledOnce());
++  // 创建态不填项目名（服务按目录自动命名）；确认后保存拿到全部目录与主目录。
+   expect(saveProject).toHaveBeenCalledWith(
+-    expect.objectContaining({ name: "Review me", roots: paths, primaryRoot: paths[0] }),
++    expect.objectContaining({ roots: paths, primaryRoot: paths[0] }),
++  );
++  expect(saveProject).toHaveBeenCalledWith(
++    expect.not.objectContaining({ name: expect.anything() }),
+   );
+   expect(props.onBeforeSave.mock.invocationCallOrder[0]).toBeLessThan(
+     saveProject.mock.invocationCallOrder[0]!,
+@@ -72,18 +75,12 @@ it.each(["cancel", "close", "escape"])(
+   "%s returns to the intact form without creating",
+   async (action) => {
+     const { props, saveProject } = setup();
+-    fireEvent.change(screen.getByTestId("virtual-project-name"), {
+-      target: { value: "Preserved" },
+-    });
+     const dialog = await requestTrust();
+     if (action === "cancel") fireEvent.click(screen.getByTestId("project-folder-trust-cancel"));
+     else if (action === "close")
+       fireEvent.click(within(dialog).getByRole("button", { name: "common.close" }));
+     else fireEvent.keyDown(dialog, { key: "Escape" });
+     await waitFor(() => expect(screen.queryByTestId("project-folder-trust-dialog")).toBeNull());
+-    expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe(
+-      "Preserved",
+-    );
+     expect(screen.getAllByTestId("virtual-project-root-row")).toHaveLength(2);
+     await waitFor(() =>
+       expect(document.activeElement).toBe(screen.getByTestId("virtual-project-save")),
+@@ -118,7 +115,8 @@ it("touch cancellation closes only the trust dialog and preserves the parent edi
+   await waitFor(() => expect(screen.queryByTestId("project-folder-trust-dialog")).toBeNull());
+   expect(props.onClose).not.toHaveBeenCalled();
+   expect(saveProject).not.toHaveBeenCalled();
+-  expect(screen.getByTestId("virtual-project-name")).toBeTruthy();
++  // 创建态无名字输入；用保存按钮探针确认父编辑器表单原样保留。
++  expect(screen.getByTestId("virtual-project-save")).toBeTruthy();
+ });
+ 
+ it("does not reuse another project's folders as approval, and asks again after a save failure", async () => {
+diff --git a/packages/ui/test/remoteNewConnectionForm.test.ts b/packages/ui/test/remoteNewConnectionForm.test.ts
+index 37e2f863..442a58b7 100644
+--- a/packages/ui/test/remoteNewConnectionForm.test.ts
++++ b/packages/ui/test/remoteNewConnectionForm.test.ts
+@@ -1,6 +1,15 @@
+ // @vitest-environment jsdom
+ import { createElement, type ComponentProps } from "react";
+-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
++import {
++  act,
++  cleanup,
++  fireEvent,
++  render,
++  renderHook,
++  screen,
++  waitFor,
++  within,
++} from "@testing-library/react";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type {
+   DockerContainerInfo,
+@@ -27,6 +36,8 @@ const ports = vi.hoisted(() => ({
+     onDidChangeDirectory: () => ({ dispose() {} }),
+     updateSource: vi.fn(),
+     confirmIdentityChange: vi.fn(),
++    renameSource: vi.fn(),
++    renameProfile: vi.fn(),
+   },
+   platform: {
+     isLocalDevelopmentRuntime: false,
+@@ -66,6 +77,7 @@ vi.mock("@/hooks/usePlatform.js", () => ({
+ vi.mock("@/hooks/useConfirmDialog.js", () => ({ useConfirmDialog: () => ports.confirm }));
+ 
+ import { RemoteConnectionDialog } from "@/SSHDialog.js";
++import { useRemoteConnectionFlow } from "@/remote-connection-flow/index.js";
+ import { useRemoteWorkspaceSessionStore } from "@/store/remoteWorkspaceSessionStore.js";
+ 
+ type DialogProps = ComponentProps<typeof RemoteConnectionDialog>;
+@@ -309,3 +321,102 @@ describe("项目/聊天入口的新建 SSH 连接表单", () => {
+     expect(footer.lastElementChild!.textContent).toBe(zhCN["remote.startConnection"]);
+   });
+ });
++
++describe("自定义名称（添加时一次命名设备与连接）", () => {
++  function namedSnapshot(deviceName: string, lineName: string): SourceServerManagementSnapshot {
++    return {
++      generation: 2,
++      servers: [{ sourceServerId: "source-1", displayName: deviceName } as never],
++      profiles: [
++        {
++          profileId: "profile-1",
++          sourceServerId: "source-1",
++          lifecycleState: "active",
++          displayName: lineName,
++          transport: "ssh",
++          target: { kind: "ssh", host: "device.example.com", username: "dev" },
++        } as never],
++      states: [],
++      workspaceHistory: [],
++      failedPathCount: 0,
++      abandonedPathCount: 0,
++      migrationCounts: [],
++    };
++  }
++
++  function mountFlow() {
++    const onConnect = vi.fn(async () => {
++      useRemoteWorkspaceSessionStore.setState({
++        sessionsById: {
++          "session-a": { sessionId: "session-a", sourceServerId: "source-1" } as never,
++        },
++      });
++      return "session-a";
++    });
++    const hook = renderHook(() =>
++      useRemoteConnectionFlow({
++        open: true,
++        completion: "device-management",
++        onConnect,
++        onSelectProject: vi.fn(async () => undefined),
++        onCancelSession: vi.fn(async () => undefined),
++      }),
++    );
++    return { ...hook, onConnect };
++  }
++
++  it("新建表单显示自定义名称输入，随输入受控更新", async () => {
++    mountSettingsEntry();
++    const input = (await screen.findByTestId("remote-custom-name-input")) as HTMLInputElement;
++    expect(screen.getByText(zhCN["remote.customNameHint"])).toBeTruthy();
++    fireEvent.change(input, { target: { value: "测试服务器" } });
++    expect(input.value).toBe("测试服务器");
++  });
++
++  it("连接成功后一次写入设备名与本次线路名并清空输入", async () => {
++    ports.snapshot = namedSnapshot("auto-device", "auto-line");
++    ports.management.renameSource.mockImplementation(async (_id: string, name: string) =>
++      namedSnapshot(name, "auto-line"),
++    );
++    ports.management.renameProfile.mockImplementation(async (_id: string, name: string) =>
++      namedSnapshot(name, name),
++    );
++    const { result, onConnect } = mountFlow();
++    await act(async () => {});
++    act(() => {
++      result.current.settingsStep.onHostChange("10.0.0.5");
++      result.current.settingsStep.onUsernameChange("root");
++      result.current.settingsStep.onPasswordChange("pw");
++      result.current.settingsStep.onCustomNameChange?.("测试服务器");
++    });
++    await act(async () => result.current.settingsStep.onConnect());
++    await waitFor(() => expect(onConnect).toHaveBeenCalledOnce());
++    await waitFor(() =>
++      expect(ports.management.renameSource).toHaveBeenCalledWith("source-1", "测试服务器"),
++    );
++    await waitFor(() =>
++      expect(ports.management.renameProfile).toHaveBeenCalledWith("profile-1", "测试服务器"),
++    );
++    await waitFor(() => expect(result.current.settingsStep.customName).toBe(""));
++  });
++
++  it("名称留空时连接不做任何改名", async () => {
++    ports.snapshot = namedSnapshot("auto-device", "auto-line");
++    ports.management.renameSource.mockImplementation(async () => ports.snapshot);
++    ports.management.renameProfile.mockImplementation(async () => ports.snapshot);
++    const { result, onConnect } = mountFlow();
++    await act(async () => {});
++    act(() => {
++      result.current.settingsStep.onHostChange("10.0.0.5");
++      result.current.settingsStep.onUsernameChange("root");
++      result.current.settingsStep.onPasswordChange("pw");
++    });
++    await act(async () => result.current.settingsStep.onConnect());
++    await waitFor(() => expect(onConnect).toHaveBeenCalledOnce());
++    await act(async () => {
++      await new Promise((resolve) => setTimeout(resolve, 5));
++    });
++    expect(ports.management.renameSource).not.toHaveBeenCalled();
++    expect(ports.management.renameProfile).not.toHaveBeenCalled();
++  });
++});
