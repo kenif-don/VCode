@@ -1,0 +1,210 @@
+diff --git a/packages/ui/src/v4/ConversationStatusPanel.tsx b/packages/ui/src/v4/ConversationStatusPanel.tsx
+index d87c74bb..6933a64e 100644
+--- a/packages/ui/src/v4/ConversationStatusPanel.tsx
++++ b/packages/ui/src/v4/ConversationStatusPanel.tsx
+@@ -1900,110 +1900,6 @@
+   );
+ }
+ 
+-/**
+- * 对话区右上角常驻 Git 快捷簇：拉取 + 分支（+ 有变更时的更改入口 + 更多操作）。
+- * 用户定夺：git 相关按钮一直显示，不受「无变更不显示」约束；非 git 项目整簇隐藏。
+- */
+-function GitControlCluster({
+-  activeTaskChangeSummary,
+-  gitDirtyFileCount,
+-  gitSummary,
+-  gitWorktreeReviewSourceId,
+-  gitWorktreeChangeSummary,
+-  onOpenGitReview,
+-  onRefreshGit,
+-  useVerticalFloatingPanels,
+-  workspaceIdentity,
+-  workspacePath,
+-}: {
+-  activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;
+-  gitDirtyFileCount: number;
+-  gitSummary: GitRepositorySummary;
+-  gitWorktreeReviewSourceId?: GitChangeSourceId | null;
+-  gitWorktreeChangeSummary?: { added: number; removed: number } | null;
+-  onOpenGitReview?: (sourceId?: GitChangeSourceId) => void;
+-  onRefreshGit: () => void;
+-  useVerticalFloatingPanels: boolean;
+-  workspaceIdentity?: string;
+-  workspacePath: string;
+-}) {
+-  const { intl } = useZCodeIntl();
+-  const { pulling: gitPulling, runPull: runGitPull } = useGitPull({
+-    workspacePath,
+-    onPulled: onRefreshGit,
+-  });
+-  const added = gitWorktreeChangeSummary?.added ?? 0;
+-  const removed = gitWorktreeChangeSummary?.removed ?? 0;
+-  const hasChanges = added + removed > 0;
+-  const pullLabel = intl.formatMessage({ id: "git.action.pull" });
+-  const changesLabel = intl.formatMessage({ id: "chat.statusPanel.changes" });
+-  return (
+-    <div
+-      data-testid="git-control-cluster"
+-      className="flex items-center gap-0.5 rounded-2xl border border-[var(--color-popover-border)] bg-[var(--color-popover)] p-1 shadow-md"
+-    >
+-      <ControlHintTooltip title={pullLabel} side="left">
+-        <Button
+-          type="button"
+-          variant="ghost"
+-          size="icon-sm"
+-          className="size-7"
+-          aria-label={pullLabel}
+-          disabled={gitPulling}
+-          onClick={() => {
+-            void runGitPull();
+-          }}
+-        >
+-          {gitPulling ? (
+-            <LoaderIcon className="size-4 animate-spin" />
+-          ) : (
+-            <ArrowDownToLineIcon className="size-4" />
+-          )}
+-        </Button>
+-      </ControlHintTooltip>
+-      <GitBranchSwitcher
+-        workspacePath={workspacePath}
+-        gitSummary={gitSummary}
+-        dirtyFileCount={gitDirtyFileCount}
+-        onRefreshGit={onRefreshGit}
+-        className="w-auto px-0 pt-0"
+-        triggerClassName="flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-ui-base text-[var(--color-foreground)] hover:bg-[var(--color-hover)] [&>span]:max-w-40 [&_svg:first-child]:text-[var(--color-foreground)]"
+-        popoverClassName="w-72 max-w-[calc(100vw-2rem)]"
+-        branchListClassName="max-h-56"
+-        popoverSide={useVerticalFloatingPanels ? "bottom" : "left"}
+-        showFooterActions
+-      />
+-      {hasChanges && onOpenGitReview ? (
+-        <ControlHintTooltip title={changesLabel} side="left">
+-          <Button
+-            type="button"
+-            variant="ghost"
+-            size="icon-sm"
+-            className="h-7 gap-1 px-2 font-mono text-ui-sm tabular-nums"
+-            aria-label={changesLabel}
+-            onClick={() => {
+-              onOpenGitReview(gitWorktreeReviewSourceId ?? undefined);
+-            }}
+-          >
+-            <FileDiffIcon className="size-4" />
+-            <span className="text-[var(--color-diff-added)]">+{added}</span>
+-            <span className="text-[var(--color-diff-removed)]">-{removed}</span>
+-          </Button>
+-        </ControlHintTooltip>
+-      ) : null}
+-      <GitActionMenu
+-        workspacePath={workspacePath}
+-        workspaceIdentity={workspaceIdentity}
+-        gitSummary={gitSummary}
+-        activeTaskChangeSummary={activeTaskChangeSummary ?? null}
+-        onRefreshGit={onRefreshGit}
+-        triggerLayout="header"
+-        className="w-auto"
+-      />
+-    </div>
+-  );
+-}
+-
+ function ConversationStatusPanelImpl({
+   workspacePath,
+   workspaceIdentity,
+@@ -2129,11 +2025,10 @@
+   // 会话会连整个胶囊一起消失——而那正是重启后打开一条旧对话的样子，run 目录的入口于是又没了。
+   // 已结束的 run 因此单独开这道门。（Agents 的已结束行有同一个洞：`endedSubagentCount` 也
+   // 没进 `hasContent`。那是既有行为，不在本轮一起翻。）
+-  // Git 快捷簇不受 hasContent 门控：git 项目永远保留拉取/分支入口（用户定夺）；
+-  // 胶囊只在有任务/变更/目标/运行等内容时出现，空会话不留空壳。
+-  const showGitCluster = Boolean(gitSummary?.isRepository && onRefreshGit && !isOfficeMode);
++  // Git 操作区常驻（用户定夺 2026-10-29）：git 项目不再「有变更才显示」——model.git 对任何
++  // 仓库非空，hasContent 恒真，面板（含 Git 操作区）对 git 项目始终可见；非 git 空会话不留空壳。
+   const showPill = model.hasContent || canRenderEndedWorkflows;
+-  if (!showPill && !showGitCluster) {
++  if (!showPill) {
+     return null;
+   }
+ 
+@@ -2152,20 +2047,6 @@
+       )}
+     >
+       <div className="flex items-start gap-2">
+-        {showGitCluster && gitSummary && onRefreshGit ? (
+-          <GitControlCluster
+-            activeTaskChangeSummary={activeTaskChangeSummary}
+-            gitDirtyFileCount={gitDirtyFileCount}
+-            gitSummary={gitSummary}
+-            gitWorktreeReviewSourceId={gitWorktreeReviewSourceId}
+-            gitWorktreeChangeSummary={gitWorktreeChangeSummary}
+-            onOpenGitReview={onOpenGitReview}
+-            onRefreshGit={onRefreshGit}
+-            useVerticalFloatingPanels={useVerticalFloatingPanels}
+-            workspaceIdentity={workspaceIdentity}
+-            workspacePath={workspacePath}
+-          />
+-        ) : null}
+         {/* Bugfix: 状态面板恢复旧 ChatView 的同 shell 收起/展开模型。
+             之前 v4 用固定展开卡片替代 summary panel，窄屏会遮挡聊天正文，也丢失用户 override。 */}
+         {showPill ? (
+diff --git a/packages/ui/src/v4/conversationStatusPanelModel.ts b/packages/ui/src/v4/conversationStatusPanelModel.ts
+index 80ea2594..b938bbe4 100644
+--- a/packages/ui/src/v4/conversationStatusPanelModel.ts
++++ b/packages/ui/src/v4/conversationStatusPanelModel.ts
+@@ -155,11 +155,10 @@
+   }
+   const added = gitWorktreeChangeSummary?.added ?? 0;
+   const removed = gitWorktreeChangeSummary?.removed ?? 0;
+-  // v4 之前只要是 Git repository 就创建 Git model，导致 clean repo
+-  // 也挂出右上角状态卡；旧 ChatView 只在 worktree 有行级变化时展示 Git Tools。
+-  if (added + removed <= 0) {
+-    return null;
+-  }
++  // 用户定夺（2026-10-29）：Git 操作区只要是 git 项目就常驻显示，不再「有变更才显示」。
++  // clean repo 同样给出分支切换/拉取/提交或推送入口——原「只在 worktree 有行级变化时
++  // 展示 Git Tools」的门控废止（曾把 Git model 的产生与否绑在变更上，clean repo 连
++  // hasContent 都进不了，整个面板一起消失）。
+   const isClean =
+     !gitSummary.isDirty &&
+     gitDirtyFileCount === 0 &&
+diff --git a/packages/ui/test/v4ConversationStatusPanel.test.ts b/packages/ui/test/v4ConversationStatusPanel.test.ts
+index fb680c92..a23b759b 100644
+--- a/packages/ui/test/v4ConversationStatusPanel.test.ts
++++ b/packages/ui/test/v4ConversationStatusPanel.test.ts
+@@ -573,9 +573,6 @@
+     expect(html).toContain("chat.statusPanel.changes");
+     expect(html).toContain("+12");
+     expect(html).toContain("-3");
+-    // Git 快捷簇常驻于胶囊之外：mini 态也始终有拉取/分支/更多操作入口。
+-    expect(html).toContain("git-control-cluster");
+-    expect(html).toContain("mock-git-action-menu");
+   });
+ 
+   it("keeps goal and running background authority on the mini shell", async () => {
+diff --git a/packages/ui/test/v4ConversationStatusPanelModel.test.ts b/packages/ui/test/v4ConversationStatusPanelModel.test.ts
+index c0d29fcc..bcfd2c37 100644
+--- a/packages/ui/test/v4ConversationStatusPanelModel.test.ts
++++ b/packages/ui/test/v4ConversationStatusPanelModel.test.ts
+@@ -560,7 +560,7 @@
+     ]);
+   });
+ 
+-  it("does not show git tools for a clean repository without worktree line changes", () => {
++  it("shows git tools for a clean repository without worktree line changes", () => {
+     const model = buildConversationStatusPanelModel({
+       gitSummary: gitSummary({ isDirty: false, ahead: 0 }),
+       gitDirtyFileCount: 0,
+@@ -570,8 +570,9 @@
+       backgroundWorks: [],
+     });
+ 
+-    expect(model.hasContent).toBe(false);
+-    expect(model.git).toBeNull();
++    // 用户定夺（2026-10-29）：Git 操作区只要是 git 项目就常驻，不再「有变更才显示」。
++    expect(model.hasContent).toBe(true);
++    expect(model.git).toMatchObject({ added: 0, removed: 0, isClean: true });
+   });
+ 
+   it("lists only terminal ExitPlanMode rows with markdown, newest first", () => {
