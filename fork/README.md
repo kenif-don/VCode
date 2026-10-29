@@ -41,7 +41,7 @@ cd hba-zcode-fork && git checkout 3c5b227 && git tag baseline/zcode-v3.16.2-2026
 > `node_modules` 重装(npmmirror 源,54s)、typecheck 0 错误、抽查单测全绿后启用;
 > 树内 git 已挂 `upstream → https://github.com/zai-org/ZCode.git` 供季度 rebase 看上游。
 > 打包产物仍落在树内 `packages/desktop/dist/`,交付时拷贝到 `../hba-on-zcode/dist/`
-> (`VCode-3.16.2-hba-panels-r{N}-win-x64.exe`)。临时目录旧树保留为备份。
+> (`VCode-3.16.2-hba-panels-r{N}-win-x64.exe`)。临时目录旧树已删除(2026-10-29,两树 git HEAD 核对一致后清理,C 盘释放约 5.2G)。
 
 仓库结构(证据:已核实,`packages/`、`apps/` 一览):`packages/desktop`(Electron 桌面端,含 `electron-builder.config.js`)、`packages/ui`(渲染层)、`packages/server`、`packages/services`(含 `git/` 服务)、`packages/shared`、`apps/zcode-cli`(CLI/内核)等 pnpm workspace 包。
 
