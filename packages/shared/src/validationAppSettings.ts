@@ -313,6 +313,32 @@ function migrateLegacyLocalePreference(value: unknown): unknown {
   };
 }
 
+function migrateLocalePreferenceDefaultZh(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const raw = value as Record<string, unknown>;
+  if (raw.localePreferenceDefaultZhMigrationInitialized === true) {
+    return value;
+  }
+
+  if (raw.localePreference !== "system") {
+    return {
+      ...raw,
+      localePreferenceDefaultZhMigrationInitialized: true,
+    };
+  }
+
+  return {
+    ...raw,
+    // 界面语言默认值改为中文后，旧默认落盘的 system 与“用户显式选过系统默认”无法区分；
+    // 一次性统一迁移到 zh-CN，写入迁移标记后，后续显式选择（含再选系统默认）原样保留。
+    localePreference: "zh-CN",
+    localePreferenceDefaultZhMigrationInitialized: true,
+  };
+}
+
 const legacyRemoteWorkspaceHistoryEntrySchema = z.object({
   id: nonEmptyStringSchema,
   workspacePath: nonEmptyStringSchema,
@@ -506,7 +532,7 @@ const appSettingsObjectSchema = z.object({
   locale: localeSchema.default("zh-CN"),
   // 快捷键用户覆盖（语义校验在 ui/src/shortcuts 生效表阶段容错，schema 只管形状）
   shortcutBindings: z.record(z.string(), z.array(z.string())).optional(),
-  localePreference: localePreferenceSchema.default("system"),
+  localePreference: localePreferenceSchema.default("zh-CN"),
   terminalInheritSystemProfile: z.boolean().default(true),
   terminalFontFamily: nonEmptyStringSchema.optional(),
   integratedTerminalShell: integratedTerminalShellSelectionSchema.optional(),
@@ -533,6 +559,7 @@ const appSettingsObjectSchema = z.object({
   desktopChromiumHardwareAccelerationEnabled: z.boolean().default(true),
   messageStreamShowReasoning: z.boolean().default(true),
   messageStreamShowReasoningMigrationInitialized: z.boolean().default(true),
+  localePreferenceDefaultZhMigrationInitialized: z.boolean().default(true),
   messageStreamShowTodos: z.boolean().default(false),
   toolGroupingExploreEnabled: z.boolean().default(true),
   toolGroupingTerminalEnabled: z.boolean().default(true),
@@ -588,11 +615,13 @@ export const appSettingsSchema = z.preprocess(
       sanitizeDesktopWindowSize(
         migrateMessageStreamShowReasoningDefault(
           migrateCloseToTrayOnWindowsDefault(
-            migrateLegacyLocalePreference(
-              sanitizeZCodeEndpointOrigin(
-                migrateLegacyWorkspaceSession(
-                  migrateLegacyBuiltinAgentCliProviders(
-                    migrateRemoteBoundaryIntroAcknowledgement(migrateTaskAutoArchiveReset(value)),
+            migrateLocalePreferenceDefaultZh(
+              migrateLegacyLocalePreference(
+                sanitizeZCodeEndpointOrigin(
+                  migrateLegacyWorkspaceSession(
+                    migrateLegacyBuiltinAgentCliProviders(
+                      migrateRemoteBoundaryIntroAcknowledgement(migrateTaskAutoArchiveReset(value)),
+                    ),
                   ),
                 ),
               ),
@@ -629,6 +658,7 @@ export const appSettingsPatchSchema = z.object({
   desktopChromiumHardwareAccelerationEnabled: z.boolean().optional(),
   messageStreamShowReasoning: z.boolean().optional(),
   messageStreamShowReasoningMigrationInitialized: z.boolean().optional(),
+  localePreferenceDefaultZhMigrationInitialized: z.boolean().optional(),
   messageStreamShowTodos: z.boolean().optional(),
   toolGroupingExploreEnabled: z.boolean().optional(),
   toolGroupingTerminalEnabled: z.boolean().optional(),

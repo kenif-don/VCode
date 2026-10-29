@@ -42,12 +42,15 @@ export function usePluginUiSidePaneModel({
   tab,
   visible,
   scopeRef,
+  activeSessionId,
   onOpenBrowserUrl,
   onCloseTab,
 }: {
   tab: PluginUiSidePaneTab;
   visible: boolean;
   scopeRef: PluginUiScopeRef;
+  /** 当前活跃会话；面板（surface）的会话交互发到这里（HBA fr7）。 */
+  activeSessionId?: string | null;
   onOpenBrowserUrl?: (url: string) => void;
   onCloseTab?: (tabId: string) => void;
 }): PluginUiSidePaneViewProps {
@@ -146,19 +149,23 @@ export function usePluginUiSidePaneModel({
     [canReturnInline, onCloseTab, tab.id],
   );
   const [width, setWidth] = useState(0);
+  // 面板（surface）跟随项目（HBA fr7）：ui/message / 模型上下文发到**当前活跃对话**；
+  // 其余宿主管道（资源通知路由、租约、widgetState）仍绑定创建会话，推送链路不受切换影响。
+  const bindSessionId =
+    scopeRef.kind === "surface" && activeSessionId ? activeSessionId : tab.parentSessionId;
   const interactions = useMemo(
     () =>
       createPluginUiInteractions({
         workspacePath: tab.workspacePath,
         remoteSessionId: tab.remoteSessionId,
         workspaceIdentity: tab.workspaceIdentity,
-        sessionId: tab.parentSessionId,
+        sessionId: bindSessionId,
         pluginId: tab.pluginId,
         scope: scopeRef,
       }),
     [
       scopeRef,
-      tab.parentSessionId,
+      bindSessionId,
       tab.pluginId,
       tab.workspacePath,
       tab.workspaceIdentity,

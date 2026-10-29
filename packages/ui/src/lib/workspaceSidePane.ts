@@ -1172,29 +1172,35 @@ export function isSidePaneTabVisibleInScope(
     case "plugin-market":
     case "treemapping":
       return true;
+    // 工作台面板跟随项目（HBA fr7）：浏览器/终端/文件/代码/白板等同工作区所有会话共享，
+    // 切换对话右侧面板不变化。归属（ownerTaskId）只作溯源，不再收窄可见性。
+    case "browser":
+    case "browser-permissions":
     case "browser-use":
-      return tab.sessionId === scope.ownerTaskId;
+    case "file-manager":
+    case "code-viewer":
+    case "whiteboard":
+    case "new-tab":
+    case "terminal":
+      return true;
     case "subagent-session":
     case "subagent-directory":
     case "bash-output":
       return tab.rootSessionId === scope.ownerTaskId;
+    case "plugin-ui":
+      // 插件面板（surface）跟随项目；工具卡片 tab 的内容属于对话，仍归会话。
+      return tab.surfaceId && !tab.toolCallId
+        ? true
+        : tab.parentSessionId === scope.ownerTaskId;
     case "selection-side-chat":
     case "plan-detail":
-    case "plugin-ui":
     case "workflow-run":
     case "workflow-directory":
     case "workflow-actor-session":
     case "workflow-workspace":
     case "workflow-artifact":
       return tab.parentSessionId === scope.ownerTaskId;
-    case "browser":
-    case "browser-permissions":
-    case "file-manager":
-    case "code-viewer":
-    case "whiteboard":
     case "model-trajectory":
-    case "new-tab":
-    case "terminal":
       return sidePaneOwnerKey(tab.ownerTaskId) === sidePaneOwnerKey(scope.ownerTaskId);
   }
 }
@@ -1274,10 +1280,12 @@ export function activateBrowserSidePane(
   },
 ): WorkspaceSidePaneState {
   if (!options?.forceNew && !options?.tabId && !options?.initialUrl) {
-    const ownerKey = sidePaneOwnerKey(options?.ownerTaskId);
+    // 工作台跟随项目（HBA fr8）：跨对话复用同一个浏览器 tab；工作区任一侧缺省即匹配
+    // （toggle 等调用方不带 workspaceKey，靠 tab 侧已打标的 key 或单工作区状态兜底）。
     const existingBrowserTab = current?.tabs.find(
       (tab): tab is BrowserSidePaneTab =>
-        tab.type === "browser" && sidePaneOwnerKey(tab.ownerTaskId) === ownerKey,
+        tab.type === "browser" &&
+        (!tab.workspaceKey || !options?.workspaceKey || tab.workspaceKey === options.workspaceKey),
     );
     if (existingBrowserTab) {
       return activateSidePaneTab(current, existingBrowserTab);
@@ -1296,8 +1304,7 @@ export function openBrowserPermissionsSidePane(
     (tab) =>
       tab.type === "browser-permissions" &&
       tab.origin === options.origin &&
-      tab.workspaceKey === options.workspaceKey &&
-      sidePaneOwnerKey(tab.ownerTaskId) === sidePaneOwnerKey(options.ownerTaskId),
+      tab.workspaceKey === options.workspaceKey,
   );
   return activateSidePaneTab(
     current,
@@ -1345,12 +1352,10 @@ export function findBrowserSidePaneTabByUrl(
     workspaceKey?: string | null;
   },
 ): BrowserSidePaneTab | undefined {
-  const ownerKey = sidePaneOwnerKey(options.ownerTaskId);
   return current?.tabs.find(
     (tab): tab is BrowserSidePaneTab =>
       tab.type === "browser" &&
       tab.initialUrl === options.initialUrl &&
-      sidePaneOwnerKey(tab.ownerTaskId) === ownerKey &&
       sidePaneTabMatchesWorkspace(tab, options.workspaceKey ?? null),
   );
 }
@@ -1723,17 +1728,16 @@ export function openCodeViewerSidePane(
   // 同一个文件/图片在消息里被重复点击时，不能把右侧面板整块替换，
   // 用户刚在别的 pane 里看的内容会直接丢掉。这里按稳定 sourceKey 复用已有 code viewer tab，
   // 既避免重复开一排同名 tab，也能在再次打开时刷新到最新 source。
+  void ownerTaskId; // 归属由 stampSidePaneTabsOwnership 提交时冻结；去 owner 去重（HBA fr8）后形参仅保留兼容
   const nextTab = createCodeViewerSidePaneTab(source);
   if (!current || nextTab.sourceKey === null) {
     return activateSidePaneTab(current, nextTab);
   }
 
-  const ownerKey = sidePaneOwnerKey(ownerTaskId);
+  // 工作台跟随项目（HBA fr7）：同工作区跨对话复用同一个 code viewer tab。
   const matchedTab = current.tabs.find(
     (tab): tab is CodeViewerSidePaneTab =>
-      tab.type === "code-viewer" &&
-      tab.sourceKey === nextTab.sourceKey &&
-      sidePaneOwnerKey(tab.ownerTaskId) === ownerKey,
+      tab.type === "code-viewer" && tab.sourceKey === nextTab.sourceKey,
   );
   // 文件导航后旧实例仍持有原 id；重新打开原路径时必须分配新 id，避免覆盖正在看的文件。
   if (!matchedTab && current.tabs.some((tab) => tab.id === nextTab.id)) {
@@ -2375,9 +2379,9 @@ export function toggleBrowserSidePane(
   ownerTaskId?: string | null,
   remoteSessionId?: string | null,
 ): WorkspaceSidePaneState | null {
-  const ownerKey = sidePaneOwnerKey(ownerTaskId);
   const activeTab = getActiveSidePaneTab(current);
-  if (activeTab?.type === "browser" && sidePaneOwnerKey(activeTab.ownerTaskId) === ownerKey) {
+  // 工作台跟随项目（HBA fr7）：浏览器 tab 跨对话共享，活跃的浏览器不分归属都可收起。
+  if (activeTab?.type === "browser") {
     return closeSidePaneTab(current, activeTab.id);
   }
 

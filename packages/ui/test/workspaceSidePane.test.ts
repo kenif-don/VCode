@@ -109,12 +109,12 @@ describe("workspaceSidePane", () => {
     expect(closeSidePaneTab(closed, second.activeTabId)).toBeNull();
   });
 
-  it("新标签页只属于创建时的工作区与对话", () => {
+  it("新标签页跟随项目（HBA fr8）：跨对话共享，仍隔离工作区", () => {
     const scope = { workspaceKey: "workspace-a", ownerTaskId: "task-a" };
     const state = stampSidePaneTabsOwnership(activateNewTabSidePane(null), scope)!;
     const tab = state.tabs[0]!;
     expect(isSidePaneTabVisibleInScope(tab, scope)).toBe(true);
-    expect(isSidePaneTabVisibleInScope(tab, { ...scope, ownerTaskId: "task-b" })).toBe(false);
+    expect(isSidePaneTabVisibleInScope(tab, { ...scope, ownerTaskId: "task-b" })).toBe(true);
     expect(isSidePaneTabVisibleInScope(tab, { ...scope, workspaceKey: "workspace-b" })).toBe(false);
     expect(normalizeWorkspaceSidePaneState(state)).toEqual(state);
   });
@@ -2258,10 +2258,18 @@ describe("workspaceSidePane", () => {
           workspaceKey: "/workspace",
           ownerTaskId: "sess-a",
         }),
+      ).toBe("browser:b");
+      // A 的 tab 仍可被 preferred 命中恢复（HBA fr8：browser-use 项目级共享）。
+      expect(
+        resolveActiveTabForOwner(
+          result.state,
+          { workspaceKey: "/workspace", ownerTaskId: "sess-a" },
+          "browser-use:tab-a",
+        ),
       ).toBe("browser-use:tab-a");
     });
 
-    it("A 的 browser-use tab 在切到无 tab 的 B 后保持挂载，切回 A 主动展开", () => {
+    it("A 的 browser-use tab 在切到 B 后保持可见共享（HBA fr8），切回 A 不丢", () => {
       const stateA = openBrowserUseSidePane(null, {
         workspaceKey: "/workspace",
         sessionId: "sess-a",
@@ -2272,11 +2280,12 @@ describe("workspaceSidePane", () => {
         workspaceKey: "/workspace",
         ownerTaskId: "sess-b",
       });
+      // fr8：browser-use 跟随项目，B 直接看到 A 开的 tab 且为 active，不收起。
       expect(stateB.sidePaneState).toMatchObject({
-        activeTabId: "",
+        activeTabId: "browser-use:tab-a",
         tabs: [{ id: "browser-use:tab-a", tabId: "tab-a" }],
       });
-      expect(stateB.isSidePaneCollapsed).toBe(true);
+      expect(stateB.isSidePaneCollapsed).toBe(false);
       expect(shouldMountSidePaneContent(false, stateB.sidePaneState?.tabs ?? [])).toBe(true);
 
       const restoredA = resolveSidePaneScopeState(stateB.sidePaneState, {
@@ -2502,23 +2511,25 @@ describe("workspaceSidePane", () => {
       ordinal: 1,
     };
     // 每个类型都明确归属；新增类型时必须补齐这张验收表，不能落入默认公共分支。
+    // HBA fr8：工作台面板（browser/permissions/code-viewer/whiteboard/terminal/browser-use）
+    // 跟随项目，owner 用 null（工作区级，同项目所有对话可见）标注。
     const cases = {
-      browser: { tab: { ...base, type: "browser" }, owner: "owner" },
+      browser: { tab: { ...base, type: "browser" }, owner: null },
       "browser-permissions": {
         tab: { ...base, type: "browser-permissions", origin: "https://a.test" },
-        owner: "owner",
+        owner: null,
       },
       "code-viewer": {
         tab: { ...base, type: "code-viewer", source: viewerSource, sourceKey: "file" },
-        owner: "owner",
+        owner: null,
       },
-      whiteboard: { tab: { ...base, type: "whiteboard", boardId: "board" }, owner: "owner" },
+      whiteboard: { tab: { ...base, type: "whiteboard", boardId: "board" }, owner: null },
       "model-trajectory": {
         tab: { ...base, type: "model-trajectory", taskId: "target" },
         owner: "owner",
       },
-      terminal: { tab: { ...base, type: "terminal" }, owner: "owner" },
-      "browser-use": { tab: { ...base, type: "browser-use", tabId: "logical" }, owner: "session" },
+      terminal: { tab: { ...base, type: "terminal" }, owner: null },
+      "browser-use": { tab: { ...base, type: "browser-use", tabId: "logical" }, owner: null },
       "bash-output": { tab: { ...base, type: "bash-output", workId: "work" }, owner: "root" },
       "subagent-session": {
         tab: { ...base, type: "subagent-session", subagentType: "Explore" },
@@ -2599,17 +2610,46 @@ describe("workspaceSidePane", () => {
       expect(restamped).toBe(stamped);
     });
 
-    it("getVisibleSidePaneTabs 按对话过滤；undefined/null 归到草稿；workspace 工具对本项目所有对话可见", () => {
+    it("getVisibleSidePaneTabs：工作台面板项目级共享，对话内容仍按对话过滤（HBA fr8）", () => {
       const tabs = [
         { id: "a", type: "browser" as const, ownerTaskId: "task-a" },
         { id: "b", type: "browser" as const, ownerTaskId: "task-b" },
         { id: "d", type: "browser" as const, ownerTaskId: null },
         { id: "u", type: "browser" as const },
         { id: "git", type: "git" as const, ownerTaskId: "task-a" },
+        {
+          id: "plan-a",
+          type: "plan-detail" as const,
+          parentSessionId: "task-a",
+          markdown: "plan",
+          toolCallId: "call",
+          workspaceKey: "ws",
+          workspacePath: "/repo",
+        },
       ];
-      expect(getVisibleSidePaneTabs(tabs, scope("task-a")).map((t) => t.id)).toEqual(["a", "git"]);
-      expect(getVisibleSidePaneTabs(tabs, scope("task-b")).map((t) => t.id)).toEqual(["b", "git"]);
-      expect(getVisibleSidePaneTabs(tabs, scope(null)).map((t) => t.id)).toEqual(["d", "u", "git"]);
+      // browser 跨对话共享（含草稿态），plan-detail 仍只归所属对话。
+      expect(getVisibleSidePaneTabs(tabs, scope("task-a", "ws")).map((t) => t.id)).toEqual([
+        "a",
+        "b",
+        "d",
+        "u",
+        "git",
+        "plan-a",
+      ]);
+      expect(getVisibleSidePaneTabs(tabs, scope("task-b", "ws")).map((t) => t.id)).toEqual([
+        "a",
+        "b",
+        "d",
+        "u",
+        "git",
+      ]);
+      expect(getVisibleSidePaneTabs(tabs, scope(null, "ws")).map((t) => t.id)).toEqual([
+        "a",
+        "b",
+        "d",
+        "u",
+        "git",
+      ]);
     });
 
     it("getVisibleSidePaneTabs 按项目(workspaceKey)隔离：切项目只看本项目的 tab（含 workspace 工具）", () => {
@@ -2651,43 +2691,55 @@ describe("workspaceSidePane", () => {
       ]);
     });
 
-    it("resolveActiveTabForOwner：preferred 优先 → 当前 active → 该作用域最新 → 无则 null", () => {
+    it("resolveActiveTabForOwner：preferred 优先 → 当前 active → 该作用域最新 → 无则 null（HBA fr8：browser 项目级）", () => {
       const state = {
         activeTabId: "a2",
         tabs: [
           { id: "a1", type: "browser" as const, ownerTaskId: "task-a" },
           { id: "a2", type: "browser" as const, ownerTaskId: "task-a" },
-          { id: "b1", type: "browser" as const, ownerTaskId: "task-b" },
+          {
+            id: "m1",
+            type: "model-trajectory" as const,
+            ownerTaskId: "task-a",
+            taskId: "target",
+          },
         ],
       };
+      // preferred 命中可见 tab → preferred（browser 跨对话可见）。
       expect(resolveActiveTabForOwner(state, scope("task-a"), "a1")).toBe("a1");
-      expect(resolveActiveTabForOwner(state, scope("task-a"), "b1")).toBe("a2");
-      expect(resolveActiveTabForOwner(state, scope("task-b"))).toBe("b1");
-      expect(resolveActiveTabForOwner(state, scope("task-c"))).toBeNull();
+      expect(resolveActiveTabForOwner(state, scope("task-b"), "a1")).toBe("a1");
+      // 无 preferred 且当前 active 可见 → active。
+      expect(resolveActiveTabForOwner(state, scope("task-b"))).toBe("a2");
+      // active 不可见（会话级 tab）→ 取作用域内最新。
+      expect(resolveActiveTabForOwner({ ...state, activeTabId: "m1" }, scope("task-b"))).toBe("a2");
+      // 无可见 tab → null。
+      expect(
+        resolveActiveTabForOwner({ tabs: [state.tabs[2]!], activeTabId: "" }, scope("task-b")),
+      ).toBeNull();
     });
 
-    it("toggle/activate browser 只复用当前对话的 browser tab，不串用别的对话", () => {
-      const stateA = stampSidePaneTabsOwnership(openBrowserSidePane(null, { tabId: "browser:a" }), {
+    it("toggle/activate browser 跨对话共享同一 browser tab（HBA fr8）", () => {
+      // 场景 1：浏览器是共享工作台，活跃浏览器不分归属，toggle 即收起。
+      const opened = stampSidePaneTabsOwnership(openBrowserSidePane(null, { tabId: "browser:a" }), {
         ownerTaskId: "task-a",
         workspaceKey: "ws-1",
       })!;
-      expect(getVisibleSidePaneTabs(stateA.tabs, scope("task-a", "ws-1")).map((t) => t.id)).toEqual(
+      expect(getVisibleSidePaneTabs(opened.tabs, scope("task-a", "ws-1")).map((t) => t.id)).toEqual(
         ["browser:a"],
       );
+      expect(toggleBrowserSidePane(opened, "task-b")).toBeNull();
 
-      // 在对话 B 点浏览器开关：不能复用 A 的 tab，应为 B 新建；A 的 tab 仍保留（不销毁）。
-      const toggled = stampSidePaneTabsOwnership(toggleBrowserSidePane(stateA, "task-b"), {
-        ownerTaskId: "task-b",
-        workspaceKey: "ws-1",
-      })!;
+      // 场景 2：非浏览器 tab 激活时 toggle：复用同一个 browser tab，跨对话不新建。
+      const withGit = toggleGitSidePane(
+        stampSidePaneTabsOwnership(openBrowserSidePane(null, { tabId: "browser:a" }), {
+          ownerTaskId: "task-a",
+          workspaceKey: "ws-1",
+        })!,
+      )!;
+      expect(withGit.activeTabId).toBe("git");
+      const toggled = toggleBrowserSidePane(withGit, "task-b")!;
       expect(toggled.tabs).toHaveLength(2);
-      const bVisible = getVisibleSidePaneTabs(toggled.tabs, scope("task-b", "ws-1"));
-      expect(bVisible).toHaveLength(1);
-      expect(bVisible[0]!.id).not.toBe("browser:a");
-      expect(toggled.activeTabId).toBe(bVisible[0]!.id);
-      expect(
-        getVisibleSidePaneTabs(toggled.tabs, scope("task-a", "ws-1")).map((t) => t.id),
-      ).toEqual(["browser:a"]);
+      expect(toggled.activeTabId).toBe("browser:a");
     });
   });
 
@@ -2718,7 +2770,7 @@ describe("workspaceSidePane", () => {
       );
     });
 
-    it("URL / owner / workspace 任一不同都另开一个 tab", () => {
+    it("URL 或 workspace 不同另开一个 tab；owner 不同复用同一个（HBA fr8）", () => {
       const base = openOrActivateBrowserSidePaneByUrl(null, {
         initialUrl: REPORT_URL,
         tabId: "browser:base",
@@ -2734,13 +2786,15 @@ describe("workspaceSidePane", () => {
       });
       expect(otherUrl.activeTabId).toBe("browser:url");
 
+      // owner 不同（跨对话）→ 复用 base，不新开。
       const otherOwner = openOrActivateBrowserSidePaneByUrl(base, {
         initialUrl: REPORT_URL,
         tabId: "browser:owner",
         ownerTaskId: "task-b",
         workspaceKey: "ws-1",
       });
-      expect(otherOwner.activeTabId).toBe("browser:owner");
+      expect(otherOwner.tabs).toHaveLength(1);
+      expect(otherOwner.activeTabId).toBe("browser:base");
 
       const otherWorkspace = openOrActivateBrowserSidePaneByUrl(base, {
         initialUrl: REPORT_URL,
@@ -2823,7 +2877,7 @@ describe("workspaceSidePane", () => {
       expect(again.activeTabId).toBe(tab.id);
     });
 
-    it("不同站点、不同工作区或不同对话各自开新标签", () => {
+    it("不同站点或不同工作区各自开新标签；不同对话复用同一个（HBA fr8）", () => {
       const opened = openBrowserPermissionsSidePane(null, {
         origin: "https://example.com",
         ownerTaskId: "task-a",
@@ -2839,15 +2893,18 @@ describe("workspaceSidePane", () => {
         ownerTaskId: "task-a",
         workspaceKey: "ws-2",
       });
+      expect(otherWorkspace.tabs).toHaveLength(3);
+      // 不同对话 → 复用同站点同工作区的既有标签，不再新开。
       const otherOwner = openBrowserPermissionsSidePane(otherWorkspace, {
         origin: "https://example.com",
         ownerTaskId: "task-b",
         workspaceKey: "ws-1",
       });
-      expect(otherOwner.tabs).toHaveLength(4);
+      expect(otherOwner.tabs).toHaveLength(3);
+      expect(otherOwner.activeTabId).toBe(opened.tabs[0]!.id);
     });
 
-    it("按 owner 作用域过滤：归属 task-a 的设置标签对 task-b 不可见", () => {
+    it("设置标签项目级共享（HBA fr8）：归属 task-a 的设置标签对 task-b 可见", () => {
       const opened = openBrowserPermissionsSidePane(null, {
         origin: "https://example.com",
         ownerTaskId: "task-a",
@@ -2858,12 +2915,12 @@ describe("workspaceSidePane", () => {
       ).toBe(opened.tabs[0]!.id);
       expect(
         resolveActiveTabForOwner(opened, { workspaceKey: "ws-1", ownerTaskId: "task-b" }),
-      ).toBeNull();
+      ).toBe(opened.tabs[0]!.id);
     });
   });
 });
 
-it("站点设置独立标签按 workspace/owner/origin 复用，不替换网页", () => {
+it("站点设置独立标签按 workspace/origin 复用，不替换网页（HBA fr8：跨对话复用）", () => {
   const browser = activateBrowserSidePane(null, {
     initialUrl: "https://site.test",
     ownerTaskId: "task-a",
@@ -2877,7 +2934,8 @@ it("站点设置独立标签按 workspace/owner/origin 复用，不替换网页"
   expect(
     openBrowserPermissionsSidePane(opened, { ...options, workspaceKey: "ssh:b" }).tabs,
   ).toHaveLength(3);
+  // owner 不同（跨对话）→ 复用同工作区同站点的标签，不再新开。
   expect(
     openBrowserPermissionsSidePane(opened, { ...options, ownerTaskId: "task-b" }).tabs,
-  ).toHaveLength(3);
+  ).toHaveLength(2);
 });

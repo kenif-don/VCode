@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import type { Dirent } from "node:fs";
-import { mkdir, open, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, relative, sep } from "node:path";
 import type {
@@ -637,6 +637,32 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
       content: string;
     }): Promise<void> {
       await writeWorkspaceFileSearchIgnore(params.rootPath, params.content);
+    },
+    async deletePath(params: { path: string; recursive?: boolean }): Promise<void> {
+      // 文件树删除按钮/菜单的唯一写通道；UI 只提交路径，删除语义在服务层收口。
+      // rm 不带 force：目标已消失时如实抛 ENOENT，让上层区分“删掉了”和“删成功”。
+      if (!params.path.trim()) {
+        throw new Error("Delete path is required.");
+      }
+      const targetStat = await stat(params.path);
+      if (targetStat.isDirectory() && params.recursive !== true) {
+        // 非空目录必须显式 recursive 才删，避免误传路径把整棵子树静默清掉。
+        throw new Error(`Directory delete requires recursive: ${params.path}`);
+      }
+      await rm(params.path, { recursive: params.recursive === true });
+    },
+    async renamePath(params: { path: string; newPath: string }): Promise<void> {
+      if (!params.path.trim() || !params.newPath.trim()) {
+        throw new Error("Rename source and target paths are required.");
+      }
+      // POSIX rename 会静默覆盖同名目标；文件树重命名是原地改名，覆盖属于事故而非预期。
+      const targetExists = await stat(params.newPath)
+        .then(() => true)
+        .catch(() => false);
+      if (targetExists) {
+        throw new Error(`Rename target already exists: ${params.newPath}`);
+      }
+      await rename(params.path, params.newPath);
     },
   };
 }

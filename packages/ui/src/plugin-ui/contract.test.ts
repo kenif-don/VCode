@@ -92,7 +92,8 @@ describe("plugin-ui contract", () => {
     const restored = JSON.parse(JSON.stringify(first));
     expect(readPluginUiScopeRef(restored)).toEqual(readPluginUiScopeRef(input));
     expect(createPluginUiSidePaneTab(restored).id).toBe(first.id);
-    expect(createPluginUiSidePaneTab({ ...input, parentSessionId: "s2" }).id).not.toBe(first.id);
+    // HBA fr7：面板（surface）跟随项目，跨会话共用同一 tab id。
+    expect(createPluginUiSidePaneTab({ ...input, parentSessionId: "s2" }).id).toBe(first.id);
   });
 
   it("默认卡片高度符合宿主约定", () => {

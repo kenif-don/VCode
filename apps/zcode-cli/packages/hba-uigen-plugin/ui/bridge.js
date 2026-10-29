@@ -15,11 +15,15 @@
  *    (params: { progressToken, progress, total, message }).
  *  - "notifications/resources/updated" carries resource change pushes
  *    (host-side ops pluginUi.resourceUpdated / pluginUi.resourceListChanged).
+ *  - "ui/notifications/host-context-changed" carries partial host context
+ *    increments (may contain only { theme: "light" | "dark" }); the initial
+ *    theme also rides in the ui/initialize response's hostContext.
  *
  * This adapter exposes the minimal interface required by the migration:
  *    callTool(name, args)        -> Promise<structuredContent>
  *    onResourceUpdate(cb)        -> subscribe to resource updates
  *    onProgress(cb)              -> subscribe to generation progress
+ *    onThemeChange(cb)           -> subscribe to host theme changes (ctx.theme)
  *    connect()                   -> Promise<"mcp" | "standalone">
  *
  * If no host answers (opened outside ZCode, or during integration bring-up),
@@ -30,8 +34,9 @@
   "use strict";
 
   var PROTOCOL_VERSION = "2025-06-18";
-  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.1.0" };
-  var APP_INFO = { name: "hba-uigen", version: "0.1.0" };
+  var UI_PROTOCOL_VERSION = "2026-01-26";
+  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.3.0" };
+  var APP_INFO = { name: "hba-uigen", version: "0.3.0" };
 
   // -------------------------------------------------------------------------
   // local demo backend — compact mirror of server.mjs / uigen_sidecar.py demo
@@ -131,28 +136,20 @@
   }
 
   function localBackend() {
-    var versions = [];
-    var seq = 0;
+    // 磁盘即真源的内存镜像(0.3.0):screens 清单 + 产物,无版本概念。
+    var screens = [];      // [{id,name,html,jsx,vue,hotspots,order}]
+    var canvasLayout = null;
 
-    function save(rec) {
-      seq += 1;
-      var id = rec.id || ("v" + String(seq).padStart(3, "0") + "-local");
-      rec = Object.assign({}, rec, { id: id });
-      versions = versions.filter(function (v) { return v.id !== id; });
-      versions.push({
-        id: id,
-        createdAt: rec.createdAt,
-        prompt: rec.prompt,
-        format: rec.format,
-        screenCount: (rec.screens || []).length,
-        source: rec.source || "generate"
-      });
-      rec._index = versions[versions.length - 1];
-      rec._full = true;
-      store[id] = rec;
-      return rec;
+    function entryOf(s) {
+      return { id: s.id, name: s.name, files: { html: s.id + ".html" }, hotspots: s.hotspots || [], order: s.order || 0, updatedAt: "" };
     }
-    var store = {};
+    function nextId() {
+      var n = screens.length + 1;
+      var used = {};
+      screens.forEach(function (s) { used[s.id] = true; });
+      while (used["s" + n]) n += 1;
+      return "s" + n;
+    }
 
     return {
       callTool: function (name, args, emitProgress) {
@@ -165,46 +162,74 @@
                 var format = (args && args.format) || "html";
                 var count = Math.min(10, Math.max(1, parseInt(args && args.screenCount, 10) || 3));
                 if (emitProgress) emitProgress({ progress: 0, total: count + 2, message: "准备生成(本地演示)" });
-                var screens = demoScreens(prompt, format, count);
+                screens = demoScreens(prompt, format, count).map(function (s, i) { s.order = i; return s; });
                 if (emitProgress) {
                   for (var i = 0; i < count; i++) emitProgress({ progress: i + 1, total: count + 2, message: "生成屏幕 " + (i + 1) + "/" + count });
                 }
-                var rec = save({
-                  prompt: prompt,
-                  format: format,
-                  createdAt: new Date().toISOString(),
-                  screens: screens,
-                  source: "demo-local"
-                });
                 if (emitProgress) emitProgress({ progress: count + 2, total: count + 2, message: "完成" });
                 resolve({
                   ok: true,
                   engine: "demo(panel-local)",
-                  versionId: rec.id,
-                  prompt: rec.prompt,
-                  format: rec.format,
+                  prompt: prompt,
+                  format: format,
                   screenCount: screens.length,
-                  screens: screens
+                  screens: screens.map(function (s) { return { id: s.id, name: s.name, html: s.html, jsx: s.jsx, vue: s.vue, hotspots: s.hotspots || [] }; })
                 });
-              } else if (name === "uigen_list_versions") {
-                var limit = Math.max(1, parseInt(args && args.limit, 10) || 20);
-                resolve({ ok: true, versions: versions.slice().reverse().slice(0, limit) });
-              } else if (name === "uigen_get_version") {
-                var rec2 = store[String((args && args.versionId) || "")];
-                if (!rec2) return reject(new Error("version not found: " + (args && args.versionId)));
-                resolve({ ok: true, version: rec2 });
+              } else if (name === "uigen_list_screens") {
+                var limit = Math.max(1, parseInt(args && args.limit, 10) || 100);
+                resolve({ ok: true, screens: screens.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).slice(0, limit).map(entryOf), updatedAt: "" });
+              } else if (name === "uigen_get_screen") {
+                var gid = String((args && args.id) || "");
+                var found = null;
+                screens.forEach(function (s) { if (s.id === gid) found = s; });
+                if (!found) return reject(new Error("screen not found: " + gid));
+                resolve({ ok: true, screen: { id: found.id, name: found.name, order: found.order || 0, hotspots: found.hotspots || [], files: { html: found.id + ".html" }, updatedAt: "", html: found.html, jsx: found.jsx || "", vue: found.vue || "" } });
+              } else if (name === "uigen_save_screen") {
+                var name2 = String((args && args.name) || "").trim();
+                if (!name2) return reject(new Error("name is required"));
+                var sid = String((args && args.id) || "").trim();
+                var target = null;
+                screens.forEach(function (s) { if (s.id === sid) target = s; });
+                if (sid && !target) {
+                  target = { id: sid, name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
+                  screens.push(target);
+                } else if (!sid) {
+                  target = { id: nextId(), name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
+                  screens.push(target);
+                }
+                target.name = name2;
+                if (args && typeof args.html === "string") target.html = args.html;
+                if (args && typeof args.jsx === "string") target.jsx = args.jsx;
+                if (args && typeof args.vue === "string") target.vue = args.vue;
+                if (args && Array.isArray(args.hotspots)) target.hotspots = args.hotspots;
+                if (args && typeof args.order === "number") target.order = args.order;
+                resolve({ ok: true, screen: entryOf(target) });
+              } else if (name === "uigen_delete_screen") {
+                var did = String((args && args.id) || "");
+                var at = -1;
+                screens.forEach(function (s, i) { if (s.id === did) at = i; });
+                if (at < 0) return reject(new Error("screen not found: " + did));
+                screens.splice(at, 1);
+                resolve({ ok: true, deleted: did });
               } else if (name === "uigen_export") {
-                var rec3 = store[String((args && args.versionId) || "")];
-                if (!rec3) return reject(new Error("version not found: " + (args && args.versionId)));
                 var files = [];
-                (rec3.screens || []).forEach(function (s) {
+                screens.forEach(function (s) {
                   ["html", "jsx", "vue"].forEach(function (ext) {
                     if (s[ext] && String(s[ext]).trim()) files.push({ name: s.id + "-" + s.name + "." + ext, bytes: String(s[ext]).length });
                   });
                 });
-                resolve({ ok: true, versionId: rec3.id, targetDir: "(panel-local, 未写盘)", files: files });
+                resolve({ ok: true, targetDir: "(panel-local, 未写盘)", screens: screens.length, files: files });
               } else if (name === "uigen_import_dir") {
                 reject(new Error("panel-local 模式不支持目录导入,请在 ZCode 宿主内使用"));
+              } else if (name === "uigen_canvas_save") {
+                var layout = args && args.layoutJson;
+                if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
+                  return reject(new Error("layoutJson must be an object"));
+                }
+                canvasLayout = layout;
+                resolve({ ok: true, updatedAt: new Date().toISOString(), bytes: 0, file: "(panel-local, 未写盘)" });
+              } else if (name === "uigen_canvas_get") {
+                resolve({ ok: true, layout: canvasLayout, updatedAt: "", workspace: null });
               } else {
                 reject(new Error("unknown tool: " + name));
               }
@@ -227,8 +252,14 @@
     var seq = 0;
     var resourceCbs = [];
     var progressCbs = [];
+    var themeCbs = [];
     var backend = localBackend();
     var connected = false;
+
+    function emitTheme(ctx) {
+      if (!ctx || !ctx.theme) return;
+      themeCbs.forEach(function (cb) { try { cb(ctx); } catch (e) { /* cb error */ } });
+    }
 
     function post(msg) {
       var target = global.parent && global.parent !== global ? global.parent : null;
@@ -286,6 +317,9 @@
           resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
         } else if (msg.method === "pluginUi.resourceUpdated" || (msg.params && msg.params.op === "pluginUi.resourceUpdated")) {
           resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
+        } else if (msg.method === "ui/notifications/host-context-changed") {
+          // params 是部分上下文增量,主题切换时可能只含 { theme }
+          emitTheme(msg.params || {});
         }
       }
     }
@@ -306,26 +340,26 @@
       get mode() { return mode; },
       onResourceUpdate: function (cb) { if (typeof cb === "function") resourceCbs.push(cb); },
       onProgress: function (cb) { if (typeof cb === "function") progressCbs.push(cb); },
+      onThemeChange: function (cb) { if (typeof cb === "function") themeCbs.push(cb); },
 
       connect: function () {
         return new Promise(function (resolve) {
           if (global.parent && global.parent !== global) {
             global.addEventListener("message", onMessage);
-            var timeoutMs = options.connectTimeoutMs || 2500;
-            sendRequest("initialize", {
-              protocolVersion: PROTOCOL_VERSION,
-              capabilities: {},
-              clientInfo: CLIENT_INFO
-            }, timeoutMs).then(function (initResult) {
+            var timeoutMs = options.connectTimeoutMs || 10000;
+            // The view<->host channel does NOT speak MCP "initialize" (the host
+            // replies "Method not found"); the handshake is exactly: ui/initialize
+            // request (UI protocol 2026-01-26) -> ui/notifications/initialized.
+            sendRequest("ui/initialize", {
+              appInfo: APP_INFO,
+              appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline"] },
+              protocolVersion: UI_PROTOCOL_VERSION
+            }, timeoutMs).then(function (result) {
+              sendNotification("ui/notifications/initialized", {});
               connected = true;
               mode = "mcp";
-              sendNotification("notifications/initialized", {});
-              // custom post-init handshake seen in the pdf-plugin bundle
-              sendRequest("ui/initialize", {
-                appInfo: APP_INFO,
-                appCapabilities: { tools: {}, displayModes: ["inline", "fullscreen"] },
-                protocolVersion: (initResult && initResult.protocolVersion) || PROTOCOL_VERSION
-              }, timeoutMs).catch(function () { /* optional, tolerate older hosts */ });
+              // 初始主题在 ui/initialize 响应的 hostContext 里,先分发一次
+              emitTheme((result && result.hostContext) || {});
               resolve(mode);
             }).catch(function () {
               mode = "standalone";
@@ -359,7 +393,7 @@
     return bridge;
   }
 
-  var api = { create: createUiGenBridge, version: "0.1.0" };
+  var api = { create: createUiGenBridge, version: "0.3.0" };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   global.UiGenBridge = api;
 })(typeof window !== "undefined" ? window : globalThis);

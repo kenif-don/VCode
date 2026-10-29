@@ -898,3 +898,16 @@ process.on("uncaughtException", (err) => {
 });
 
 process.stderr.write(`[${SERVER_NAME}] ready (workspace: ${WORKSPACE_ROOT})\n`);
+
+// ── Plugin-host contract ─────────────────────────────────────────────────
+// Built-in plugins launch via `__zcode-plugin-host`, which imports this module
+// and awaits main() (see apps/zcode-cli plugin-host-command.ts). The stdio
+// loop above is registered on import; main() keeps the host awaiting until
+// stdio closes. Direct `node server.mjs` usage is unchanged.
+export function main() {
+  return new Promise((resolveMain) => {
+    process.stdin.on("end", resolveMain);
+    process.stdin.on("close", resolveMain);
+    process.stdin.on("error", resolveMain);
+  });
+}

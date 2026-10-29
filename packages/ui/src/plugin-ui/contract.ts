@@ -57,8 +57,8 @@ export type OpenPluginUiSideTabRequest = PluginUiOpenTarget & {
 };
 
 /**
- * 侧栏 tab；工具卡片 id 为 `plugin-ui:<ws>:<session>:<pluginId>:<toolCallId>`，面板为 `plugin-ui:<ws>:<session>:<pluginId>:surface:<surfaceId>`；
- * 按 parentSessionId 作用域可见。
+ * 侧栏 tab；工具卡片 id 为 `plugin-ui:<ws>:<session>:<pluginId>:<toolCallId>`（归对话），
+ * 面板为 `plugin-ui:<ws>:*:<pluginId>:surface:<surfaceId>`（跟随项目，跨会话共用，HBA fr7）。
  */
 export interface PluginUiSidePaneTab {
   instanceId?: string;
@@ -187,7 +187,8 @@ export function buildPluginUiSidePaneTabId(request: OpenPluginUiSideTabRequest):
   return [
     "plugin-ui",
     request.workspaceIdentity?.trim() || request.workspacePath,
-    request.parentSessionId,
+    // 面板（surface）跟随项目：同工作区跨会话共用一个 tab；工具卡片仍归对话（HBA fr7）。
+    scope.kind === "surface" ? "*" : request.parentSessionId,
     request.pluginId,
     request.serverName ?? "",
     request.resourceUri,

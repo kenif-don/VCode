@@ -98,6 +98,7 @@ function shouldPersistSettingsMigrations(rawValue: unknown): boolean {
       readIncompleteLegacyTeamConnections(rawValue).length === 0) ||
     raw.closeToTrayOnWindowsMigrationInitialized !== true ||
     raw.messageStreamShowReasoningMigrationInitialized !== true ||
+    raw.localePreferenceDefaultZhMigrationInitialized !== true ||
     raw.taskAutoArchiveResetVersion !== 1
   );
 }

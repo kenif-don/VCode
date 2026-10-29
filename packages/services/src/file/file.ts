@@ -77,6 +77,16 @@ export interface IFileService {
     transform: "sync-gitignore" | "reset-defaults";
   }): Promise<{ content: string }>;
   writeWorkspaceFileSearchIgnore(params: { rootPath: string; content: string }): Promise<void>;
+  /**
+   * 删除文件或目录（目录需 recursive 才允许非空删除）。
+   * 供文件树删除按钮/菜单调用；失败抛错由 UI toast，成功后文件树经 watcher 自动刷新。
+   */
+  deletePath(params: { path: string; recursive?: boolean }): Promise<void>;
+  /**
+   * 重命名/移动条目。newPath 目标已存在时抛错（不静默覆盖），
+   * 供文件树重命名按钮/菜单调用，newPath 由 UI 拼同目录新名称后传入。
+   */
+  renamePath(params: { path: string; newPath: string }): Promise<void>;
 }
 
 export const IFileService = createServiceDescriptor<IFileService>(ServiceChannels.File);

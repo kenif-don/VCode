@@ -484,7 +484,7 @@ describe("settingService", () => {
     await expect(service.get()).resolves.toMatchObject({
       recentProjects: [],
       locale: "zh-CN",
-      localePreference: "system",
+      localePreference: "zh-CN",
       taskAutoArchiveEnabled: false,
       taskAutoArchiveOlderThanDays: 30,
       messageStreamShowReasoning: true,
@@ -544,6 +544,40 @@ describe("settingService", () => {
     await expect(reloadedService.get()).resolves.toMatchObject({
       closeToTrayOnWindows: false,
       closeToTrayOnWindowsMigrationInitialized: true,
+    });
+  });
+
+  it("首次读取旧 system 语言偏好时统一迁移到中文，之后保留用户显式系统默认选择", async () => {
+    const home = makeTempHome();
+    const settingsDir = join(home, ".zcode", "v2");
+    const settingsFile = join(settingsDir, "setting.json");
+    mkdirSync(settingsDir, { recursive: true });
+    writeFileSync(
+      settingsFile,
+      JSON.stringify({
+        locale: "zh-CN",
+        localePreference: "system",
+        closeToTrayOnWindowsMigrationInitialized: true,
+        messageStreamShowReasoningMigrationInitialized: true,
+      }),
+      "utf-8",
+    );
+
+    const service = await createSettingServiceInHome(home);
+    await expect(service.get()).resolves.toMatchObject({
+      localePreference: "zh-CN",
+      localePreferenceDefaultZhMigrationInitialized: true,
+    });
+    expect(JSON.parse(readFileSync(settingsFile, "utf-8"))).toMatchObject({
+      localePreference: "zh-CN",
+      localePreferenceDefaultZhMigrationInitialized: true,
+    });
+
+    await service.update({ localePreference: "system" });
+    const reloadedService = await createSettingServiceInHome(home);
+    await expect(reloadedService.get()).resolves.toMatchObject({
+      localePreference: "system",
+      localePreferenceDefaultZhMigrationInitialized: true,
     });
   });
 

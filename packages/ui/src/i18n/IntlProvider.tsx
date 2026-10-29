@@ -180,7 +180,8 @@ export function ZCodeIntlProvider({
   }, []);
 
   const [localePreference, setLocalePreferenceState] = useState<LocalePreference>(
-    () => initialLocale ?? readStoredPreference() ?? "system",
+    // 界面语言默认中文（HBA 白标）：未落过偏好时不再跟随系统语言。
+    () => initialLocale ?? readStoredPreference() ?? "zh-CN",
   );
   const [systemLocale, setSystemLocale] = useState<Locale>(() => resolveNavigatorSystemLocale());
   const enqueueLocalePreferenceUpdate = useCallback(

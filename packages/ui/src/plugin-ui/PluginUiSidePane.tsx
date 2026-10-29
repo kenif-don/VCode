@@ -10,6 +10,8 @@ import { PluginUiSidePaneView } from "@/plugin-ui/components/PluginUiSidePane.js
 type Props = {
   tab: PluginUiSidePaneTab;
   visible: boolean;
+  /** 当前活跃会话；面板（surface）的 ui/message / 模型上下文发到这里（HBA fr7）。 */
+  activeSessionId?: string | null;
   onOpenBrowserUrl?: (url: string) => void;
   /** 页面请求回到 inline 时宿主关闭本 tab。 */
   onCloseTab?: (tabId: string) => void;

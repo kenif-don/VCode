@@ -5,18 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HBA 运行面板</title>
 <style>
-  :root {
+  /* 双主题:默认(=深色)兜底独立打开场景;宿主经 hostContext.theme /
+     host-context-changed 通知切换 documentElement[data-theme]。 */
+  :root, [data-theme="dark"] {
     --bg: #1e1f24;
     --bg2: #26272e;
     --bg3: #2e3038;
+    --console-bg: #141519;
     --fg: #e6e6e6;
     --fg-dim: #9a9aa2;
     --accent: #4f8cff;
+    --accent-soft: rgba(79, 140, 255, 0.16);
     --ok: #3fb96f;
     --err: #e5534b;
     --warn: #d4a72c;
     --border: #3a3c45;
     --mono: "Cascadia Code", Consolas, "Courier New", monospace;
+  }
+  [data-theme="light"] {
+    --bg: #FFFFFF;
+    --bg2: #F7F8FA;
+    --bg3: #EEF0F3;
+    --console-bg: #F3F4F6;
+    --fg: #1F2329;
+    --fg-dim: #6B7280;
+    --accent: #3B82F6;
+    --accent-soft: rgba(59, 130, 246, 0.12);
+    --ok: #16A34A;
+    --err: #DC2626;
+    --warn: #B45309;
+    --border: #E5E6EB;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
@@ -28,16 +46,6 @@
     flex-direction: column;
     min-width: 640px;
   }
-  header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 14px;
-    background: var(--bg2);
-    border-bottom: 1px solid var(--border);
-  }
-  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
-  header .spacer { flex: 1; }
   .badge {
     display: inline-flex;
     align-items: center;
@@ -67,8 +75,8 @@
     min-height: 0;
   }
   aside {
-    width: 240px;
-    min-width: 200px;
+    width: 268px;
+    min-width: 220px;
     border-right: 1px solid var(--border);
     background: var(--bg2);
     display: flex;
@@ -86,7 +94,10 @@
   aside .head .spacer, .section-head .spacer { flex: 1; }
   #config-items { flex: 1; overflow: auto; padding: 6px; }
   .config-item {
-    padding: 7px 9px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 4px 5px 9px;
     border-radius: 6px;
     cursor: pointer;
     border: 1px solid transparent;
@@ -94,6 +105,7 @@
   }
   .config-item:hover { background: var(--bg3); }
   .config-item.selected { background: var(--bg3); border-color: var(--accent); }
+  .config-item .ci-main { flex: 1; min-width: 0; }
   .config-item .name { font-weight: 600; word-break: break-all; }
   .config-item .cmd {
     color: var(--fg-dim);
@@ -103,13 +115,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .config-item .ci-actions { display: flex; gap: 1px; flex: none; }
 
   section#work {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: 10px 12px;
     gap: 10px;
   }
@@ -119,6 +132,8 @@
     border-radius: 8px;
     overflow: hidden;
   }
+  #console-box { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #console-box .body { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
   .card .body { padding: 10px 12px; }
   .form-grid {
     display: grid;
@@ -154,10 +169,23 @@
   button:hover:not(:disabled) { border-color: var(--accent); }
   button:disabled { opacity: 0.45; cursor: default; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
   button.small { padding: 2px 8px; font-size: 11px; }
-  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .toolbar .spacer { flex: 1; }
+
+  /* 纯图标按钮(配置行 + 栏头工具):透明底,hover 才显边框,省横向空间 */
+  .icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--fg-dim);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 13px;
+    line-height: 1.6;
+    cursor: pointer;
+  }
+  .icon-btn:hover:not(:disabled) { background: var(--bg3); border-color: var(--border); color: var(--fg); }
+  .icon-btn:disabled { opacity: 0.3; cursor: default; }
+  .icon-btn.go:hover:not(:disabled) { color: var(--ok); border-color: var(--ok); }
+  .icon-btn.stop:hover:not(:disabled) { color: var(--err); border-color: var(--err); }
 
   #runs-bar { display: flex; gap: 8px; flex-wrap: wrap; }
   .run-chip {
@@ -174,13 +202,14 @@
 
   #console-box .body { display: flex; flex-direction: column; gap: 8px; }
   #console {
-    background: #141519;
+    flex: 1;
+    background: var(--console-bg);
     border: 1px solid var(--border);
     border-radius: 6px;
     font-family: var(--mono);
     font-size: 12px;
     padding: 8px 10px;
-    height: 240px;
+    min-height: 200px;
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-all;
@@ -189,72 +218,117 @@
   #console .l-system { color: var(--warn); }
   #console .l-stdout { color: var(--fg); }
 
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  th { color: var(--fg-dim); font-weight: 600; white-space: nowrap; }
-  td { word-break: break-all; }
-  tr.clickable { cursor: pointer; }
-  tr.clickable:hover { background: var(--bg3); }
-
   .empty { color: var(--fg-dim); padding: 12px; text-align: center; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .tag { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
+  .aside-show { display: none; }
+  body.aside-hidden aside { display: none; }
+  body.aside-hidden .aside-show { display: inline-block; }
+
+  /* 配置编辑弹窗:遮罩 + 对话框,替代原 work 区编辑卡片 */
+  .modal-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .modal-mask[hidden] { display: none; }
+  .modal {
+    width: 480px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+  .modal .modal-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .modal .modal-head .spacer { flex: 1; }
+  .modal .modal-body { padding: 12px 14px; overflow: auto; }
+  .modal .modal-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+  }
+  .modal .modal-foot .spacer { flex: 1; }
+  .modal .err-text { color: var(--err); font-size: 11px; }
+
+  /* 日志右键菜单:仅样式取自主题变量,内容由 JS 控制 */
+  .ctx-menu {
+    position: fixed;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    min-width: 150px;
+    padding: 4px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+  .ctx-menu[hidden] { display: none; }
+  .ctx-menu button {
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--fg);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .ctx-menu button:hover { background: var(--bg3); border-color: var(--border); }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(8px);
+    background: var(--bg3);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12px;
+    max-width: 80vw;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s, transform 0.18s;
+    z-index: 70;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { border-color: var(--err); color: var(--err); }
 </style>
 </head>
-<body>
-<header>
-  <h1>HBA 运行面板</h1>
-  <span id="conn-badge" class="badge">桥连接中…</span>
-  <span class="spacer"></span>
-  <span id="workspace-tag" class="tag"></span>
-  <button id="btn-open-preview" class="primary" disabled>打开预览</button>
-</header>
+<body class="aside-hidden">
 <main>
+  <button id="btn-aside-show" class="small aside-show" title="展开运行配置">»</button>
   <aside>
     <div class="head">
       运行配置
       <span class="spacer"></span>
-      <button class="small" id="btn-new">新建</button>
-      <button class="small" id="btn-dup">复制</button>
-      <button class="small danger" id="btn-del">删除</button>
+      <button class="icon-btn" id="btn-new" title="新建配置">＋</button>
+      <button class="icon-btn" id="btn-dup" title="复制当前配置">⧉</button>
+      <button class="icon-btn" id="btn-del" title="删除当前配置">🗑</button>
+      <button class="icon-btn" id="btn-aside-hide" title="收起侧栏">«</button>
     </div>
     <div id="config-items"><div class="empty">暂无配置</div></div>
   </aside>
 
   <section id="work">
-    <div class="card">
-      <div class="section-head">
-        <span id="form-title">配置编辑</span>
-        <span class="spacer"></span>
-        <span id="form-id" class="tag"></span>
-        <button class="primary" id="btn-save">保存</button>
-        <button id="btn-run">运行</button>
-      </div>
-      <div class="body">
-        <div class="form-grid">
-          <label for="f-name">名称</label>
-          <input type="text" id="f-name" placeholder="例如：前端开发服务">
-          <label for="f-command">启动命令</label>
-          <input type="text" id="f-command" placeholder="例如：npm run dev">
-          <label for="f-cwd">工作目录</label>
-          <div>
-            <input type="text" id="f-cwd" placeholder="留空 = 工作区根目录;可填相对或绝对路径">
-            <div class="hint">相对路径相对于工作区根目录解析</div>
-          </div>
-          <label for="f-env">环境变量</label>
-          <div>
-            <textarea id="f-env" placeholder="每行一条 KEY=VALUE&#10;PORT=5173&#10;NODE_ENV=development"></textarea>
-            <div class="hint">每行一条 KEY=VALUE,以 # 开头的行为注释</div>
-          </div>
-          <label for="f-preview">预览地址</label>
-          <div>
-            <input type="text" id="f-preview" placeholder="例如：http://localhost:5173">
-            <div class="hint">配置后,该配置运行成功时可一键打开预览</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="card" id="console-box">
       <div class="section-head">
         运行输出
@@ -269,28 +343,56 @@
         <div id="console"><div class="empty">选择一个运行查看输出</div></div>
       </div>
     </div>
-
-    <div class="card">
-      <div class="section-head">
-        任务历史
-        <span class="spacer"></span>
-        <button class="small" id="btn-refresh-history">刷新</button>
-      </div>
-      <div class="body" style="padding:0">
-        <table>
-          <thead>
-            <tr>
-              <th>配置</th><th>命令</th><th>开始时间</th><th>结束时间</th><th>退出码</th><th>状态</th><th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="history-body">
-            <tr><td colspan="7" class="empty">暂无历史记录</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
   </section>
 </main>
+
+<!-- 配置编辑弹窗(新建 / 编辑共用) -->
+<div id="cfg-modal" class="modal-mask" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <span id="modal-title">新建配置</span>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="modal-close" title="关闭">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label for="f-name">名称</label>
+        <input type="text" id="f-name" placeholder="例如：前端开发服务">
+        <label for="f-command">启动命令</label>
+        <input type="text" id="f-command" placeholder="例如：npm run dev">
+        <label for="f-cwd">工作目录</label>
+        <div>
+          <input type="text" id="f-cwd" placeholder="留空 = 工作区根目录;可填相对或绝对路径">
+          <div class="hint">相对路径相对于工作区根目录解析</div>
+        </div>
+        <label for="f-env">环境变量</label>
+        <div>
+          <textarea id="f-env" placeholder="每行一条 KEY=VALUE&#10;PORT=5173&#10;NODE_ENV=development"></textarea>
+          <div class="hint">每行一条 KEY=VALUE,以 # 开头的行为注释</div>
+        </div>
+        <label for="f-preview">预览地址</label>
+        <div>
+          <input type="text" id="f-preview" placeholder="例如：http://localhost:5173">
+          <div class="hint">配置后,该配置运行成功时自动打开预览</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span id="modal-error" class="err-text"></span>
+      <span class="spacer"></span>
+      <button id="modal-cancel">取消</button>
+      <button id="modal-save" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日志右键菜单 -->
+<div id="ctx-menu" class="ctx-menu" hidden>
+  <button data-act="send">添加到对话</button>
+  <button data-act="copy">复制</button>
+</div>
+
+<div id="toast" class="toast"></div>
 
 <script>
 "use strict";
@@ -300,18 +402,19 @@
  * 反推得到的 MCP-over-postMessage 桥:
  *   - 面板 iframe 是一个 MCP client,JSON-RPC 2.0 消息原样经 window.parent.postMessage
  *     发往宿主,window "message" 事件收取(e.source 必须是 window.parent);
- *   - 握手:initialize(protocolVersion "2025-06-18") -> notifications/initialized
- *     -> ui/notifications/initialized(UI 扩展握手);
+ *   - 握手:ui/initialize(protocolVersion "2026-01-26")-> ui/notifications/initialized
+ *     (不要发 MCP initialize,宿主回 Method not found);
+ *   - ui/initialize 的响应带 hostContext(含 theme),主题变化由
+ *     ui/notifications/host-context-changed 通知推送(部分增量,可能只含 theme);
  *   - 之后走标准 MCP:tools/call、resources/read、resources/subscribe,
  *     服务端以 notifications/resources/updated 推送状态变化;
- *   - 面板可发 ui/notifications/size-changed {width,height} 通知宿主尺寸,
- *     宿主可发 ui/notifications/request-teardown 要求面板清理。
- * 结论为反推所得,集成期需与宿主联测校验(见 README「桥协议结论」)。
+ *   - ui/message 请求可把文本以用户身份发进会话(宿主可能弹确认框)。
  * ======================================================================== */
 const Bridge = (() => {
   const pending = new Map();
   const resourceListeners = new Set();
   const teardownListeners = new Set();
+  const themeListeners = new Set();
   let nextId = 1;
   let connected = false;
 
@@ -333,6 +436,12 @@ const Bridge = (() => {
         for (const cb of resourceListeners) { try { cb(msg.params || {}); } catch (e) { console.error(e); } }
       } else if (msg.method === "ui/notifications/request-teardown") {
         for (const cb of teardownListeners) { try { cb(); } catch (e) { console.error(e); } }
+      } else if (msg.method === "ui/notifications/host-context-changed") {
+        // params 是部分上下文增量,只有主题变化时就只含 theme
+        const ctx = msg.params || {};
+        if (ctx.theme) {
+          for (const cb of themeListeners) { try { cb(ctx); } catch (e) { console.error(e); } }
+        }
       }
     }
   });
@@ -354,12 +463,14 @@ const Bridge = (() => {
   }
 
   async function connect() {
-    const result = await request("initialize", {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "hba-run-panel", version: "0.1.0" }
-    });
-    notify("notifications/initialized", {});
+    // The view<->host channel does NOT speak MCP "initialize" (the host replies
+    // "Method not found"); the handshake is exactly: ui/initialize request
+    // (UI protocol 2026-01-26) -> ui/notifications/initialized.
+    const result = await request("ui/initialize", {
+      appInfo: { name: "hba-run", version: "0.1.1" },
+      appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline"] },
+      protocolVersion: "2026-01-26"
+    }, 5000);
     notify("ui/notifications/initialized", {});
     connected = true;
     return result;
@@ -385,6 +496,7 @@ const Bridge = (() => {
 
   function onResourceUpdate(cb) { resourceListeners.add(cb); return () => resourceListeners.delete(cb); }
   function onTeardown(cb) { teardownListeners.add(cb); return () => teardownListeners.delete(cb); }
+  function onThemeChange(cb) { themeListeners.add(cb); return () => themeListeners.delete(cb); }
 
   function sendSizeChanged() {
     const width = Math.ceil(window.innerWidth);
@@ -394,7 +506,7 @@ const Bridge = (() => {
 
   return {
     connect, request, notify, callTool, readResource, subscribe,
-    onResourceUpdate, onTeardown, sendSizeChanged,
+    onResourceUpdate, onTeardown, onThemeChange, sendSizeChanged,
     get connected() { return connected; }
   };
 })();
@@ -407,25 +519,21 @@ const $ = (id) => document.getElementById(id);
 const App = {
   configs: [],
   runs: [],
-  history: [],
   selectedConfigId: null,
   currentRunId: null,
   outputByRun: Object.create(null), // runId -> { lines: [], since: 0 }
   autoScroll: true,
+  editingConfigId: null, // null = 弹窗处于「新建」模式;否则为被编辑配置 id
   pollTimer: null,
   refreshTimer: null
 };
 
-function fmtTime(iso) {
-  if (!iso) return "—";
-  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
-}
-
-function stateBadge(run) {
-  if (run.state === "running") return '<span class="badge run">运行中</span>';
-  if (run.stopped && run.state === "exited") return '<span class="badge">已停止</span>';
-  if (run.state === "exited") return '<span class="badge ok">已完成</span>';
-  return '<span class="badge err">失败</span>';
+// 独立打开(无宿主)时直接拒绝工具调用,给出可读错误而不是桥超时。
+function callTool(name, args) {
+  if (window.parent === window) {
+    return Promise.reject(new Error("独立模式:未连接宿主,无法调用 " + name));
+  }
+  return Bridge.callTool(name, args);
 }
 
 function escapeHtml(s) {
@@ -450,38 +558,82 @@ function envToLines(env) {
   return Object.entries(env || {}).map(([k, v]) => k + "=" + v).join("\n");
 }
 
+function stateBadge(run) {
+  if (run.state === "running") return '<span class="badge run">运行中</span>';
+  if (run.stopped && run.state === "exited") return '<span class="badge">已停止</span>';
+  if (run.state === "exited") return '<span class="badge ok">已完成</span>';
+  return '<span class="badge err">失败</span>';
+}
+
+function toast(msg, isErr) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isErr ? " err" : "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.className = "toast"; }, 2800);
+}
+
+// ---- 主题 ------------------------------------------------------------------
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+}
+
+function systemTheme() {
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches)
+    ? "light" : "dark";
+}
+
 // ---- 渲染 ------------------------------------------------------------------
+
+/** 该配置当前是否有运行中的 run(行内 ▶/■ 按钮的启停依据)。 */
+function runningRunOf(configId) {
+  return App.runs.find((r) => r.configId === configId && r.state === "running") || null;
+}
 
 function renderConfigs() {
   const box = $("config-items");
   if (!App.configs.length) {
-    box.innerHTML = '<div class="empty">暂无配置,点「新建」创建</div>';
+    box.innerHTML = '<div class="empty">暂无配置,点「＋」创建</div>';
+    $("btn-dup").disabled = true;
+    $("btn-del").disabled = true;
     return;
   }
-  box.innerHTML = App.configs.map((c) => `
+  box.innerHTML = App.configs.map((c) => {
+    const running = !!runningRunOf(c.id);
+    return `
     <div class="config-item ${c.id === App.selectedConfigId ? "selected" : ""}" data-id="${escapeHtml(c.id)}">
-      <div class="name">${escapeHtml(c.name)}</div>
-      <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
-    </div>`).join("");
+      <div class="ci-main">
+        <div class="name">${escapeHtml(c.name)}</div>
+        <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
+      </div>
+      <div class="ci-actions">
+        <button class="icon-btn" data-act="edit" title="编辑配置">✎</button>
+        <button class="icon-btn go" data-act="start" title="运行该配置" ${running ? "disabled" : ""}>▶</button>
+        <button class="icon-btn stop" data-act="stop" title="停止该配置" ${running ? "" : "disabled"}>■</button>
+        <button class="icon-btn" data-act="restart" title="重启(先停止再启动同一配置)">↻</button>
+      </div>
+    </div>`;
+  }).join("");
   for (const el of box.querySelectorAll(".config-item")) {
-    el.addEventListener("click", () => selectConfig(el.dataset.id));
-    el.addEventListener("dblclick", () => startRunOf(el.dataset.id));
+    const id = el.dataset.id;
+    el.addEventListener("click", () => selectConfig(id));
+    // 双击行 = 打开编辑弹窗(与 ✎ 等价,避免误触直接跑命令)
+    el.addEventListener("dblclick", () => openModal(id));
+    for (const btn of el.querySelectorAll("[data-act]")) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        if (act === "edit") { selectConfig(id); openModal(id); }
+        else if (act === "start") startRunOf(id).catch((e2) => toast(e2.message, true));
+        else if (act === "stop") stopConfig(id).catch((e2) => toast(e2.message, true));
+        else if (act === "restart") restartConfig(id).catch((e2) => toast(e2.message, true));
+      });
+    }
   }
-}
-
-function renderForm() {
-  const c = App.configs.find((x) => x.id === App.selectedConfigId);
-  $("form-title").textContent = c ? "配置编辑" : "新建配置";
-  $("form-id").textContent = c ? c.id : "";
-  $("f-name").value = c ? c.name : "";
-  $("f-command").value = c ? c.command : "";
-  $("f-cwd").value = c ? (c.cwd || "") : "";
-  $("f-env").value = c ? envToLines(c.env) : "";
-  $("f-preview").value = c ? (c.previewUrl || "") : "";
-  $("btn-run").disabled = !c;
-  $("btn-dup").disabled = !c;
-  $("btn-del").disabled = !c;
-  updatePreviewButton();
+  const hasSel = !!App.selectedConfigId;
+  $("btn-dup").disabled = !hasSel;
+  $("btn-del").disabled = !hasSel;
 }
 
 function renderRunsBar() {
@@ -494,7 +646,7 @@ function renderRunsBar() {
     <div class="run-chip ${r.runId === App.currentRunId ? "current" : ""}" data-run="${escapeHtml(r.runId)}">
       ${stateBadge(r)}
       <span>${escapeHtml(r.configName || r.command)}</span>
-      ${r.state === "running" ? `<button class="small danger" data-stop="${escapeHtml(r.runId)}">停止</button>` : ""}
+      ${r.state === "running" ? `<button class="small" data-stop="${escapeHtml(r.runId)}">停止</button>` : ""}
     </div>`).join("");
   for (const el of bar.querySelectorAll(".run-chip")) {
     el.addEventListener("click", (e) => {
@@ -505,39 +657,8 @@ function renderRunsBar() {
   for (const el of bar.querySelectorAll("[data-stop]")) {
     el.addEventListener("click", (e) => {
       e.stopPropagation();
-      stopRun(el.dataset.stop);
+      stopRun(el.dataset.stop).catch((err) => toast(err.message, true));
     });
-  }
-}
-
-function renderHistory() {
-  const body = $("history-body");
-  if (!App.history.length) {
-    body.innerHTML = '<tr><td colspan="7" class="empty">暂无历史记录</td></tr>';
-    return;
-  }
-  body.innerHTML = App.history.map((h) => `
-    <tr class="clickable" data-run="${escapeHtml(h.id)}">
-      <td>${escapeHtml(h.configName || "—")}</td>
-      <td class="tag" title="${escapeHtml(h.command)}">${escapeHtml(h.command)}</td>
-      <td>${fmtTime(h.startedAt)}</td>
-      <td>${fmtTime(h.endedAt)}</td>
-      <td>${h.exitCode === null || h.exitCode === undefined ? "—" : h.exitCode}</td>
-      <td>${stateBadge(h)}</td>
-      <td>
-        <button class="small" data-view="${escapeHtml(h.id)}">查看输出</button>
-        ${h.previewUrl && h.state === "exited" && !h.stopped
-          ? `<button class="small" data-preview="${escapeHtml(h.previewUrl)}">打开预览</button>` : ""}
-      </td>
-    </tr>`).join("");
-  for (const el of body.querySelectorAll("[data-view]")) {
-    el.addEventListener("click", (e) => { e.stopPropagation(); selectRun(el.dataset.view); });
-  }
-  for (const el of body.querySelectorAll("[data-preview]")) {
-    el.addEventListener("click", (e) => { e.stopPropagation(); openPreview(el.dataset.preview); });
-  }
-  for (const el of body.querySelectorAll("tr[data-run]")) {
-    el.addEventListener("click", () => selectRun(el.dataset.run));
   }
 }
 
@@ -562,22 +683,62 @@ function renderConsole() {
   if (App.autoScroll) box.scrollTop = box.scrollHeight;
 }
 
-function updatePreviewButton() {
-  const btn = $("btn-open-preview");
-  const c = App.configs.find((x) => x.id === App.selectedConfigId);
-  let url = "";
-  if (c && c.previewUrl) {
-    // 最近一次该配置的成功运行(实时优先,其次历史)
-    const liveOk = [...App.runs].reverse().find(
-      (r) => r.configId === c.id && r.state === "exited" && !r.stopped && !r.spawnError
-    );
-    const histOk = [...App.history].find(
-      (h) => h.configId === c.id && h.state === "exited" && !h.stopped
-    );
-    if (liveOk || histOk) url = c.previewUrl;
+const previewShown = new Set();
+
+function maybeAutoPreview() {
+  // FR-4-4 (revised): the header preview button was removed; a preview URL now
+  // opens automatically when its run finishes successfully (once per run).
+  for (const r of App.runs) {
+    if (r.state === "exited" && !r.stopped && !r.spawnError && r.configId && !previewShown.has(r.runId)) {
+      previewShown.add(r.runId);
+      const c = App.configs.find((x) => x.id === r.configId);
+      if (c && c.previewUrl) openPreview(c.previewUrl);
+    }
   }
-  btn.disabled = !url;
-  btn.dataset.url = url;
+}
+
+// ---- 配置编辑弹窗 ----------------------------------------------------------
+
+function openModal(configId) {
+  App.editingConfigId = configId || null;
+  const c = configId ? App.configs.find((x) => x.id === configId) : null;
+  $("modal-title").textContent = c ? "编辑配置" : "新建配置";
+  $("f-name").value = c ? c.name : "";
+  $("f-command").value = c ? c.command : "";
+  $("f-cwd").value = c ? (c.cwd || "") : "";
+  $("f-env").value = c ? envToLines(c.env) : "";
+  $("f-preview").value = c ? (c.previewUrl || "") : "";
+  $("modal-error").textContent = "";
+  $("cfg-modal").hidden = false;
+  $("f-name").focus();
+}
+
+function closeModal() {
+  $("cfg-modal").hidden = true;
+  App.editingConfigId = null;
+}
+
+async function saveModal() {
+  const payload = {
+    name: $("f-name").value.trim(),
+    command: $("f-command").value.trim(),
+    cwd: $("f-cwd").value.trim(),
+    env: parseEnvLines($("f-env").value),
+    previewUrl: $("f-preview").value.trim()
+  };
+  if (!payload.name || !payload.command) {
+    $("modal-error").textContent = "名称和启动命令不能为空";
+    return;
+  }
+  if (App.editingConfigId) payload.id = App.editingConfigId;
+  try {
+    const res = await callTool("run_config_save", payload);
+    if (res.config) App.selectedConfigId = res.config.id;
+    closeModal();
+    await refreshConfigs();
+  } catch (e) {
+    $("modal-error").textContent = e.message;
+  }
 }
 
 // ---- 动作 ------------------------------------------------------------------
@@ -585,7 +746,6 @@ function updatePreviewButton() {
 function selectConfig(id) {
   App.selectedConfigId = id;
   renderConfigs();
-  renderForm();
 }
 
 function selectRun(runId) {
@@ -597,11 +757,11 @@ function selectRun(runId) {
 }
 
 async function refreshAll() {
-  await Promise.all([refreshConfigs(), refreshRuns(), refreshHistory()]);
+  await Promise.all([refreshConfigs(), refreshRuns()]);
 }
 
 async function refreshConfigs() {
-  const res = await Bridge.callTool("run_config_list", {});
+  const res = await callTool("run_config_list", {});
   App.configs = res.configs || [];
   if (App.selectedConfigId && !App.configs.some((c) => c.id === App.selectedConfigId)) {
     App.selectedConfigId = null;
@@ -610,26 +770,20 @@ async function refreshConfigs() {
     App.selectedConfigId = App.configs[0].id;
   }
   renderConfigs();
-  renderForm();
 }
 
 async function refreshRuns() {
-  const res = await Bridge.callTool("run_status", {});
+  const res = await callTool("run_status", {});
   App.runs = res.runs || [];
   renderRunsBar();
-  updatePreviewButton();
-}
-
-async function refreshHistory() {
-  const res = await Bridge.callTool("run_history", { limit: 50 });
-  App.history = res.history || [];
-  renderHistory();
-  updatePreviewButton();
+  // 运行态变化会翻转行内 ▶/■ 的可用性,配置列表也要重绘
+  renderConfigs();
+  maybeAutoPreview();
 }
 
 async function fetchOutput(runId) {
   const view = App.outputByRun[runId] || (App.outputByRun[runId] = { lines: [], since: 0 });
-  const res = await Bridge.callTool("run_output", { runId, since: view.since });
+  const res = await callTool("run_output", { runId, since: view.since });
   if (res.lines && res.lines.length) {
     view.lines.push(...res.lines);
     if (view.lines.length > 5000) view.lines.splice(0, view.lines.length - 5000);
@@ -638,65 +792,55 @@ async function fetchOutput(runId) {
   if (App.currentRunId === runId) renderConsole();
 }
 
-async function saveConfig() {
-  const payload = {
-    name: $("f-name").value.trim(),
-    command: $("f-command").value.trim(),
-    cwd: $("f-cwd").value.trim(),
-    env: parseEnvLines($("f-env").value),
-    previewUrl: $("f-preview").value.trim()
-  };
-  if (!payload.name || !payload.command) {
-    alert("名称和启动命令不能为空");
-    return;
-  }
-  if (App.selectedConfigId) payload.id = App.selectedConfigId;
-  const res = await Bridge.callTool("run_config_save", payload);
-  if (res.config) App.selectedConfigId = res.config.id;
-  await refreshConfigs();
-}
-
 async function deleteConfig() {
   if (!App.selectedConfigId) return;
   if (!confirm("确认删除该运行配置?历史记录会保留。")) return;
-  await Bridge.callTool("run_config_delete", { configId: App.selectedConfigId });
+  await callTool("run_config_delete", { configId: App.selectedConfigId });
   App.selectedConfigId = null;
   await refreshConfigs();
 }
 
 async function duplicateConfig() {
   if (!App.selectedConfigId) return;
-  const res = await Bridge.callTool("run_config_duplicate", { configId: App.selectedConfigId });
+  const res = await callTool("run_config_duplicate", { configId: App.selectedConfigId });
   if (res.config) App.selectedConfigId = res.config.id;
   await refreshConfigs();
 }
 
-function newConfig() {
-  App.selectedConfigId = null;
-  renderConfigs();
-  renderForm();
-  $("f-name").focus();
-}
-
 async function startRunOf(configId) {
-  const res = await Bridge.callTool("run_start", { configId });
+  const res = await callTool("run_start", { configId });
   if (res.run) {
     App.selectedConfigId = configId;
     selectRun(res.run.runId);
   }
-  await Promise.all([refreshRuns(), refreshHistory()]);
+  await refreshRuns();
+}
+
+async function stopConfig(configId) {
+  const run = runningRunOf(configId);
+  if (!run) return;
+  await stopRun(run.runId);
 }
 
 async function stopRun(runId) {
-  try {
-    await Bridge.callTool("run_stop", { runId });
-  } catch (e) {
-    alert("停止失败: " + e.message);
+  // 失败直接抛出,由调用方统一 toast,避免重复提示
+  await callTool("run_stop", { runId });
+  // 停止是异步生效的,稍等后刷新一次即可翻转按钮状态
+  setTimeout(() => { refreshRuns().catch(() => {}); }, 800);
+}
+
+async function restartConfig(configId) {
+  const run = runningRunOf(configId);
+  if (run) {
+    await callTool("run_stop", { runId: run.runId, timeoutMs: 2000 });
+    // 等旧 run 真正退出再启动,避免同配置双实例并存的观感
+    for (let i = 0; i < 20; i++) {
+      const s = await callTool("run_status", { runId: run.runId });
+      if (!s.run || s.run.state !== "running") break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
   }
-  setTimeout(() => {
-    refreshRuns().catch(() => {});
-    refreshHistory().catch(() => {});
-  }, 800);
+  await startRunOf(configId);
 }
 
 function openPreview(url) {
@@ -704,10 +848,7 @@ function openPreview(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-async function copyConsole() {
-  const view = App.outputByRun[App.currentRunId];
-  const text = view ? view.lines.map((l) => l.text).join("\n") : "";
-  if (!text) return;
+async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch (e) {
@@ -720,11 +861,71 @@ async function copyConsole() {
   }
 }
 
+async function copyConsole() {
+  const view = App.outputByRun[App.currentRunId];
+  const text = view ? view.lines.map((l) => l.text).join("\n") : "";
+  if (!text) return;
+  await copyText(text);
+}
+
 function clearConsole() {
   if (!App.currentRunId) return;
   App.outputByRun[App.currentRunId] = { lines: [], since: 0 };
   renderConsole();
   fetchOutput(App.currentRunId).catch(() => {});
+}
+
+// ---- 日志右键「添加到对话」 ------------------------------------------------
+
+function hideCtxMenu() {
+  $("ctx-menu").hidden = true;
+}
+
+async function sendSelectionToChat(text) {
+  const payload = "【运行输出摘录 · " + (App.currentRunId || "未知运行") + "】\n" + text;
+  if (window.parent === window || !Bridge.connected) {
+    // 独立模式没有宿主可以代发,降级为复制到剪贴板
+    await copyText(payload);
+    toast("独立模式:无法发送到会话,已复制到剪贴板");
+    return;
+  }
+  try {
+    const res = await Bridge.request("ui/message", {
+      role: "user",
+      content: [{ type: "text", text: payload }]
+    });
+    if (res && res.isError) toast("宿主拒绝了消息发送(isError)", true);
+    else toast("已添加到对话");
+  } catch (e) {
+    toast("发送失败: " + e.message, true);
+  }
+}
+
+function setupCtxMenu() {
+  const menu = $("ctx-menu");
+  const consoleEl = $("console");
+  consoleEl.addEventListener("contextmenu", (e) => {
+    const sel = String(window.getSelection() || "");
+    if (!sel.trim()) { hideCtxMenu(); return; } // 无选中时保留原生菜单
+    e.preventDefault();
+    menu.hidden = false;
+    // 先显示再夹取,避免菜单超出视口
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + "px";
+    menu.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + "px";
+  });
+  for (const btn of menu.querySelectorAll("[data-act]")) {
+    btn.addEventListener("click", () => {
+      const sel = String(window.getSelection() || "");
+      hideCtxMenu();
+      if (!sel.trim()) return;
+      if (btn.dataset.act === "send") sendSelectionToChat(sel).catch((e) => toast(e.message, true));
+      else copyText(sel).then(() => toast("已复制选中文本")).catch(() => toast("复制失败", true));
+    });
+  }
+  document.addEventListener("click", hideCtxMenu);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideCtxMenu(); });
+  window.addEventListener("scroll", hideCtxMenu, true);
 }
 
 // ---- 启动 ------------------------------------------------------------------
@@ -733,7 +934,7 @@ function scheduleRefresh() {
   if (App.refreshTimer) return;
   App.refreshTimer = setTimeout(() => {
     App.refreshTimer = null;
-    Promise.all([refreshRuns(), refreshHistory()])
+    Promise.all([refreshRuns()])
       .then(() => {
         if (App.currentRunId) return fetchOutput(App.currentRunId);
       })
@@ -746,46 +947,60 @@ function startPolling() {
   App.pollTimer = setInterval(() => {
     const anyRunning = App.runs.some((r) => r.state === "running");
     if (!anyRunning) return;
-    Promise.all([refreshRuns()])
+    refreshRuns()
       .then(() => (App.currentRunId ? fetchOutput(App.currentRunId) : null))
       .catch(() => {});
   }, 1200);
 }
 
 async function init() {
+  // 启动先落一个系统主题兜底;连上宿主后由 hostContext 覆盖
+  applyTheme(systemTheme());
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    if (mq.addEventListener) {
+      mq.addEventListener("change", () => { if (!Bridge.connected) applyTheme(systemTheme()); });
+    }
+  }
+
   // 事件绑定
-  $("btn-new").addEventListener("click", newConfig);
-  $("btn-save").addEventListener("click", () => saveConfig().catch((e) => alert(e.message)));
-  $("btn-del").addEventListener("click", () => deleteConfig().catch((e) => alert(e.message)));
-  $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => alert(e.message)));
-  $("btn-run").addEventListener("click", () => {
-    if (App.selectedConfigId) startRunOf(App.selectedConfigId).catch((e) => alert(e.message));
-  });
+  $("btn-new").addEventListener("click", () => openModal(null));
+  $("btn-del").addEventListener("click", () => deleteConfig().catch((e) => toast(e.message, true)));
+  $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => toast(e.message, true)));
   $("btn-clear").addEventListener("click", clearConsole);
   $("btn-copy").addEventListener("click", () => copyConsole().catch((e) => console.warn(e)));
   $("chk-autoscroll").addEventListener("change", (e) => {
     App.autoScroll = e.target.checked;
     if (App.autoScroll) renderConsole();
   });
-  $("btn-refresh-history").addEventListener("click", () => refreshHistory().catch((e) => console.warn(e)));
-  $("btn-open-preview").addEventListener("click", () => openPreview($("btn-open-preview").dataset.url));
+  $("btn-aside-hide").addEventListener("click", () => document.body.classList.add("aside-hidden"));
+  $("btn-aside-show").addEventListener("click", () => document.body.classList.remove("aside-hidden"));
+  $("modal-save").addEventListener("click", () => saveModal());
+  $("modal-cancel").addEventListener("click", closeModal);
+  $("modal-close").addEventListener("click", closeModal);
+  $("cfg-modal").addEventListener("click", (e) => { if (e.target === $("cfg-modal")) closeModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("cfg-modal").hidden) closeModal();
+  });
+  setupCtxMenu();
 
-  const badge = $("conn-badge");
   if (window.parent === window) {
-    badge.textContent = "独立打开模式(未连接宿主)";
-    badge.className = "badge err";
+    return; // standalone preview mode: no host bridge
+  }
+
+  let initResult = null;
+  try {
+    initResult = await Bridge.connect();
+  } catch (e) {
+    console.warn("bridge connect failed:", e);
     return;
   }
 
-  try {
-    await Bridge.connect();
-    badge.textContent = "已连接";
-    badge.className = "badge ok";
-  } catch (e) {
-    badge.textContent = "桥连接失败: " + e.message;
-    badge.className = "badge err";
-    return;
+  // hostContext 携带初始主题;之后的变化走 host-context-changed 通知
+  if (initResult && initResult.hostContext && initResult.hostContext.theme) {
+    applyTheme(initResult.hostContext.theme);
   }
+  Bridge.onThemeChange((ctx) => { if (ctx && ctx.theme) applyTheme(ctx.theme); });
 
   Bridge.onResourceUpdate(() => {
     scheduleRefresh();
@@ -805,10 +1020,8 @@ async function init() {
 }
 
 init().catch((e) => {
+  // No header status badge any more; surface init errors in the console.
   console.error(e);
-  const badge = $("conn-badge");
-  badge.textContent = "初始化失败: " + e.message;
-  badge.className = "badge err";
 });
 </script>
 </body>

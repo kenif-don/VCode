@@ -1233,6 +1233,7 @@ export function AnimatedSidePanePanel({
                           <PluginUiSidePane
                             tab={tab}
                             visible={isVisible && tab.id === contentActiveTabId}
+                            activeSessionId={sidePaneOwnerId}
                             onOpenBrowserUrl={onOpenBrowserUrl}
                             onCloseTab={onCloseTab}
                           />
