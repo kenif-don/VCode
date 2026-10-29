@@ -36,6 +36,13 @@ git clone https://github.com/zai-org/ZCode.git hba-zcode-fork
 cd hba-zcode-fork && git checkout 3c5b227 && git tag baseline/zcode-v3.16.2-20261028
 ```
 
+> **工作树位置(2026-10-29 迁移)**:开发/测试/打包的工作树已从系统临时目录迁至
+> `D:\ai_workspace\AI IDE\hba-zcode-fork\`(Temp 目录有被系统清理的风险)——整树复制、
+> `node_modules` 重装(npmmirror 源,54s)、typecheck 0 错误、抽查单测全绿后启用;
+> 树内 git 已挂 `upstream → https://github.com/zai-org/ZCode.git` 供季度 rebase 看上游。
+> 打包产物仍落在树内 `packages/desktop/dist/`,交付时拷贝到 `../hba-on-zcode/dist/`
+> (`VCode-3.16.2-hba-panels-r{N}-win-x64.exe`)。临时目录旧树保留为备份。
+
 仓库结构(证据:已核实,`packages/`、`apps/` 一览):`packages/desktop`(Electron 桌面端,含 `electron-builder.config.js`)、`packages/ui`(渲染层)、`packages/server`、`packages/services`(含 `git/` 服务)、`packages/shared`、`apps/zcode-cli`(CLI/内核)等 pnpm workspace 包。
 
 ## 3. 构建(工具链与命令,均引自源码 package.json,证据:已核实)
