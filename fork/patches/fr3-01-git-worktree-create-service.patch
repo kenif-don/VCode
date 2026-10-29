@@ -1,0 +1,256 @@
+diff --git a/packages/services/src/git/git.ts b/packages/services/src/git/git.ts
+index 417f21f..4291454 100644
+--- a/packages/services/src/git/git.ts
++++ b/packages/services/src/git/git.ts
+@@ -4,6 +4,8 @@ import type {
+   GitCommitGraphRequest,
+   GitCommitGraphResult,
+   GitCreateBranchRequest,
++  GitCreateWorktreeRequest,
++  GitCreateWorktreeResult,
+   GitChangesRequest,
+   GitCommitRequest,
+   GitCommitResult,
+@@ -36,6 +38,8 @@ export interface IGitService {
+   getCommitGraph(params: GitCommitGraphRequest): Promise<GitCommitGraphResult>;
+   switchBranch(params: GitSwitchBranchRequest): Promise<GitBranchMutationResult>;
+   createBranchAndSwitch(params: GitCreateBranchRequest): Promise<GitBranchMutationResult>;
++  /** FR-3-2:在 <repoRoot>/.hba/worktrees/<name> 创建独立 worktree(新分支),供隔离会话打开。 */
++  createWorktree(params: GitCreateWorktreeRequest): Promise<GitCreateWorktreeResult>;
+   getChanges(params: GitChangesRequest): Promise<GitFileChange[]>;
+   getIgnoredPaths(params: GitIgnoredPathsRequest): Promise<string[]>;
+   getDiff(params: GitDiffQuery): Promise<GitDiffResult>;
+diff --git a/packages/services/src/git/gitService.ts b/packages/services/src/git/gitService.ts
+index df3426c..5dd1fc9 100644
+--- a/packages/services/src/git/gitService.ts
++++ b/packages/services/src/git/gitService.ts
+@@ -211,6 +211,15 @@ export function createGitService(options?: {
+       );
+     },
+ 
++    async createWorktree(params) {
++      return await repo.createWorktree(
++        params.workspacePath,
++        params.name,
++        params.branchName,
++        params.startPoint,
++      );
++    },
++
+     async getChanges(params) {
+       const status = await repo.getStatus(params.workspacePath);
+ 
+diff --git a/packages/services/src/git/repo/gitCliRepo.ts b/packages/services/src/git/repo/gitCliRepo.ts
+index ffe734d..176e4b3 100644
+--- a/packages/services/src/git/repo/gitCliRepo.ts
++++ b/packages/services/src/git/repo/gitCliRepo.ts
+@@ -8,6 +8,7 @@ import type {
+   GitBranchMutationResult,
+   GitCommitGraphCommit,
+   GitCommitGraphRef,
++  GitCreateWorktreeResult,
+   GitDiffQuery,
+   GitDiffResult,
+   GitIdentity,
+@@ -1249,6 +1250,128 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
+       });
+     },
+ 
++    // FR-3-2：worktree 隔离会话创建。目录约定 <repoRoot>/.hba/worktrees/<name>（与 HBA
++    // 业务数据 .hba/ 同根）；新分支缺省 hba/<name>。主工作区状态与 worktree 相互独立，
++    // 创建后由 UI 侧在 worktree 路径打开新会话（onCreateTask targetWorkspace）。
++    async createWorktree(
++      workspacePath: string,
++      name: string,
++      branchName?: string,
++      startPoint?: string,
++    ): Promise<GitCreateWorktreeResult> {
++      const status = await this.getStatus(workspacePath);
++      const resolution = ensureRepositoryAvailable(status.resolution, "create worktrees");
++      const normalizedName = name.trim();
++      // 目录名作为路径段使用；白名单校验避免路径穿越与跨平台非法字符。
++      if (
++        !/^[A-Za-z0-9._-]+$/.test(normalizedName) ||
++        normalizedName === "." ||
++        normalizedName === ".."
++      ) {
++        return {
++          ok: false,
++          issues: [
++            {
++              code: "invalid-name",
++              message:
++                "Worktree name may only contain letters, digits, dot, underscore and dash.",
++            },
++          ],
++          summary: status.summary,
++        };
++      }
++
++      const normalizedBranchName = branchName?.trim() || `hba/${normalizedName}`;
++      if (status.entries.some((entry) => entry.isConflicted)) {
++        return {
++          ok: false,
++          issues: [
++            { code: "conflicts-present", message: "Repository still has unresolved conflicts." },
++          ],
++          summary: status.summary,
++        };
++      }
++
++      if (await hasOperationInProgress(resolution)) {
++        return {
++          ok: false,
++          issues: [
++            {
++              code: "operation-in-progress",
++              message: "Another Git operation is still in progress.",
++            },
++          ],
++          summary: status.summary,
++        };
++      }
++
++      const invalidBranchIssue = await validateBranchName(resolution, normalizedBranchName);
++      if (invalidBranchIssue) {
++        return {
++          ok: false,
++          issues: [{ code: "invalid-name", message: invalidBranchIssue.message }],
++          summary: status.summary,
++        };
++      }
++
++      const worktreePath = join(resolution.repoRoot, ".hba", "worktrees", normalizedName);
++      if (await fileExists(worktreePath)) {
++        return {
++          ok: false,
++          issues: [{ code: "path-exists", message: "Target worktree path already exists." }],
++          summary: status.summary,
++        };
++      }
++
++      const normalizedStartPoint = startPoint?.trim();
++      const result = await commandProvider.run({
++        cwd: resolution.repoRoot,
++        // `git worktree add -b <branch> <path> [<commit-ish>]`；path 由 repoRoot 拼出，
++        // 不会以 `-` 开头，无需 `--` 终止选项解析。
++        args: [
++          "worktree",
++          "add",
++          "-b",
++          normalizedBranchName,
++          worktreePath,
++          ...(normalizedStartPoint ? [normalizedStartPoint] : []),
++        ],
++        timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
++        maxOutputBytes: DEFAULT_GIT_OUTPUT_BYTES,
++      });
++      if (result.exitCode !== 0) {
++        const detail = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.toLowerCase();
++        const issueCode = detail.includes("already exists")
++          ? detail.includes("branch")
++            ? "branch-exists"
++            : "path-exists"
++          : detail.includes("already used by worktree")
++            ? "branch-exists"
++            : "command-failed";
++        return {
++          ok: false,
++          issues: [
++            {
++              code: issueCode,
++              message:
++                result.stderr?.trim() ||
++                "git worktree add failed. Use a different name or branch.",
++            },
++          ],
++          summary: status.summary,
++        };
++      }
++
++      invalidate(workspacePath);
++      const nextStatus = await this.getStatus(workspacePath);
++      return {
++        ok: true,
++        worktreePath,
++        branchName: normalizedBranchName,
++        summary: nextStatus.summary,
++      };
++    },
++
+     async getDiff(params: GitDiffQuery): Promise<GitDiffResult> {
+       const resolution = await this.resolveRepository(params.workspacePath);
+       const absolutePath = isAbsolute(params.path)
+diff --git a/packages/services/src/git/repo/gitCliTypes.ts b/packages/services/src/git/repo/gitCliTypes.ts
+index 7ce3c88..8eafb47 100644
+--- a/packages/services/src/git/repo/gitCliTypes.ts
++++ b/packages/services/src/git/repo/gitCliTypes.ts
+@@ -2,6 +2,7 @@ import type {
+   GitBranchMutationResult,
+   GitChangeKind,
+   GitCommitGraphCommit,
++  GitCreateWorktreeResult,
+   GitDiffQuery,
+   GitDiffResult,
+   GitIdentity,
+@@ -86,6 +87,12 @@ export interface GitCliRepo {
+     branchName: string,
+     startPoint?: string,
+   ): Promise<GitBranchMutationResult>;
++  createWorktree(
++    workspacePath: string,
++    name: string,
++    branchName?: string,
++    startPoint?: string,
++  ): Promise<GitCreateWorktreeResult>;
+   getDiff(params: GitDiffQuery): Promise<GitDiffResult>;
+   getBranchComparison(workspacePath: string): Promise<GitBranchComparisonSnapshot>;
+   stage(workspacePath: string, paths: string[]): Promise<void>;
+diff --git a/packages/shared/src/git.ts b/packages/shared/src/git.ts
+index 72f335e..2c6d09a 100644
+--- a/packages/shared/src/git.ts
++++ b/packages/shared/src/git.ts
+@@ -136,6 +136,43 @@ export interface GitWorkspaceRepositoryInfo {
+   isGitAvailable: boolean;
+ }
+ 
++/** FR-3-2:worktree 隔离会话创建请求;worktree 统一落在 <repoRoot>/.hba/worktrees/<name>。 */
++export interface GitCreateWorktreeRequest {
++  workspacePath: string;
++  /** worktree 目录名(.hba/worktrees/<name> 的 <name>);仅允许字母/数字/点/下划线/连字符。 */
++  name: string;
++  /** 新分支名;缺省 hba/<name>。 */
++  branchName?: string;
++  /** 起始引用(分支/标签/提交);缺省 HEAD。 */
++  startPoint?: string;
++}
++
++export type GitCreateWorktreeIssueCode =
++  | "invalid-name"
++  | "path-exists"
++  | "branch-exists"
++  | "conflicts-present"
++  | "operation-in-progress"
++  | "command-failed";
++
++export interface GitCreateWorktreeIssue {
++  code: GitCreateWorktreeIssueCode;
++  message: string;
++}
++
++export type GitCreateWorktreeResult =
++  | {
++      ok: true;
++      worktreePath: string;
++      branchName: string;
++      summary: GitRepositorySummary;
++    }
++  | {
++      ok: false;
++      issues: GitCreateWorktreeIssue[];
++      summary: GitRepositorySummary | null;
++    };
++
+ export interface GitSwitchBranchRequest extends GitRepositoryRequest {
+   targetBranchName: string;
+ }

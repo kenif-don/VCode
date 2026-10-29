@@ -1,0 +1,43 @@
+{
+  "name": "hba-uigen",
+  "version": "0.3.0",
+  "description": "UI prototype generation panel (HBA FR-2): disk-as-truth screens store, multi-screen canvas, 390px preview, demo playback, HTML/JSX/Vue artifacts, import/export.",
+  "description_i18n": {
+    "en": "UI prototype panel migrated from HBA ui_gen (FR-2): generate multi-screen prototypes from a requirement prompt straight to the workspace disk (screens/ + index.json, no versioning), browse them on a zoomable/draggable canvas, preview in a 390px phone frame, play them as a demo, switch HTML/JSX/Vue artifacts, create/rename/delete screens on disk, import from a local directory and export.",
+    "zh-CN": "UI 原型面板（HBA FR-2 迁移）：需求输入生成多屏原型并直接写入工作区磁盘（screens/ + index.json，无版本概念），画布缩放/拖拽，390px 手机预览，演示播放，HTML/JSX/Vue 产物切换，页面新建/重命名/删除真落盘，本地目录导入与导出。"
+  },
+  "author": {
+    "name": "HBA->ZCode Migration"
+  },
+  "license": "Apache-2.0",
+  "mcpServers": {
+    "hba-uigen": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${ZCODE_PLUGIN_ROOT}/server.mjs"
+      ],
+      "cwd": "${ZCODE_PROJECT_DIR}",
+      "env": {
+        "ZCODE_WORKSPACE_ROOT": "${ZCODE_PROJECT_DIR}",
+        "HBA_ROOT": "${ZCODE_PROJECT_DIR}/HBA"
+      },
+      "isolation": "workspace"
+    }
+  },
+  "ui": {
+    "surfaces": [
+      {
+        "id": "hba-uigen",
+        "title": {
+          "zh-CN": "UI 原型",
+          "en-US": "UI Prototype"
+        },
+        "icon": "layout",
+        "server": "hba-uigen",
+        "resourceUri": "ui://hba-uigen/panel.html",
+        "availability": "session"
+      }
+    ]
+  }
+}

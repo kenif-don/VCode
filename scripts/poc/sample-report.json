@@ -1,0 +1,91 @@
+{
+  "tool": "msg-list-perf.mjs",
+  "generatedAt": "2026-10-27T17:34:09.654Z",
+  "tc": "TC-PERF-01",
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpuCount": 32,
+    "totalMemMB": 98012
+  },
+  "fixture": {
+    "path": "D:\\ai_workspace\\AI IDE\\hba-on-zcode\\scripts\\poc\\fixtures\\session.json",
+    "rounds": 500,
+    "messageCount": 1542,
+    "bytes": 1644298
+  },
+  "config": {
+    "iterations": 30,
+    "warmup": 5,
+    "pageSize": 50,
+    "thresholdMs": 2000
+  },
+  "scenarios": {
+    "full-load-cold": {
+      "desc": "全量加载:读文件 + JSON.parse + 整表建模(会话打开完整成本)",
+      "samples": 30,
+      "minMs": 6.4,
+      "p50Ms": 6.967,
+      "p95Ms": 8.665,
+      "maxMs": 8.731,
+      "meanMs": 7.19
+    },
+    "full-load-warm": {
+      "desc": "全量加载:JSON.parse + 整表建模(排除磁盘 IO)",
+      "samples": 30,
+      "minMs": 2.032,
+      "p50Ms": 2.477,
+      "p95Ms": 2.946,
+      "maxMs": 3.113,
+      "meanMs": 2.45
+    },
+    "paged-load-cold": {
+      "desc": "分页加载:读文件 + parse + 首屏 1 页(50 条)+ 滚动补齐全部页",
+      "pageSize": 50,
+      "samples": 30,
+      "minMs": 6.397,
+      "p50Ms": 6.829,
+      "p95Ms": 8.024,
+      "maxMs": 12.949,
+      "meanMs": 7.071
+    },
+    "first-paint": {
+      "desc": "首屏时间:parse + 仅建模第 1 页(50 条)",
+      "pageSize": 50,
+      "samples": 30,
+      "minMs": 1.295,
+      "p50Ms": 1.396,
+      "p95Ms": 1.613,
+      "maxMs": 2.023,
+      "meanMs": 1.42
+    }
+  },
+  "baseline": {
+    "tc": "TC-PERF-01",
+    "title": "500 轮会话打开 ≤2s",
+    "metric": "full-load-cold.p95Ms",
+    "thresholdMs": 2000,
+    "unit": "ms",
+    "old": {
+      "value": 2000,
+      "label": "PRD 基线(旧值):会话打开 ≤2000ms",
+      "source": "PRD 性能指标 TC-PERF-01"
+    },
+    "new": {
+      "value": 8.665,
+      "label": "本次实测(新值):全量加载冷路径 P95",
+      "measuredAt": "2026-10-27T17:34:09.654Z"
+    },
+    "deltaMs": -1991.335,
+    "deltaPct": -99.567,
+    "verdict": "PASS",
+    "rule": "新值 P95 ≤ 2000ms 判 PASS"
+  },
+  "notes": [
+    "POC 在 Node 侧模拟消息列表的加载/建模成本,不含 ZCode 宿主 IPC 与真实 DOM 渲染;",
+    "宿主内实测(TC-PERF-01 端到端)由 e2e/specs/perf.spec.ts 在 zcode --web 上执行,",
+    "两者共用同一夹具与同一 ≤2000ms 判定口径。"
+  ],
+  "reportPath": "D:\\ai_workspace\\AI IDE\\hba-on-zcode\\scripts\\poc\\sample-report.json"
+}

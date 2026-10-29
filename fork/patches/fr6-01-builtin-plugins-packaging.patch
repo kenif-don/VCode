@@ -1,0 +1,4551 @@
+diff --git a/apps/zcode-cli/packages/bootstrap/src/app/bundled-plugins.ts b/apps/zcode-cli/packages/bootstrap/src/app/bundled-plugins.ts
+index 3e6a6805..aaa25334 100644
+--- a/apps/zcode-cli/packages/bootstrap/src/app/bundled-plugins.ts
++++ b/apps/zcode-cli/packages/bootstrap/src/app/bundled-plugins.ts
+@@ -51,8 +51,13 @@ const includedTopLevelPaths = new Set([
+   // Browser skill 会从官方插件根目录动态导入 scripts/browser-client.mjs。
+   // filesystem seed 若漏掉 scripts，Dev 会连接 node_repl 成功却在首次 Browser Use 时导入失败。
+   "scripts",
++  // HBA UI 插件（hba-uigen / hba-run）的 MCP server 直接放在包根，面板资源在 ui/。
++  // 两处顶层白名单（这里与 desktop 的 prepare-agent-node-bundle.mjs）漏任何一项，
++  // seed 都会装出只有 manifest 的残缺插件。
++  "server.mjs",
+   "skills",
+   "templates",
++  "ui",
+ ]);
+ 
+ interface OfficialPluginSeedFile {
+diff --git a/apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts b/apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts
+index a469fb23..9b5a054e 100644
+--- a/apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts
++++ b/apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts
+@@ -427,6 +427,55 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] =
+     // marketplace 条目都对齐；具体版本由原子 producer bump 工作流维护。
+     version: "0.6.5",
+   },
++  {
++    // HBA 迁移（fr6）：UI 原型面板。UI 插件（server.mjs + ui/ 面板资源），默认启用，
++    // 首启 seed 后即出现在右侧面板 launcher（见 ui 侧 BUILTIN_UI_PLUGIN_RECOMMENDATIONS）。
++    componentTypes: ["ui"],
++    defaultEnabled: true,
++    listing: {
++      author: { name: "HBA->ZCode Migration" },
++      category: "productivity",
++      displayName: "UI Prototype",
++      displayName_i18n: { "zh-CN": "UI 原型" },
++      description_i18n: {
++        "zh-CN":
++          "UI 原型面板（HBA FR-2 迁移）：需求输入生成多屏原型，画布缩放/拖拽/跳转热点，390px 手机预览，演示播放，HTML/JSX/Vue 产物切换，历史版本、本地目录导入与导出。",
++      },
++    },
++    name: "hba-uigen",
++    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/bridge.js", "ui/panel.html"],
++    rootCandidates: [
++      "packages/hba-uigen-plugin",
++      "../hba-uigen-plugin",
++      "../../hba-uigen-plugin",
++      "../../../hba-uigen-plugin",
++    ],
++    version: "0.1.1",
++  },
++  {
++    // HBA 迁移（fr6）：运行面板。同为 UI 插件，默认启用，launcher 常驻入口。
++    componentTypes: ["ui"],
++    defaultEnabled: true,
++    listing: {
++      author: { name: "HBA" },
++      category: "productivity",
++      displayName: "HBA Run Panel",
++      displayName_i18n: { "zh-CN": "HBA 运行面板" },
++      description_i18n: {
++        "zh-CN":
++          "HBA 运行面板：管理运行配置（启动命令、工作目录、环境变量、预览地址），一键运行/停止并实时查看输出，浏览任务历史，并在运行成功后打开预览。",
++      },
++    },
++    name: "hba-run",
++    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/panel.html"],
++    rootCandidates: [
++      "packages/hba-run-plugin",
++      "../hba-run-plugin",
++      "../../hba-run-plugin",
++      "../../../hba-run-plugin",
++    ],
++    version: "0.1.0",
++  },
+ ];
+ 
+ // 在 official plugin 定义里标了 defaultEnabled: true 的, 拼成 `<name>@<marketplace>` 形式,
+diff --git a/apps/zcode-cli/packages/hba-run-plugin/.zcode-plugin/plugin.json b/apps/zcode-cli/packages/hba-run-plugin/.zcode-plugin/plugin.json
+new file mode 100644
+index 00000000..d34e54dc
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-run-plugin/.zcode-plugin/plugin.json
+@@ -0,0 +1,40 @@
++{
++  "name": "hba-run",
++  "version": "0.1.0",
++  "description": "Run panel plugin (FR-4): run configurations, one-click run/stop with live output, task history and preview linking, persisted to .hba/run.json.",
++  "description_i18n": {
++    "en": "Run panel for HBA on ZCode: manage run configurations (command, working directory, env vars, preview URL), start/stop processes with live output streaming, review task history, and open the preview of a successful run.",
++    "zh-CN": "HBA 运行面板：管理运行配置（启动命令、工作目录、环境变量、预览地址），一键运行/停止并实时查看输出，浏览任务历史，并在运行成功后打开预览。"
++  },
++  "author": {
++    "name": "HBA"
++  },
++  "license": "Apache-2.0",
++  "mcpServers": {
++    "run": {
++      "type": "stdio",
++      "command": "node",
++      "args": ["${ZCODE_PLUGIN_ROOT}/server.mjs"],
++      "cwd": "${ZCODE_PROJECT_DIR}",
++      "env": {
++        "ZCODE_WORKSPACE_ROOT": "${ZCODE_PROJECT_DIR}"
++      },
++      "isolation": "workspace"
++    }
++  },
++  "ui": {
++    "surfaces": [
++      {
++        "id": "hba-run",
++        "title": {
++          "zh-CN": "运行",
++          "en-US": "Run"
++        },
++        "icon": "play",
++        "server": "run",
++        "resourceUri": "ui://run/panel.html",
++        "availability": "session"
++      }
++    ]
++  }
++}
+diff --git a/apps/zcode-cli/packages/hba-run-plugin/README.md b/apps/zcode-cli/packages/hba-run-plugin/README.md
+new file mode 100644
+index 00000000..ce18494d
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-run-plugin/README.md
+@@ -0,0 +1,204 @@
++# hba-run — HBA 运行面板插件(FR-4)
++
++HBA→ZCode 迁移项目 FR-4:运行面板插件。提供运行配置管理、一键运行/停止(实时输出)、
++任务历史、预览联动,配置持久化到工作区 `.hba/run.json`,跨会话保留。
++
++零外部依赖(仅 Node 内置模块),Windows(git bash)+ POSIX 双平台进程管理。
++
++## 文件结构
++
++```
++plugins/hba-run/
++├── .zcode-plugin/plugin.json   # 插件清单:mcpServers.run + ui.surfaces
++├── server.mjs                  # 手写 MCP stdio JSON-RPC 2.0 服务端(运行管理器)
++├── ui/panel.html               # 单文件面板(含 bridge 适配层)
++└── README.md
++tests/run/test-server.mjs       # 集成测试(node:test,真实 JSON-RPC)
++```
++
++## 架构
++
++```
++┌────────────────────────────┐
++│ ZCode 宿主                  │
++│  ┌──────────────────────┐  │      ┌─────────────────────────────┐
++│  │ panel.html (iframe)  │  │      │ server.mjs (MCP stdio)      │
++│  │  MCP client          │──┼──────┼─ MCP server                  │
++│  │  桥:postMessage      │  │ JSON │  tools/call → 运行管理器     │
++│  └──────────────────────┘  │ RPC  │  spawn(shell:true)          │
++│  (宿主代理 JSON-RPC 到      │ 2.0  │  环形缓冲 + 资源更新通知     │
++│   mcpServers.run 的 stdio) │      │  .hba/run.json 持久化        │
++└────────────────────────────┘      └─────────────────────────────┘
++```
++
++- **server.mjs**:手写 MCP stdio 传输(newline-delimited JSON-RPC 2.0),
++  实现 `initialize`、`ping`、`tools/list`、`tools/call`、`resources/list`、
++  `resources/templates/list`、`resources/read`、`resources/subscribe`、
++  `resources/unsubscribe`,以及 `notifications/resources/updated` 推送。
++- **运行管理器**:每个 run 独立 `child_process.spawn(command, { shell: true })`,
++  stdout/stderr 按行切分进每 run 环形缓冲(2000 行,seq 游标),支持并发多个 run,
++  状态机 `running / exited / failed`。
++- **panel.html**:单文件面板。内嵌 `Bridge` 适配层(独立代码块,便于集成期替换),
++  之上是配置列表 + 表单、运行/停止、输出控制台(自动滚动/清空/复制)、
++  任务历史表、预览按钮。
++
++## 工具清单(9 个,visibility: model + app)
++
++| 工具 | 参数 | 说明 |
++|---|---|---|
++| `run_config_list` | — | 列出全部运行配置 |
++| `run_config_save` | `id?`, `name`, `command`, `cwd?`, `env?`, `previewUrl?` | 新建/更新配置(带 id 为更新) |
++| `run_config_delete` | `configId` | 删除配置(历史保留) |
++| `run_config_duplicate` | `configId`, `name?` | 复制配置(新 id,默认名追加 " (copy)") |
++| `run_start` | `configId` | 启动运行,返回 `runId`(含 pid/startedAt) |
++| `run_stop` | `runId`, `timeoutMs?`(默认 2000) | 优雅停止,超时后强杀整棵进程树 |
++| `run_status` | `runId?` | 单个或全部运行状态快照 |
++| `run_output` | `runId`, `since?` | 游标式拉取输出行(`seq > since`),活运行与历史均可用 |
++| `run_history` | `limit?` | 历史记录(新命令/起止时间/退出码/状态/输出行数),新→旧 |
++
++工具结果统一 `{ content: [{type:"text", ...}], structuredContent: {...} }`;
++工具级错误(配置不存在、参数缺失)返回 `isError: true` 结果而非 JSON-RPC error。
++
++## 资源
++
++| URI | mimeType | 内容 |
++|---|---|---|
++| `ui://run/panel.html` | `text/html;profile=mcp-app` | 面板 HTML(`resources/read` 由 server.mjs 从 `ui/panel.html` 读出) |
++| `ui://run/state` | `application/json` | 状态快照(配置/活运行/历史计数),运行输出与状态变化时推送 `notifications/resources/updated` |
++
++## .hba/run.json schema
++
++```jsonc
++{
++  "version": 1,
++  "configs": [
++    {
++      "id": "cfg-xxxx",              // 生成 id
++      "name": "前端开发服务",
++      "command": "npm run dev",
++      "cwd": "packages/app",         // 空 = 工作区根目录;相对路径基于工作区根目录解析
++      "env": { "PORT": "5173" },     // 合并到进程环境(覆盖同名变量)
++      "previewUrl": "http://localhost:5173",
++      "createdAt": "2026-10-27T...Z",
++      "updatedAt": "2026-10-27T...Z"
++    }
++  ],
++  "history": [                       // 最多 50 条,旧的先淘汰
++    {
++      "id": "run-xxxx",
++      "configId": "cfg-xxxx",
++      "configName": "前端开发服务",
++      "command": "npm run dev",
++      "cwd": "packages/app",
++      "env": { "PORT": "5173" },
++      "previewUrl": "http://localhost:5173",
++      "startedAt": "...", "endedAt": "...",
++      "exitCode": 0,                 // 被强杀时可能为 null/1
++      "signal": null,
++      "state": "exited",             // exited | failed(仅终止后的终态入库)
++      "stopped": false,              // true = 用户 run_stop 终止
++      "spawnError": null,
++      "output": [                    // 最多 500 行(环形缓冲截尾)
++        { "seq": 1, "stream": "stdout", "text": "..." }
++      ]
++    }
++  ]
++}
++```
++
++- 写盘时机:配置增删改/复制、每次 run 结束入库时(临时文件 + rename 原子替换)。
++- 工作区根目录取 `$ZCODE_WORKSPACE_ROOT`(plugin.json 注入 `${ZCODE_PROJECT_DIR}`),
++  测试/独立运行时回退 `process.cwd()`。
++- **状态语义**:`running` 进程存活;`exited` 正常退出(exit 0)或用户停止;
++  `failed` 非 0 退出、信号终止或 spawn 失败。`stopped: true` 标记用户主动停止,
++  面板据此显示"已停止"而非"失败"。
++
++## 桥协议结论(反推自 ZCode 官方 pdf-plugin,集成期需联测校验)
++
++来源:`D:\ZCode\resources\glm\packages\pdf-plugin\` 的
++`.zcode-plugin/plugin.json` + `dist/ui/panel.html`(600KB bundle)逆向分析:
++
++1. **传输**:面板 iframe 是一个完整 MCP client。JSON-RPC 2.0 消息**原样**
++   经 `window.parent.postMessage(msg, "*")` 发出,`window.addEventListener("message")`
++   收取,`e.source === window.parent` 校验;无额外封包。
++2. **握手**:`initialize`(`protocolVersion: "2025-06-18"`)→ `notifications/initialized`
++   → `ui/notifications/initialized`(UI 扩展握手,initialize 结果中宿主附带
++   `hostCapabilities`/`hostInfo`/`hostContext`)。
++3. **调用**:标准 MCP `tools/call`、`resources/read`、`resources/subscribe`;
++   服务端用 `notifications/resources/updated { uri }` 推送更新。
++4. **面板资源**:服务端以 `mimeType: "text/html;profile=mcp-app"` 注册
++   `ui://<name>/panel.html` 资源(pdf 的还带 `_meta: {"zcode/csp": {wasmUnsafeEval: true}}`),
++   宿主通过 `resources/read` 取 HTML 装载进 iframe。
++5. **UI 扩展通知**:面板可发 `ui/notifications/size-changed {width, height}`;
++   宿主可发 `ui/notifications/request-teardown` 等。
++6. **工具可见性**:工具 `_meta.ui = { resourceUri, surface, visibility }`,
++   visibility 取值 `"model"`(Agent 可调)/ `"app"`(面板可调),本插件全部为两者。
++
++**适配层**:`ui/panel.html` 内的 `Bridge` 代码块(callTool / readResource /
++subscribe / onResourceUpdate / sendSizeChanged)按上述协议实现,集中封装、
++便于集成期一处替换。以下点位需与真实宿主联测确认:
++- initialize 结果的扩展字段(hostCapabilities 等)对宿主是否必需回传;
++- `notifications/resources/updated` 在宿主侧是否要求先 subscribe 才转发;
++- `ui/notifications/size-changed` / `request-teardown` 的确切行为;
++- iframe `window.open` 打开预览是否被宿主沙箱允许(必要时改为宿主动作)。
++
++## Windows 进程树终止方案
++
++`spawn(command, { shell: true })` 在 Windows 上的直接子进程是 `cmd.exe`,
++真正的目标进程是孙进程。**关键点:`child.kill()` 在 Windows 只会终止 cmd.exe
++本身(TerminateProcess),孙进程存活且会触发 `exit` 事件提前结束状态机**——
++因此本实现不在停止路径上调用 `child.kill()`,而是:
++
++1. **优雅期**:`taskkill /pid <shellPid> /T`(不带 /F,向树内各进程发 WM_CLOSE,
++   对 GUI 程序等价于温和关闭;控制台程序多数忽略);
++2. **超时(默认 2s,`run_stop` 的 `timeoutMs` 可调)后强杀**:
++   `taskkill /pid <shellPid> /T /F` 整树强杀(taskkill /T 按父子关系枚举,
++   不依赖根进程存活);
++3. taskkill 本身失败(如缺失)才回退 `child.kill("SIGKILL")` 兜底。
++
++POSIX 路径:spawn 时 `detached: true` 建独立进程组,停止用
++`process.kill(-pid, "SIGTERM")` → 超时 `SIGKILL`。
++
++测试(`tests/run/test-server.mjs`)对此做了真实校验:运行命令先打印自身
++`PID=<inner>`,`run_stop` 后断言该 pid 已不存在(`process.kill(pid,0)` 抛 ESRCH)。
++
++## 面板功能(FR-4 对照)
++
++- **FR-4-1 运行配置管理**:左侧列表 + 表单(名称/启动命令/工作目录/
++  环境变量 KEY=VALUE 行/预览地址),新建/保存/删除/复制;双击配置直接运行。
++- **FR-4-2 一键运行/停止**:运行按钮 / 活动运行 chip 上的停止按钮;
++  输出控制台实时回流(自动滚动、清空、复制),资源更新通知 + 1.2s 轮询兜底。
++- **FR-4-3 任务历史**:表格(配置/命令/起止时间/退出码/状态),查看历史输出
++  (run_output 游标拉取,含已结束运行)。
++- **FR-4-4 预览联动**:配置含预览地址且最近一次运行成功(未被停止)时,
++  顶栏"打开预览"与历史行"打开预览"按钮可点。
++- **FR-4-5 持久化**:配置与历史落盘 `.hba/run.json`,跨会话保留
++  (历史输出为截尾快照,活运行的完整输出仅在环形缓冲内)。
++
++## 测试
++
++```
++node --test tests/run/test-server.mjs
++```
++
++真实 spawn `server.mjs` 走 JSON-RPC,覆盖:握手/工具与资源清单、panel.html 资源读取、
++配置 CRUD + `.hba/run.json` 落盘校验、run_start 真实长跑命令 + run_output 流式输出 +
++run_stop 进程树终止校验、环境变量透传、自然退出/失败退出状态机、并发多 run、
++run_history(含历史输出回读)、resources 读与订阅通知、工具校验错误。
++临时工作目录在系统 temp 下创建,测试结束清理(Windows 下 rm 带重试)。
++
++## 遗留事项
++
++1. **桥协议为反推结论**,与宿主的联测校验点见「桥协议结论」小节;若宿主实际
++   协议有出入,只需替换 `panel.html` 中的 `Bridge` 代码块。
++2. **进程树强杀的完备性**:Windows 下未使用 Job Object。极端场景(优雅期
++   taskkill 枚举树的同时根进程自行退出)可能遗留孙进程;常规 run_stop 路径
++   (/T 两次)已由测试覆盖。彻底方案可引入 Job Object(kill-job 兜底)。
++3. **历史输出截尾**:历史入库最多 500 行/条、50 条;活运行环形缓冲 2000 行。
++   如需完整日志可后续落盘 `.hba/logs/<runId>.log`。
++4. **run.json 并发写**:单 server 实例(isolation: workspace)串行写,当前安全;
++   多工作区多实例各写各的文件,无共享。
++5. **预览打开方式**:当前 `window.open`;若宿主沙箱限制弹窗,可改为发送
++   ui 扩展通知请宿主打开(待联测确认)。
++6. `cwd` 不存在时 spawn 会失败并记为 `failed`(spawnError 字段),面板未做
++   预校验提示。
+diff --git a/apps/zcode-cli/packages/hba-run-plugin/package.json b/apps/zcode-cli/packages/hba-run-plugin/package.json
+new file mode 100644
+index 00000000..845dcc12
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-run-plugin/package.json
+@@ -0,0 +1,9 @@
++{
++  "$schema": "https://json.schemastore.org/package.json",
++  "name": "@zcode/hba-run-plugin",
++  "version": "0.1.0",
++  "private": true,
++  "description": "Run panel plugin (FR-4): run configurations, one-click run/stop with live output, task history and preview linking, persisted to .hba/run.json.",
++  "license": "Apache-2.0",
++  "type": "module"
++}
+diff --git a/apps/zcode-cli/packages/hba-run-plugin/server.mjs b/apps/zcode-cli/packages/hba-run-plugin/server.mjs
+new file mode 100644
+index 00000000..272c623d
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-run-plugin/server.mjs
+@@ -0,0 +1,900 @@
++#!/usr/bin/env node
++/**
++ * hba-run MCP server (FR-4) — zero-dependency, hand-written MCP stdio JSON-RPC 2.0.
++ *
++ * Wire format: newline-delimited JSON-RPC 2.0 over stdin/stdout (MCP stdio transport).
++ * Implements: initialize, ping, tools/list, tools/call, resources/list,
++ * resources/templates/list, resources/read, resources/subscribe, resources/unsubscribe,
++ * plus the notification side (notifications/resources/updated).
++ *
++ * Tools: run_config_list / run_config_save / run_config_delete / run_config_duplicate /
++ *        run_start / run_stop / run_status / run_output / run_history
++ *
++ * Config + history persistence: <workspace>/.hba/run.json
++ * Workspace root: $ZCODE_WORKSPACE_ROOT (set by plugin.json), fallback process.cwd().
++ */
++
++import fs from "node:fs";
++import path from "node:path";
++import os from "node:os";
++import { spawn, execFile } from "node:child_process";
++import { fileURLToPath } from "node:url";
++
++// ---------------------------------------------------------------------------
++// Constants
++// ---------------------------------------------------------------------------
++
++const SERVER_NAME = "hba-run";
++const SERVER_VERSION = "0.1.0";
++const PROTOCOL_VERSION = "2025-06-18";
++const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
++
++const SURFACE_ID = "hba-run";
++const PANEL_URI = "ui://run/panel.html";
++const STATE_URI = "ui://run/state";
++const HTML_MIME = "text/html;profile=mcp-app";
++
++const IS_WIN = process.platform === "win32";
++const WORKSPACE_ROOT = path.resolve(
++  process.env.ZCODE_WORKSPACE_ROOT || process.env.HBA_WORKSPACE_ROOT || process.cwd()
++);
++const HBA_DIR = path.join(WORKSPACE_ROOT, ".hba");
++const RUN_JSON_PATH = path.join(HBA_DIR, "run.json");
++
++const RING_BUFFER_LINES = 2000; // live output ring buffer per run
++const HISTORY_OUTPUT_LINES = 500; // persisted output lines per history entry
++const HISTORY_MAX_ENTRIES = 50;
++const DEFAULT_STOP_GRACE_MS = 2000;
++const MAX_STOP_GRACE_MS = 30000;
++const OUTPUT_NOTIFY_THROTTLE_MS = 120;
++
++// ---------------------------------------------------------------------------
++// Store: .hba/run.json  { version, configs[], history[] }
++// ---------------------------------------------------------------------------
++
++const store = { version: 1, configs: [], history: [] };
++
++function loadStore() {
++  try {
++    const raw = fs.readFileSync(RUN_JSON_PATH, "utf8");
++    const data = JSON.parse(raw);
++    if (data && typeof data === "object") {
++      if (Array.isArray(data.configs)) store.configs = data.configs;
++      if (Array.isArray(data.history)) store.history = data.history;
++      if (typeof data.version === "number") store.version = data.version;
++    }
++  } catch {
++    /* missing or corrupt file -> start empty */
++  }
++}
++
++function saveStore() {
++  fs.mkdirSync(HBA_DIR, { recursive: true });
++  const tmp = RUN_JSON_PATH + ".tmp";
++  fs.writeFileSync(tmp, JSON.stringify(store, null, 2), "utf8");
++  fs.renameSync(tmp, RUN_JSON_PATH); // atomic-ish on POSIX and Windows
++}
++
++loadStore();
++
++// ---------------------------------------------------------------------------
++// Run manager
++// ---------------------------------------------------------------------------
++
++/** @type {Map<string, Run>} */
++const runs = new Map();
++let runCounter = 0;
++
++function nowIso() {
++  return new Date().toISOString();
++}
++
++function newRunId() {
++  runCounter += 1;
++  return `run-${Date.now().toString(36)}-${runCounter.toString(36)}`;
++}
++
++function newConfigId() {
++  return `cfg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
++}
++
++class Run {
++  constructor(config) {
++    this.id = newRunId();
++    this.configId = config.id;
++    this.configName = config.name;
++    this.command = config.command;
++    this.cwd = config.cwd || "";
++    this.env = config.env && typeof config.env === "object" ? { ...config.env } : {};
++    this.previewUrl = config.previewUrl || "";
++    this.state = "running"; // running | exited | failed
++    this.pid = null;
++    this.startedAt = nowIso();
++    this.endedAt = null;
++    this.exitCode = null;
++    this.signal = null;
++    this.stopped = false; // true when terminated via run_stop
++    this.spawnError = null;
++    this.lines = []; // ring buffer: { seq, stream, text }
++    this.seq = 0;
++    this.child = null;
++    this.stopTimer = null;
++    this.notifyTimer = null;
++    this.partialStdout = "";
++    this.partialStderr = "";
++    this.exited = false;
++  }
++
++  appendLine(stream, text) {
++    this.seq += 1;
++    this.lines.push({ seq: this.seq, stream, text });
++    if (this.lines.length > RING_BUFFER_LINES) {
++      this.lines.splice(0, this.lines.length - RING_BUFFER_LINES);
++    }
++    this.scheduleNotify();
++  }
++
++  scheduleNotify() {
++    if (this.notifyTimer) return;
++    this.notifyTimer = setTimeout(() => {
++      this.notifyTimer = null;
++      sendResourceUpdated();
++    }, OUTPUT_NOTIFY_THROTTLE_MS);
++    if (typeof this.notifyTimer.unref === "function") this.notifyTimer.unref();
++  }
++
++  snapshot() {
++    return {
++      runId: this.id,
++      configId: this.configId,
++      configName: this.configName,
++      command: this.command,
++      cwd: this.cwd,
++      previewUrl: this.previewUrl,
++      state: this.state,
++      pid: this.pid,
++      startedAt: this.startedAt,
++      endedAt: this.endedAt,
++      exitCode: this.exitCode,
++      signal: this.signal,
++      stopped: this.stopped,
++      spawnError: this.spawnError,
++      lineCount: this.seq
++    };
++  }
++}
++
++function resolveCwd(cwd) {
++  if (!cwd) return WORKSPACE_ROOT;
++  return path.isAbsolute(cwd) ? cwd : path.resolve(WORKSPACE_ROOT, cwd);
++}
++
++function startRun(config) {
++  const run = new Run(config);
++  const cwd = resolveCwd(config.cwd);
++  const env = { ...process.env, ...run.env };
++
++  let child;
++  try {
++    child = spawn(run.command, {
++      cwd,
++      env,
++      shell: true, // run through the platform shell (cmd.exe on Windows)
++      windowsHide: true,
++      // On POSIX create a new process group so we can signal the whole tree.
++      // On Windows detached would create a new console window -> do not use it;
++      // the tree is terminated with `taskkill /T` instead.
++      detached: !IS_WIN
++    });
++  } catch (err) {
++    run.state = "failed";
++    run.spawnError = String(err && err.message ? err.message : err);
++    run.endedAt = nowIso();
++    run.exitCode = null;
++    run.appendLine("system", `[spawn error] ${run.spawnError}`);
++    runs.set(run.id, run);
++    finalizeRun(run);
++    return run;
++  }
++
++  run.child = child;
++  run.pid = child.pid ?? null;
++  runs.set(run.id, run);
++  run.appendLine("system", `[hba-run] started: ${run.command} (cwd: ${cwd}, pid: ${run.pid})`);
++
++  const pump = (stream, run2, key) => (chunk) => {
++    run2[key] += chunk.toString("utf8");
++    let idx;
++    while ((idx = run2[key].indexOf("\n")) >= 0) {
++      const line = run2[key].slice(0, idx).replace(/\r$/, "");
++      run2[key] = run2[key].slice(idx + 1);
++      run2.appendLine(stream, line);
++    }
++  };
++  child.stdout.on("data", pump("stdout", run, "partialStdout"));
++  child.stderr.on("data", pump("stderr", run, "partialStderr"));
++
++  child.on("error", (err) => {
++    if (run.exited) return;
++    run.spawnError = String(err && err.message ? err.message : err);
++    run.appendLine("system", `[spawn error] ${run.spawnError}`);
++    finishRun(run, null, null, "failed");
++  });
++
++  child.on("exit", (code, signal) => {
++    // flush partial trailing lines
++    if (run.partialStdout) {
++      run.appendLine("stdout", run.partialStdout);
++      run.partialStdout = "";
++    }
++    if (run.partialStderr) {
++      run.appendLine("stderr", run.partialStderr);
++      run.partialStderr = "";
++    }
++    let state;
++    if (run.stopped) state = "exited"; // user-initiated stop is not a failure
++    else if (signal) state = "failed";
++    else state = code === 0 ? "exited" : "failed";
++    finishRun(run, code, signal, state);
++  });
++
++  return run;
++}
++
++function finishRun(run, code, signal, state) {
++  if (run.exited) return;
++  run.exited = true;
++  run.state = state;
++  run.exitCode = code;
++  run.signal = signal;
++  run.endedAt = nowIso();
++  if (run.stopTimer) {
++    clearTimeout(run.stopTimer);
++    run.stopTimer = null;
++  }
++  if (run.notifyTimer) {
++    clearTimeout(run.notifyTimer);
++    run.notifyTimer = null;
++  }
++  run.appendLine(
++    "system",
++    `[hba-run] finished: state=${state} exitCode=${code === null ? "null" : code} signal=${signal ?? "null"}`
++  );
++  finalizeRun(run);
++}
++
++function finalizeRun(run) {
++  const entry = {
++    id: run.id,
++    configId: run.configId,
++    configName: run.configName,
++    command: run.command,
++    cwd: run.cwd,
++    env: run.env,
++    previewUrl: run.previewUrl,
++    startedAt: run.startedAt,
++    endedAt: run.endedAt,
++    exitCode: run.exitCode,
++    signal: run.signal,
++    state: run.state,
++    stopped: run.stopped,
++    spawnError: run.spawnError,
++    output: run.lines.slice(-HISTORY_OUTPUT_LINES)
++  };
++  store.history.push(entry);
++  if (store.history.length > HISTORY_MAX_ENTRIES) {
++    store.history.splice(0, store.history.length - HISTORY_MAX_ENTRIES);
++  }
++  try {
++    saveStore();
++  } catch (err) {
++    process.stderr.write(`[${SERVER_NAME}] failed to persist history: ${err}\n`);
++  }
++  sendResourceUpdated();
++}
++
++/**
++ * Gracefully stop a run, then force-kill its whole process tree.
++ * Windows: `taskkill /pid <pid> /T` (graceful WM_CLOSE) then `taskkill /pid <pid> /T /F`.
++ * POSIX:   SIGTERM to the process group, then SIGKILL.
++ */
++function stopRun(run, graceMs = DEFAULT_STOP_GRACE_MS) {
++  if (!run.child || run.exited) return;
++  run.stopped = true;
++  run.appendLine("system", `[hba-run] stopping (grace ${graceMs}ms)...`);
++
++  const forceKill = () => {
++    if (run.exited) return;
++    run.appendLine("system", "[hba-run] grace period elapsed, force-killing process tree");
++    killTree(run, true);
++  };
++
++  if (run.pid) {
++    killTree(run, false);
++    run.stopTimer = setTimeout(forceKill, graceMs);
++    if (typeof run.stopTimer.unref === "function") run.stopTimer.unref();
++  } else {
++    try {
++      run.child.kill("SIGKILL");
++    } catch {
++      /* already dead */
++    }
++  }
++}
++
++/**
++ * Kill a process and all of its descendants. force=true -> uncatchable kill.
++ *
++ * Windows: `taskkill /pid <pid> /T` (WM_CLOSE-based, graceful-ish) and
++ * `taskkill /pid <pid> /T /F` (force). The direct child is deliberately NOT
++ * killed with child.kill() first: on Windows that would terminate only the
++ * shell (cmd.exe), fire its 'exit' event and orphan the grandchildren before
++ * taskkill can walk the tree. taskkill /T always targets the whole tree.
++ *
++ * POSIX: SIGTERM/SIGKILL to the process group (the child was spawned with
++ * detached=true, so its pid is the group leader).
++ */
++function killTree(run, force) {
++  const pid = run.pid;
++  if (!pid) return;
++  if (IS_WIN) {
++    const args = ["/pid", String(pid), "/T"];
++    if (force) args.push("/F");
++    execFile("taskkill", args, { windowsHide: true }, (err) => {
++      if (err && force) {
++        // Last resort (e.g. taskkill missing): kill the direct child only.
++        try {
++          run.child.kill("SIGKILL");
++        } catch {
++          /* already dead */
++        }
++      }
++    });
++  } else {
++    try {
++      process.kill(-pid, force ? "SIGKILL" : "SIGTERM");
++    } catch {
++      try {
++        run.child.kill(force ? "SIGKILL" : "SIGTERM");
++      } catch {
++        /* already dead */
++      }
++    }
++  }
++}
++
++function killAllRuns() {
++  for (const run of runs.values()) {
++    if (!run.exited && run.child) {
++      run.stopped = true;
++      killTree(run, true);
++    }
++  }
++}
++
++// ---------------------------------------------------------------------------
++// JSON-RPC plumbing (newline-delimited over stdio)
++// ---------------------------------------------------------------------------
++
++function send(msg) {
++  process.stdout.write(JSON.stringify(msg) + "\n");
++}
++function sendResult(id, result) {
++  send({ jsonrpc: "2.0", id, result });
++}
++function sendError(id, code, message) {
++  send({ jsonrpc: "2.0", id, error: { code, message } });
++}
++function sendNotification(method, params) {
++  send({ jsonrpc: "2.0", method, params });
++}
++
++const subscribedUris = new Set();
++function sendResourceUpdated(uri = STATE_URI) {
++  if (!subscribedUris.has(uri)) return;
++  sendNotification("notifications/resources/updated", { uri });
++}
++
++// ---------------------------------------------------------------------------
++// Tools
++// ---------------------------------------------------------------------------
++
++function toolText(obj) {
++  return JSON.stringify(obj, null, 2);
++}
++
++function ok(structured, text) {
++  return {
++    content: [{ type: "text", text: text ?? toolText(structured) }],
++    structuredContent: structured
++  };
++}
++
++function fail(message, structured = {}) {
++  return {
++    isError: true,
++    content: [{ type: "text", text: message }],
++    structuredContent: { error: message, ...structured }
++  };
++}
++
++function cleanConfigInput(input) {
++  const name = typeof input.name === "string" ? input.name.trim() : "";
++  const command = typeof input.command === "string" ? input.command.trim() : "";
++  if (!name) throw new Error("name is required");
++  if (!command) throw new Error("command is required");
++  const cwd = typeof input.cwd === "string" ? input.cwd.trim() : "";
++  const previewUrl = typeof input.previewUrl === "string" ? input.previewUrl.trim() : "";
++  let env = {};
++  if (input.env != null) {
++    if (typeof input.env !== "object" || Array.isArray(input.env)) {
++      throw new Error("env must be an object of KEY -> value");
++    }
++    for (const [k, v] of Object.entries(input.env)) {
++      if (!k) continue;
++      env[k] = String(v);
++    }
++  }
++  return { name, command, cwd, env, previewUrl };
++}
++
++function publicConfig(c) {
++  return {
++    id: c.id,
++    name: c.name,
++    command: c.command,
++    cwd: c.cwd || "",
++    env: c.env || {},
++    previewUrl: c.previewUrl || "",
++    createdAt: c.createdAt || null,
++    updatedAt: c.updatedAt || null
++  };
++}
++
++const TOOLS = [
++  {
++    name: "run_config_list",
++    description: "List all saved run configurations (name, command, working directory, env vars, preview URL).",
++    inputSchema: { type: "object", properties: {}, additionalProperties: false },
++    readOnly: true,
++    handler: async () => ok({ configs: store.configs.map(publicConfig) })
++  },
++  {
++    name: "run_config_save",
++    description:
++      "Create or update a run configuration. Pass id to update an existing one, omit it to create a new one. Fields: name, command, cwd (absolute or relative to workspace root), env (KEY -> value map), previewUrl.",
++    inputSchema: {
++      type: "object",
++      properties: {
++        id: { type: "string", description: "Existing config id to update; omit to create." },
++        name: { type: "string", description: "Configuration display name." },
++        command: { type: "string", description: "Shell command to run." },
++        cwd: { type: "string", description: "Working directory; absolute or relative to the workspace root." },
++        env: {
++          type: "object",
++          additionalProperties: { type: "string" },
++          description: "Extra environment variables merged over the server environment."
++        },
++        previewUrl: { type: "string", description: "Preview URL to offer after a successful run." }
++      },
++      required: ["name", "command"],
++      additionalProperties: false
++    },
++    readOnly: false,
++    handler: async (input) => {
++      let clean;
++      try {
++        clean = cleanConfigInput(input);
++      } catch (err) {
++        return fail(String(err.message || err));
++      }
++      const now = nowIso();
++      if (input.id) {
++        const idx = store.configs.findIndex((c) => c.id === input.id);
++        if (idx < 0) return fail(`config not found: ${input.id}`);
++        const prev = store.configs[idx];
++        store.configs[idx] = { ...prev, ...clean, id: prev.id, createdAt: prev.createdAt, updatedAt: now };
++        saveStore();
++        sendResourceUpdated();
++        return ok({ config: publicConfig(store.configs[idx]) }, `Updated config ${store.configs[idx].name}`);
++      }
++      const config = { id: newConfigId(), ...clean, createdAt: now, updatedAt: now };
++      store.configs.push(config);
++      saveStore();
++      sendResourceUpdated();
++      return ok({ config: publicConfig(config) }, `Created config ${config.name}`);
++    }
++  },
++  {
++    name: "run_config_delete",
++    description: "Delete a run configuration by id. Historical run records are kept.",
++    inputSchema: {
++      type: "object",
++      properties: { configId: { type: "string", description: "Config id to delete." } },
++      required: ["configId"],
++      additionalProperties: false
++    },
++    readOnly: false,
++    handler: async ({ configId }) => {
++      const idx = store.configs.findIndex((c) => c.id === configId);
++      if (idx < 0) return fail(`config not found: ${configId}`);
++      const [removed] = store.configs.splice(idx, 1);
++      saveStore();
++      sendResourceUpdated();
++      return ok({ deleted: publicConfig(removed) }, `Deleted config ${removed.name}`);
++    }
++  },
++  {
++    name: "run_config_duplicate",
++    description: "Duplicate a run configuration; the copy gets a new id and a '(copy)' name suffix unless name is given.",
++    inputSchema: {
++      type: "object",
++      properties: {
++        configId: { type: "string", description: "Config id to copy." },
++        name: { type: "string", description: "Optional name for the copy." }
++      },
++      required: ["configId"],
++      additionalProperties: false
++    },
++    readOnly: false,
++    handler: async ({ configId, name }) => {
++      const src = store.configs.find((c) => c.id === configId);
++      if (!src) return fail(`config not found: ${configId}`);
++      const now = nowIso();
++      const copy = {
++        ...publicConfig(src),
++        id: newConfigId(),
++        name: typeof name === "string" && name.trim() ? name.trim() : `${src.name} (copy)`,
++        createdAt: now,
++        updatedAt: now
++      };
++      store.configs.push(copy);
++      saveStore();
++      sendResourceUpdated();
++      return ok({ config: publicConfig(copy) }, `Duplicated as ${copy.name}`);
++    }
++  },
++  {
++    name: "run_start",
++    description:
++      "Start a run of a saved configuration. Spawns the command (through the platform shell) and streams stdout/stderr into a ring buffer. Returns the runId used by run_output/run_status/run_stop.",
++    inputSchema: {
++      type: "object",
++      properties: { configId: { type: "string", description: "Configuration id to run." } },
++      required: ["configId"],
++      additionalProperties: false
++    },
++    readOnly: false,
++    handler: async ({ configId }) => {
++      const config = store.configs.find((c) => c.id === configId);
++      if (!config) return fail(`config not found: ${configId}`);
++      const run = startRun(config);
++      const snap = run.snapshot();
++      if (run.state === "failed" && run.spawnError) return fail(`spawn failed: ${run.spawnError}`, { run: snap });
++      sendResourceUpdated();
++      return ok({ run: snap }, `Started run ${run.id} (pid ${run.pid})`);
++    }
++  },
++  {
++    name: "run_stop",
++    description:
++      "Stop a running process gracefully, then kill its whole process tree if it does not exit in time (Windows: taskkill /T /F; POSIX: SIGTERM then SIGKILL to the process group).",
++    inputSchema: {
++      type: "object",
++      properties: {
++        runId: { type: "string", description: "Run id to stop." },
++        timeoutMs: {
++          type: "integer",
++          minimum: 0,
++          maximum: MAX_STOP_GRACE_MS,
++          description: "Grace period before force-killing the tree (default 2000)."
++        }
++      },
++      required: ["runId"],
++      additionalProperties: false
++    },
++    readOnly: false,
++    handler: async ({ runId, timeoutMs }) => {
++      const run = runs.get(runId);
++      if (!run) return fail(`run not found: ${runId}`);
++      if (run.exited) return ok({ run: run.snapshot() }, `Run ${runId} already finished`);
++      const grace =
++        typeof timeoutMs === "number" && Number.isFinite(timeoutMs)
++          ? Math.max(0, Math.min(MAX_STOP_GRACE_MS, Math.round(timeoutMs)))
++          : DEFAULT_STOP_GRACE_MS;
++      stopRun(run, grace);
++      sendResourceUpdated();
++      return ok({ run: run.snapshot() }, `Stopping run ${runId} (grace ${grace}ms)`);
++    }
++  },
++  {
++    name: "run_status",
++    description: "Get the status of one run (by runId) or of all runs of this session.",
++    inputSchema: {
++      type: "object",
++      properties: { runId: { type: "string", description: "Optional run id; omit for all runs." } },
++      additionalProperties: false
++    },
++    readOnly: true,
++    handler: async ({ runId }) => {
++      if (runId) {
++        const run = runs.get(runId);
++        if (!run) return fail(`run not found: ${runId}`);
++        return ok({ run: run.snapshot() });
++      }
++      return ok({ runs: [...runs.values()].map((r) => r.snapshot()) });
++    }
++  },
++  {
++    name: "run_output",
++    description:
++      "Fetch run output lines with a cursor: pass the last seen seq as `since` (0 for the beginning) to get lines after it. Works for live runs and for history entries.",
++    inputSchema: {
++      type: "object",
++      properties: {
++        runId: { type: "string", description: "Run id." },
++        since: { type: "integer", minimum: 0, description: "Return lines with seq > since (default 0)." }
++      },
++      required: ["runId"],
++      additionalProperties: false
++    },
++    readOnly: true,
++    handler: async ({ runId, since }) => {
++      const cursor = typeof since === "number" && Number.isFinite(since) && since >= 0 ? Math.floor(since) : 0;
++      const run = runs.get(runId);
++      if (run) {
++        const lines = run.lines.filter((l) => l.seq > cursor);
++        return ok({
++          runId,
++          state: run.state,
++          lines,
++          nextSince: run.seq,
++          truncatedBefore: run.lines.length ? run.lines[0].seq : cursor + 1
++        });
++      }
++      const entry = store.history.find((h) => h.id === runId);
++      if (entry) {
++        const all = entry.output || [];
++        const lines = all.filter((l) => l.seq > cursor);
++        return ok({
++          runId,
++          state: entry.state,
++          lines,
++          nextSince: all.length ? all[all.length - 1].seq : cursor,
++          truncatedBefore: all.length ? all[0].seq : cursor + 1
++        });
++      }
++      return fail(`run not found: ${runId}`);
++    }
++  },
++  {
++    name: "run_history",
++    description:
++      "List past runs (newest first): config name, command, start/end time, exit code, state, stopped flag, and stored output (capped).",
++    inputSchema: {
++      type: "object",
++      properties: {
++        limit: { type: "integer", minimum: 1, maximum: HISTORY_MAX_ENTRIES, description: "Max entries (default 20)." }
++      },
++      additionalProperties: false
++    },
++    readOnly: true,
++    handler: async ({ limit }) => {
++      const n = typeof limit === "number" && Number.isFinite(limit) ? Math.max(1, Math.min(HISTORY_MAX_ENTRIES, Math.floor(limit))) : 20;
++      const history = [...store.history].reverse().slice(0, n).map((e) => ({
++        id: e.id,
++        configId: e.configId,
++        configName: e.configName,
++        command: e.command,
++        cwd: e.cwd,
++        env: e.env,
++        previewUrl: e.previewUrl,
++        startedAt: e.startedAt,
++        endedAt: e.endedAt,
++        exitCode: e.exitCode,
++        signal: e.signal,
++        state: e.state,
++        stopped: e.stopped,
++        outputLines: (e.output || []).length
++      }));
++      return ok({ history });
++    }
++  }
++];
++
++const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
++
++function toolDefinition(t) {
++  return {
++    name: t.name,
++    description: t.description,
++    inputSchema: t.inputSchema,
++    annotations: { readOnlyHint: t.readOnly, idempotentHint: t.readOnly },
++    _meta: {
++      ui: {
++        resourceUri: PANEL_URI,
++        surface: SURFACE_ID,
++        visibility: ["model", "app"]
++      }
++    }
++  };
++}
++
++// ---------------------------------------------------------------------------
++// Resources
++// ---------------------------------------------------------------------------
++
++function readPanelHtml() {
++  const panelPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "ui", "panel.html");
++  return fs.readFileSync(panelPath, "utf8");
++}
++
++function stateSnapshot() {
++  return {
++    workspaceRoot: WORKSPACE_ROOT,
++    serverTime: nowIso(),
++    configs: store.configs.map(publicConfig),
++    runs: [...runs.values()].map((r) => r.snapshot()),
++    historyCount: store.history.length,
++    platform: process.platform
++  };
++}
++
++const RESOURCES = [
++  {
++    uri: PANEL_URI,
++    name: "Run Panel",
++    description: "The hba-run panel UI (run configurations, run/stop, live output, history, preview).",
++    mimeType: HTML_MIME
++  },
++  {
++    uri: STATE_URI,
++    name: "Run State",
++    description: "JSON snapshot of run configurations, live runs and history; updated as runs produce output.",
++    mimeType: "application/json"
++  }
++];
++
++// ---------------------------------------------------------------------------
++// Request dispatch
++// ---------------------------------------------------------------------------
++
++async function dispatch(method, params) {
++  switch (method) {
++    case "initialize": {
++      const requested = params && typeof params.protocolVersion === "string" ? params.protocolVersion : null;
++      return {
++        protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSION,
++        capabilities: {
++          tools: { listChanged: false },
++          resources: { subscribe: true, listChanged: false }
++        },
++        serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
++        instructions:
++          "Run panel server. Manage run configs with run_config_* tools, start/stop processes with run_start/run_stop, read live output with run_output and past runs with run_history. The panel UI is served at " +
++          PANEL_URI +
++          "."
++      };
++    }
++    case "ping":
++      return {};
++    case "tools/list":
++      return { tools: TOOLS.map(toolDefinition) };
++    case "tools/call": {
++      const name = params && params.name;
++      const tool = TOOLS_BY_NAME.get(name);
++      if (!tool) throw rpcError(-32602, `Unknown tool: ${name}`);
++      const input = params && params.arguments && typeof params.arguments === "object" ? params.arguments : {};
++      try {
++        return await tool.handler(input);
++      } catch (err) {
++        return fail(`${tool.name}: ${String(err && err.message ? err.message : err)}`);
++      }
++    }
++    case "resources/list":
++      return { resources: RESOURCES };
++    case "resources/templates/list":
++      return { resourceTemplates: [] };
++    case "resources/read": {
++      const uri = params && params.uri;
++      if (uri === PANEL_URI) {
++        return {
++          contents: [
++            {
++              uri: PANEL_URI,
++              mimeType: HTML_MIME,
++              text: readPanelHtml(),
++              _meta: { "zcode/csp": {} }
++            }
++          ]
++        };
++      }
++      if (uri === STATE_URI) {
++        return {
++          contents: [{ uri: STATE_URI, mimeType: "application/json", text: JSON.stringify(stateSnapshot(), null, 2) }]
++        };
++      }
++      throw rpcError(-32002, `Unknown resource: ${uri}`);
++    }
++    case "resources/subscribe": {
++      const uri = params && params.uri;
++      if (typeof uri !== "string" || !uri) throw rpcError(-32602, "uri is required");
++      subscribedUris.add(uri);
++      return {};
++    }
++    case "resources/unsubscribe": {
++      const uri = params && params.uri;
++      if (typeof uri !== "string" || !uri) throw rpcError(-32602, "uri is required");
++      subscribedUris.delete(uri);
++      return {};
++    }
++    default:
++      throw rpcError(-32601, `Method not found: ${method}`);
++  }
++}
++
++function rpcError(code, message) {
++  const err = new Error(message);
++  err.rpcCode = code;
++  return err;
++}
++
++async function handleMessage(msg) {
++  if (!msg || msg.jsonrpc !== "2.0") return;
++  const { id, method, params } = msg;
++
++  // notification (no id) — nothing to answer
++  if (id === undefined || id === null) {
++    if (method === "notifications/initialized" || method === "notifications/cancelled") return;
++    return;
++  }
++  if (typeof method !== "string") {
++    sendError(id, -32600, "Invalid request: method must be a string");
++    return;
++  }
++  try {
++    const result = await dispatch(method, params);
++    sendResult(id, result);
++  } catch (err) {
++    sendError(id, typeof err.rpcCode === "number" ? err.rpcCode : -32603, String(err && err.message ? err.message : err));
++  }
++}
++
++// stdin: newline-delimited JSON
++let stdinBuf = "";
++process.stdin.on("data", (chunk) => {
++  stdinBuf += chunk.toString("utf8");
++  let idx;
++  while ((idx = stdinBuf.indexOf("\n")) >= 0) {
++    const line = stdinBuf.slice(0, idx).trim();
++    stdinBuf = stdinBuf.slice(idx + 1);
++    if (!line) continue;
++    let msg;
++    try {
++      msg = JSON.parse(line);
++    } catch {
++      sendError(null, -32700, "Parse error");
++      continue;
++    }
++    handleMessage(msg);
++  }
++});
++
++function shutdown() {
++  killAllRuns();
++  try {
++    saveStore();
++  } catch {
++    /* best effort */
++  }
++  process.exit(0);
++}
++process.stdin.on("end", shutdown);
++process.stdin.on("close", shutdown);
++process.on("SIGINT", shutdown);
++process.on("SIGTERM", shutdown);
++process.on("uncaughtException", (err) => {
++  process.stderr.write(`[${SERVER_NAME}] uncaughtException: ${err && err.stack ? err.stack : err}\n`);
++});
++
++process.stderr.write(`[${SERVER_NAME}] ready (workspace: ${WORKSPACE_ROOT})\n`);
+diff --git a/apps/zcode-cli/packages/hba-run-plugin/ui/panel.html b/apps/zcode-cli/packages/hba-run-plugin/ui/panel.html
+new file mode 100644
+index 00000000..de8d43d1
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-run-plugin/ui/panel.html
+@@ -0,0 +1,815 @@
++<!DOCTYPE html>
++<html lang="zh-CN">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width, initial-scale=1">
++<title>HBA 运行面板</title>
++<style>
++  :root {
++    --bg: #1e1f24;
++    --bg2: #26272e;
++    --bg3: #2e3038;
++    --fg: #e6e6e6;
++    --fg-dim: #9a9aa2;
++    --accent: #4f8cff;
++    --ok: #3fb96f;
++    --err: #e5534b;
++    --warn: #d4a72c;
++    --border: #3a3c45;
++    --mono: "Cascadia Code", Consolas, "Courier New", monospace;
++  }
++  * { box-sizing: border-box; }
++  html, body { margin: 0; padding: 0; height: 100%; }
++  body {
++    background: var(--bg);
++    color: var(--fg);
++    font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
++    display: flex;
++    flex-direction: column;
++    min-width: 640px;
++  }
++  header {
++    display: flex;
++    align-items: center;
++    gap: 12px;
++    padding: 8px 14px;
++    background: var(--bg2);
++    border-bottom: 1px solid var(--border);
++  }
++  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
++  header .spacer { flex: 1; }
++  .badge {
++    display: inline-flex;
++    align-items: center;
++    gap: 5px;
++    padding: 1px 8px;
++    border-radius: 10px;
++    font-size: 11px;
++    background: var(--bg3);
++    color: var(--fg-dim);
++    white-space: nowrap;
++  }
++  .badge.ok { color: var(--ok); }
++  .badge.err { color: var(--err); }
++  .badge.run { color: var(--accent); }
++  .badge.run::before {
++    content: "";
++    width: 7px; height: 7px;
++    border-radius: 50%;
++    background: var(--accent);
++    animation: pulse 1.2s infinite;
++  }
++  @keyframes pulse { 50% { opacity: 0.25; } }
++
++  main {
++    flex: 1;
++    display: flex;
++    min-height: 0;
++  }
++  aside {
++    width: 240px;
++    min-width: 200px;
++    border-right: 1px solid var(--border);
++    background: var(--bg2);
++    display: flex;
++    flex-direction: column;
++    min-height: 0;
++  }
++  aside .head, .section-head {
++    display: flex;
++    align-items: center;
++    gap: 6px;
++    padding: 8px 10px;
++    border-bottom: 1px solid var(--border);
++    font-weight: 600;
++  }
++  aside .head .spacer, .section-head .spacer { flex: 1; }
++  #config-items { flex: 1; overflow: auto; padding: 6px; }
++  .config-item {
++    padding: 7px 9px;
++    border-radius: 6px;
++    cursor: pointer;
++    border: 1px solid transparent;
++    margin-bottom: 4px;
++  }
++  .config-item:hover { background: var(--bg3); }
++  .config-item.selected { background: var(--bg3); border-color: var(--accent); }
++  .config-item .name { font-weight: 600; word-break: break-all; }
++  .config-item .cmd {
++    color: var(--fg-dim);
++    font-family: var(--mono);
++    font-size: 11px;
++    white-space: nowrap;
++    overflow: hidden;
++    text-overflow: ellipsis;
++  }
++
++  section#work {
++    flex: 1;
++    display: flex;
++    flex-direction: column;
++    min-width: 0;
++    overflow: auto;
++    padding: 10px 12px;
++    gap: 10px;
++  }
++  .card {
++    background: var(--bg2);
++    border: 1px solid var(--border);
++    border-radius: 8px;
++    overflow: hidden;
++  }
++  .card .body { padding: 10px 12px; }
++  .form-grid {
++    display: grid;
++    grid-template-columns: 90px 1fr;
++    gap: 8px 10px;
++    align-items: start;
++  }
++  .form-grid label { color: var(--fg-dim); padding-top: 5px; }
++  input[type=text], textarea {
++    width: 100%;
++    background: var(--bg);
++    color: var(--fg);
++    border: 1px solid var(--border);
++    border-radius: 5px;
++    padding: 6px 8px;
++    font-family: var(--mono);
++    font-size: 12px;
++    outline: none;
++  }
++  input[type=text]:focus, textarea:focus { border-color: var(--accent); }
++  textarea { resize: vertical; min-height: 64px; }
++  .hint { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
++
++  button {
++    background: var(--bg3);
++    color: var(--fg);
++    border: 1px solid var(--border);
++    border-radius: 6px;
++    padding: 5px 12px;
++    font-size: 12px;
++    cursor: pointer;
++  }
++  button:hover:not(:disabled) { border-color: var(--accent); }
++  button:disabled { opacity: 0.45; cursor: default; }
++  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
++  button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
++  button.small { padding: 2px 8px; font-size: 11px; }
++  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
++  .toolbar .spacer { flex: 1; }
++
++  #runs-bar { display: flex; gap: 8px; flex-wrap: wrap; }
++  .run-chip {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++    background: var(--bg2);
++    border: 1px solid var(--border);
++    border-radius: 8px;
++    padding: 5px 10px;
++    cursor: pointer;
++  }
++  .run-chip.current { border-color: var(--accent); }
++
++  #console-box .body { display: flex; flex-direction: column; gap: 8px; }
++  #console {
++    background: #141519;
++    border: 1px solid var(--border);
++    border-radius: 6px;
++    font-family: var(--mono);
++    font-size: 12px;
++    padding: 8px 10px;
++    height: 240px;
++    overflow: auto;
++    white-space: pre-wrap;
++    word-break: break-all;
++  }
++  #console .l-stderr { color: var(--err); }
++  #console .l-system { color: var(--warn); }
++  #console .l-stdout { color: var(--fg); }
++
++  table { width: 100%; border-collapse: collapse; font-size: 12px; }
++  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
++  th { color: var(--fg-dim); font-weight: 600; white-space: nowrap; }
++  td { word-break: break-all; }
++  tr.clickable { cursor: pointer; }
++  tr.clickable:hover { background: var(--bg3); }
++
++  .empty { color: var(--fg-dim); padding: 12px; text-align: center; }
++  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
++  .tag { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
++</style>
++</head>
++<body>
++<header>
++  <h1>HBA 运行面板</h1>
++  <span id="conn-badge" class="badge">桥连接中…</span>
++  <span class="spacer"></span>
++  <span id="workspace-tag" class="tag"></span>
++  <button id="btn-open-preview" class="primary" disabled>打开预览</button>
++</header>
++<main>
++  <aside>
++    <div class="head">
++      运行配置
++      <span class="spacer"></span>
++      <button class="small" id="btn-new">新建</button>
++      <button class="small" id="btn-dup">复制</button>
++      <button class="small danger" id="btn-del">删除</button>
++    </div>
++    <div id="config-items"><div class="empty">暂无配置</div></div>
++  </aside>
++
++  <section id="work">
++    <div class="card">
++      <div class="section-head">
++        <span id="form-title">配置编辑</span>
++        <span class="spacer"></span>
++        <span id="form-id" class="tag"></span>
++        <button class="primary" id="btn-save">保存</button>
++        <button id="btn-run">运行</button>
++      </div>
++      <div class="body">
++        <div class="form-grid">
++          <label for="f-name">名称</label>
++          <input type="text" id="f-name" placeholder="例如：前端开发服务">
++          <label for="f-command">启动命令</label>
++          <input type="text" id="f-command" placeholder="例如：npm run dev">
++          <label for="f-cwd">工作目录</label>
++          <div>
++            <input type="text" id="f-cwd" placeholder="留空 = 工作区根目录;可填相对或绝对路径">
++            <div class="hint">相对路径相对于工作区根目录解析</div>
++          </div>
++          <label for="f-env">环境变量</label>
++          <div>
++            <textarea id="f-env" placeholder="每行一条 KEY=VALUE&#10;PORT=5173&#10;NODE_ENV=development"></textarea>
++            <div class="hint">每行一条 KEY=VALUE,以 # 开头的行为注释</div>
++          </div>
++          <label for="f-preview">预览地址</label>
++          <div>
++            <input type="text" id="f-preview" placeholder="例如：http://localhost:5173">
++            <div class="hint">配置后,该配置运行成功时可一键打开预览</div>
++          </div>
++        </div>
++      </div>
++    </div>
++
++    <div class="card" id="console-box">
++      <div class="section-head">
++        运行输出
++        <span id="console-run-tag" class="tag"></span>
++        <span class="spacer"></span>
++        <label class="hint"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
++        <button class="small" id="btn-clear">清空</button>
++        <button class="small" id="btn-copy">复制</button>
++      </div>
++      <div class="body">
++        <div id="runs-bar"></div>
++        <div id="console"><div class="empty">选择一个运行查看输出</div></div>
++      </div>
++    </div>
++
++    <div class="card">
++      <div class="section-head">
++        任务历史
++        <span class="spacer"></span>
++        <button class="small" id="btn-refresh-history">刷新</button>
++      </div>
++      <div class="body" style="padding:0">
++        <table>
++          <thead>
++            <tr>
++              <th>配置</th><th>命令</th><th>开始时间</th><th>结束时间</th><th>退出码</th><th>状态</th><th>操作</th>
++            </tr>
++          </thead>
++          <tbody id="history-body">
++            <tr><td colspan="7" class="empty">暂无历史记录</td></tr>
++          </tbody>
++        </table>
++      </div>
++    </div>
++  </section>
++</main>
++
++<script>
++"use strict";
++/* ===========================================================================
++ * bridge 适配层(独立块,便于集成期替换)
++ * 协议来源:对 ZCode 官方 pdf-plugin 的 .zcode-plugin/plugin.json + dist/ui/panel.html
++ * 反推得到的 MCP-over-postMessage 桥:
++ *   - 面板 iframe 是一个 MCP client,JSON-RPC 2.0 消息原样经 window.parent.postMessage
++ *     发往宿主,window "message" 事件收取(e.source 必须是 window.parent);
++ *   - 握手:initialize(protocolVersion "2025-06-18") -> notifications/initialized
++ *     -> ui/notifications/initialized(UI 扩展握手);
++ *   - 之后走标准 MCP:tools/call、resources/read、resources/subscribe,
++ *     服务端以 notifications/resources/updated 推送状态变化;
++ *   - 面板可发 ui/notifications/size-changed {width,height} 通知宿主尺寸,
++ *     宿主可发 ui/notifications/request-teardown 要求面板清理。
++ * 结论为反推所得,集成期需与宿主联测校验(见 README「桥协议结论」)。
++ * ======================================================================== */
++const Bridge = (() => {
++  const pending = new Map();
++  const resourceListeners = new Set();
++  const teardownListeners = new Set();
++  let nextId = 1;
++  let connected = false;
++
++  window.addEventListener("message", (event) => {
++    if (event.source !== window.parent) return;
++    const msg = event.data;
++    if (!msg || msg.jsonrpc !== "2.0") return;
++    if (msg.id !== undefined && msg.id !== null && (msg.result !== undefined || msg.error !== undefined)) {
++      const entry = pending.get(msg.id);
++      if (!entry) return;
++      pending.delete(msg.id);
++      clearTimeout(entry.timer);
++      if (msg.error) entry.reject(new Error(msg.error.message || "JSON-RPC error"));
++      else entry.resolve(msg.result);
++      return;
++    }
++    if (typeof msg.method === "string") {
++      if (msg.method === "notifications/resources/updated") {
++        for (const cb of resourceListeners) { try { cb(msg.params || {}); } catch (e) { console.error(e); } }
++      } else if (msg.method === "ui/notifications/request-teardown") {
++        for (const cb of teardownListeners) { try { cb(); } catch (e) { console.error(e); } }
++      }
++    }
++  });
++
++  function request(method, params, timeoutMs = 15000) {
++    return new Promise((resolve, reject) => {
++      const id = nextId++;
++      const timer = setTimeout(() => {
++        pending.delete(id);
++        reject(new Error("bridge 请求超时: " + method));
++      }, timeoutMs);
++      pending.set(id, { resolve, reject, timer });
++      window.parent.postMessage({ jsonrpc: "2.0", id, method, params: params || {} }, "*");
++    });
++  }
++
++  function notify(method, params) {
++    window.parent.postMessage({ jsonrpc: "2.0", method, params: params || {} }, "*");
++  }
++
++  async function connect() {
++    const result = await request("initialize", {
++      protocolVersion: "2025-06-18",
++      capabilities: {},
++      clientInfo: { name: "hba-run-panel", version: "0.1.0" }
++    });
++    notify("notifications/initialized", {});
++    notify("ui/notifications/initialized", {});
++    connected = true;
++    return result;
++  }
++
++  async function callTool(name, args) {
++    const result = await request("tools/call", { name, arguments: args || {} }, 30000);
++    if (result && result.isError) {
++      const text = (result.content || []).map((c) => c.text || "").join("\n");
++      throw new Error(text || ("工具执行失败: " + name));
++    }
++    return result && result.structuredContent !== undefined ? result.structuredContent : result;
++  }
++
++  async function readResource(uri) {
++    const result = await request("resources/read", { uri });
++    return result && result.contents ? result.contents[0] : null;
++  }
++
++  async function subscribe(uri) {
++    try { await request("resources/subscribe", { uri }); } catch (e) { console.warn(e); }
++  }
++
++  function onResourceUpdate(cb) { resourceListeners.add(cb); return () => resourceListeners.delete(cb); }
++  function onTeardown(cb) { teardownListeners.add(cb); return () => teardownListeners.delete(cb); }
++
++  function sendSizeChanged() {
++    const width = Math.ceil(window.innerWidth);
++    const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
++    notify("ui/notifications/size-changed", { width, height });
++  }
++
++  return {
++    connect, request, notify, callTool, readResource, subscribe,
++    onResourceUpdate, onTeardown, sendSizeChanged,
++    get connected() { return connected; }
++  };
++})();
++
++/* ===========================================================================
++ * 应用逻辑
++ * ======================================================================== */
++const $ = (id) => document.getElementById(id);
++
++const App = {
++  configs: [],
++  runs: [],
++  history: [],
++  selectedConfigId: null,
++  currentRunId: null,
++  outputByRun: Object.create(null), // runId -> { lines: [], since: 0 }
++  autoScroll: true,
++  pollTimer: null,
++  refreshTimer: null
++};
++
++function fmtTime(iso) {
++  if (!iso) return "—";
++  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
++}
++
++function stateBadge(run) {
++  if (run.state === "running") return '<span class="badge run">运行中</span>';
++  if (run.stopped && run.state === "exited") return '<span class="badge">已停止</span>';
++  if (run.state === "exited") return '<span class="badge ok">已完成</span>';
++  return '<span class="badge err">失败</span>';
++}
++
++function escapeHtml(s) {
++  return String(s).replace(/[&<>"']/g, (c) => ({
++    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
++  }[c]));
++}
++
++function parseEnvLines(text) {
++  const env = {};
++  for (const raw of String(text || "").split("\n")) {
++    const line = raw.trim();
++    if (!line || line.startsWith("#")) continue;
++    const i = line.indexOf("=");
++    if (i <= 0) continue;
++    env[line.slice(0, i).trim()] = line.slice(i + 1);
++  }
++  return env;
++}
++
++function envToLines(env) {
++  return Object.entries(env || {}).map(([k, v]) => k + "=" + v).join("\n");
++}
++
++// ---- 渲染 ------------------------------------------------------------------
++
++function renderConfigs() {
++  const box = $("config-items");
++  if (!App.configs.length) {
++    box.innerHTML = '<div class="empty">暂无配置,点「新建」创建</div>';
++    return;
++  }
++  box.innerHTML = App.configs.map((c) => `
++    <div class="config-item ${c.id === App.selectedConfigId ? "selected" : ""}" data-id="${escapeHtml(c.id)}">
++      <div class="name">${escapeHtml(c.name)}</div>
++      <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
++    </div>`).join("");
++  for (const el of box.querySelectorAll(".config-item")) {
++    el.addEventListener("click", () => selectConfig(el.dataset.id));
++    el.addEventListener("dblclick", () => startRunOf(el.dataset.id));
++  }
++}
++
++function renderForm() {
++  const c = App.configs.find((x) => x.id === App.selectedConfigId);
++  $("form-title").textContent = c ? "配置编辑" : "新建配置";
++  $("form-id").textContent = c ? c.id : "";
++  $("f-name").value = c ? c.name : "";
++  $("f-command").value = c ? c.command : "";
++  $("f-cwd").value = c ? (c.cwd || "") : "";
++  $("f-env").value = c ? envToLines(c.env) : "";
++  $("f-preview").value = c ? (c.previewUrl || "") : "";
++  $("btn-run").disabled = !c;
++  $("btn-dup").disabled = !c;
++  $("btn-del").disabled = !c;
++  updatePreviewButton();
++}
++
++function renderRunsBar() {
++  const bar = $("runs-bar");
++  const live = App.runs.filter((r) => r.state === "running");
++  const recent = App.runs.filter((r) => r.state !== "running").slice(-5);
++  const items = [...live, ...recent];
++  if (!items.length) { bar.innerHTML = ""; return; }
++  bar.innerHTML = items.map((r) => `
++    <div class="run-chip ${r.runId === App.currentRunId ? "current" : ""}" data-run="${escapeHtml(r.runId)}">
++      ${stateBadge(r)}
++      <span>${escapeHtml(r.configName || r.command)}</span>
++      ${r.state === "running" ? `<button class="small danger" data-stop="${escapeHtml(r.runId)}">停止</button>` : ""}
++    </div>`).join("");
++  for (const el of bar.querySelectorAll(".run-chip")) {
++    el.addEventListener("click", (e) => {
++      if (e.target.dataset.stop) return;
++      selectRun(el.dataset.run);
++    });
++  }
++  for (const el of bar.querySelectorAll("[data-stop]")) {
++    el.addEventListener("click", (e) => {
++      e.stopPropagation();
++      stopRun(el.dataset.stop);
++    });
++  }
++}
++
++function renderHistory() {
++  const body = $("history-body");
++  if (!App.history.length) {
++    body.innerHTML = '<tr><td colspan="7" class="empty">暂无历史记录</td></tr>';
++    return;
++  }
++  body.innerHTML = App.history.map((h) => `
++    <tr class="clickable" data-run="${escapeHtml(h.id)}">
++      <td>${escapeHtml(h.configName || "—")}</td>
++      <td class="tag" title="${escapeHtml(h.command)}">${escapeHtml(h.command)}</td>
++      <td>${fmtTime(h.startedAt)}</td>
++      <td>${fmtTime(h.endedAt)}</td>
++      <td>${h.exitCode === null || h.exitCode === undefined ? "—" : h.exitCode}</td>
++      <td>${stateBadge(h)}</td>
++      <td>
++        <button class="small" data-view="${escapeHtml(h.id)}">查看输出</button>
++        ${h.previewUrl && h.state === "exited" && !h.stopped
++          ? `<button class="small" data-preview="${escapeHtml(h.previewUrl)}">打开预览</button>` : ""}
++      </td>
++    </tr>`).join("");
++  for (const el of body.querySelectorAll("[data-view]")) {
++    el.addEventListener("click", (e) => { e.stopPropagation(); selectRun(el.dataset.view); });
++  }
++  for (const el of body.querySelectorAll("[data-preview]")) {
++    el.addEventListener("click", (e) => { e.stopPropagation(); openPreview(el.dataset.preview); });
++  }
++  for (const el of body.querySelectorAll("tr[data-run]")) {
++    el.addEventListener("click", () => selectRun(el.dataset.run));
++  }
++}
++
++function renderConsole() {
++  const tag = $("console-run-tag");
++  const box = $("console");
++  const view = App.outputByRun[App.currentRunId];
++  tag.textContent = App.currentRunId ? App.currentRunId : "";
++  if (!view || !view.lines.length) {
++    box.innerHTML = '<div class="empty">暂无输出</div>';
++    return;
++  }
++  const frag = document.createDocumentFragment();
++  for (const l of view.lines) {
++    const div = document.createElement("div");
++    div.className = "l-" + (l.stream || "stdout");
++    div.textContent = l.text;
++    frag.appendChild(div);
++  }
++  box.innerHTML = "";
++  box.appendChild(frag);
++  if (App.autoScroll) box.scrollTop = box.scrollHeight;
++}
++
++function updatePreviewButton() {
++  const btn = $("btn-open-preview");
++  const c = App.configs.find((x) => x.id === App.selectedConfigId);
++  let url = "";
++  if (c && c.previewUrl) {
++    // 最近一次该配置的成功运行(实时优先,其次历史)
++    const liveOk = [...App.runs].reverse().find(
++      (r) => r.configId === c.id && r.state === "exited" && !r.stopped && !r.spawnError
++    );
++    const histOk = [...App.history].find(
++      (h) => h.configId === c.id && h.state === "exited" && !h.stopped
++    );
++    if (liveOk || histOk) url = c.previewUrl;
++  }
++  btn.disabled = !url;
++  btn.dataset.url = url;
++}
++
++// ---- 动作 ------------------------------------------------------------------
++
++function selectConfig(id) {
++  App.selectedConfigId = id;
++  renderConfigs();
++  renderForm();
++}
++
++function selectRun(runId) {
++  App.currentRunId = runId;
++  if (!App.outputByRun[runId]) App.outputByRun[runId] = { lines: [], since: 0 };
++  renderRunsBar();
++  renderConsole();
++  fetchOutput(runId).catch((e) => console.warn(e));
++}
++
++async function refreshAll() {
++  await Promise.all([refreshConfigs(), refreshRuns(), refreshHistory()]);
++}
++
++async function refreshConfigs() {
++  const res = await Bridge.callTool("run_config_list", {});
++  App.configs = res.configs || [];
++  if (App.selectedConfigId && !App.configs.some((c) => c.id === App.selectedConfigId)) {
++    App.selectedConfigId = null;
++  }
++  if (!App.selectedConfigId && App.configs.length) {
++    App.selectedConfigId = App.configs[0].id;
++  }
++  renderConfigs();
++  renderForm();
++}
++
++async function refreshRuns() {
++  const res = await Bridge.callTool("run_status", {});
++  App.runs = res.runs || [];
++  renderRunsBar();
++  updatePreviewButton();
++}
++
++async function refreshHistory() {
++  const res = await Bridge.callTool("run_history", { limit: 50 });
++  App.history = res.history || [];
++  renderHistory();
++  updatePreviewButton();
++}
++
++async function fetchOutput(runId) {
++  const view = App.outputByRun[runId] || (App.outputByRun[runId] = { lines: [], since: 0 });
++  const res = await Bridge.callTool("run_output", { runId, since: view.since });
++  if (res.lines && res.lines.length) {
++    view.lines.push(...res.lines);
++    if (view.lines.length > 5000) view.lines.splice(0, view.lines.length - 5000);
++  }
++  view.since = res.nextSince !== undefined ? res.nextSince : view.since;
++  if (App.currentRunId === runId) renderConsole();
++}
++
++async function saveConfig() {
++  const payload = {
++    name: $("f-name").value.trim(),
++    command: $("f-command").value.trim(),
++    cwd: $("f-cwd").value.trim(),
++    env: parseEnvLines($("f-env").value),
++    previewUrl: $("f-preview").value.trim()
++  };
++  if (!payload.name || !payload.command) {
++    alert("名称和启动命令不能为空");
++    return;
++  }
++  if (App.selectedConfigId) payload.id = App.selectedConfigId;
++  const res = await Bridge.callTool("run_config_save", payload);
++  if (res.config) App.selectedConfigId = res.config.id;
++  await refreshConfigs();
++}
++
++async function deleteConfig() {
++  if (!App.selectedConfigId) return;
++  if (!confirm("确认删除该运行配置?历史记录会保留。")) return;
++  await Bridge.callTool("run_config_delete", { configId: App.selectedConfigId });
++  App.selectedConfigId = null;
++  await refreshConfigs();
++}
++
++async function duplicateConfig() {
++  if (!App.selectedConfigId) return;
++  const res = await Bridge.callTool("run_config_duplicate", { configId: App.selectedConfigId });
++  if (res.config) App.selectedConfigId = res.config.id;
++  await refreshConfigs();
++}
++
++function newConfig() {
++  App.selectedConfigId = null;
++  renderConfigs();
++  renderForm();
++  $("f-name").focus();
++}
++
++async function startRunOf(configId) {
++  const res = await Bridge.callTool("run_start", { configId });
++  if (res.run) {
++    App.selectedConfigId = configId;
++    selectRun(res.run.runId);
++  }
++  await Promise.all([refreshRuns(), refreshHistory()]);
++}
++
++async function stopRun(runId) {
++  try {
++    await Bridge.callTool("run_stop", { runId });
++  } catch (e) {
++    alert("停止失败: " + e.message);
++  }
++  setTimeout(() => {
++    refreshRuns().catch(() => {});
++    refreshHistory().catch(() => {});
++  }, 800);
++}
++
++function openPreview(url) {
++  if (!url) return;
++  window.open(url, "_blank", "noopener,noreferrer");
++}
++
++async function copyConsole() {
++  const view = App.outputByRun[App.currentRunId];
++  const text = view ? view.lines.map((l) => l.text).join("\n") : "";
++  if (!text) return;
++  try {
++    await navigator.clipboard.writeText(text);
++  } catch (e) {
++    const ta = document.createElement("textarea");
++    ta.value = text;
++    document.body.appendChild(ta);
++    ta.select();
++    document.execCommand("copy");
++    ta.remove();
++  }
++}
++
++function clearConsole() {
++  if (!App.currentRunId) return;
++  App.outputByRun[App.currentRunId] = { lines: [], since: 0 };
++  renderConsole();
++  fetchOutput(App.currentRunId).catch(() => {});
++}
++
++// ---- 启动 ------------------------------------------------------------------
++
++function scheduleRefresh() {
++  if (App.refreshTimer) return;
++  App.refreshTimer = setTimeout(() => {
++    App.refreshTimer = null;
++    Promise.all([refreshRuns(), refreshHistory()])
++      .then(() => {
++        if (App.currentRunId) return fetchOutput(App.currentRunId);
++      })
++      .catch((e) => console.warn(e));
++  }, 250);
++}
++
++function startPolling() {
++  if (App.pollTimer) return;
++  App.pollTimer = setInterval(() => {
++    const anyRunning = App.runs.some((r) => r.state === "running");
++    if (!anyRunning) return;
++    Promise.all([refreshRuns()])
++      .then(() => (App.currentRunId ? fetchOutput(App.currentRunId) : null))
++      .catch(() => {});
++  }, 1200);
++}
++
++async function init() {
++  // 事件绑定
++  $("btn-new").addEventListener("click", newConfig);
++  $("btn-save").addEventListener("click", () => saveConfig().catch((e) => alert(e.message)));
++  $("btn-del").addEventListener("click", () => deleteConfig().catch((e) => alert(e.message)));
++  $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => alert(e.message)));
++  $("btn-run").addEventListener("click", () => {
++    if (App.selectedConfigId) startRunOf(App.selectedConfigId).catch((e) => alert(e.message));
++  });
++  $("btn-clear").addEventListener("click", clearConsole);
++  $("btn-copy").addEventListener("click", () => copyConsole().catch((e) => console.warn(e)));
++  $("chk-autoscroll").addEventListener("change", (e) => {
++    App.autoScroll = e.target.checked;
++    if (App.autoScroll) renderConsole();
++  });
++  $("btn-refresh-history").addEventListener("click", () => refreshHistory().catch((e) => console.warn(e)));
++  $("btn-open-preview").addEventListener("click", () => openPreview($("btn-open-preview").dataset.url));
++
++  const badge = $("conn-badge");
++  if (window.parent === window) {
++    badge.textContent = "独立打开模式(未连接宿主)";
++    badge.className = "badge err";
++    return;
++  }
++
++  try {
++    await Bridge.connect();
++    badge.textContent = "已连接";
++    badge.className = "badge ok";
++  } catch (e) {
++    badge.textContent = "桥连接失败: " + e.message;
++    badge.className = "badge err";
++    return;
++  }
++
++  Bridge.onResourceUpdate(() => {
++    scheduleRefresh();
++    if (App.currentRunId) fetchOutput(App.currentRunId).catch(() => {});
++    startPolling();
++  });
++  Bridge.onTeardown(() => {
++    if (App.pollTimer) clearInterval(App.pollTimer);
++    if (App.refreshTimer) clearTimeout(App.refreshTimer);
++  });
++
++  await Bridge.subscribe("ui://run/state");
++  await refreshAll();
++  startPolling();
++  Bridge.sendSizeChanged();
++  window.addEventListener("resize", () => Bridge.sendSizeChanged());
++}
++
++init().catch((e) => {
++  console.error(e);
++  const badge = $("conn-badge");
++  badge.textContent = "初始化失败: " + e.message;
++  badge.className = "badge err";
++});
++</script>
++</body>
++</html>
+diff --git a/apps/zcode-cli/packages/hba-uigen-plugin/.zcode-plugin/plugin.json b/apps/zcode-cli/packages/hba-uigen-plugin/.zcode-plugin/plugin.json
+new file mode 100644
+index 00000000..b5cb6680
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-uigen-plugin/.zcode-plugin/plugin.json
+@@ -0,0 +1,41 @@
++{
++  "name": "hba-uigen",
++  "version": "0.1.1",
++  "description": "UI prototype generation panel (HBA FR-2): multi-screen canvas, 390px preview, demo playback, HTML/JSX/Vue artifacts, versions, import/export.",
++  "description_i18n": {
++    "en": "UI prototype panel migrated from HBA ui_gen (FR-2): generate multi-screen prototypes from a requirement prompt, browse them on a zoomable/draggable canvas, preview in a 390px phone frame, play them as a demo, switch HTML/JSX/Vue artifacts, manage versions, import from a local directory and export.",
++    "zh-CN": "UI 原型面板（HBA FR-2 迁移）：需求输入生成多屏原型，画布缩放/拖拽/跳转热点，390px 手机预览，演示播放，HTML/JSX/Vue 产物切换，历史版本、本地目录导入与导出。"
++  },
++  "author": {
++    "name": "HBA->ZCode Migration"
++  },
++  "license": "Apache-2.0",
++  "mcpServers": {
++    "hba-uigen": {
++      "type": "stdio",
++      "command": "node",
++      "args": ["${ZCODE_PLUGIN_ROOT}/server.mjs"],
++      "cwd": "${ZCODE_PROJECT_DIR}",
++      "env": {
++        "ZCODE_WORKSPACE_ROOT": "${ZCODE_PROJECT_DIR}",
++        "HBA_ROOT": "${ZCODE_PROJECT_DIR}/HBA"
++      },
++      "isolation": "workspace"
++    }
++  },
++  "ui": {
++    "surfaces": [
++      {
++        "id": "hba-uigen",
++        "title": {
++          "zh-CN": "UI 原型",
++          "en-US": "UI Prototype"
++        },
++        "icon": "layout",
++        "server": "hba-uigen",
++        "resourceUri": "ui://hba-uigen/panel.html",
++        "availability": "session"
++      }
++    ]
++  }
++}
+diff --git a/apps/zcode-cli/packages/hba-uigen-plugin/README.md b/apps/zcode-cli/packages/hba-uigen-plugin/README.md
+new file mode 100644
+index 00000000..2c2c5474
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-uigen-plugin/README.md
+@@ -0,0 +1,163 @@
++# hba-uigen — UI 原型面板插件(HBA FR-2 迁移)
++
++HBA `ui_gen` 多屏 UI 原型生成能力迁移到 ZCode 插件形态。面板 + 手写 MCP stdio
++server + Python sidecar,全部零外部依赖(Node 内置 / Python 标准库)。
++
++功能覆盖 PRD FR-2:
++
++| 需求 | 状态 | 落点 |
++|---|---|---|
++| FR-2-1 需求输入生成 | P0 ✅ | panel 需求输入 + `uigen_generate` |
++| FR-2-2 多屏画布(缩放/拖拽/跳转热点) | P0 ✅ | panel 画布网格 + 热点叠加层 |
++| FR-2-3 HTML/JSX/Vue 产物 | P0 ✅ | 每屏三产物 + 格式切换/复制 |
++| FR-2-4 390px 手机预览 | P0 ✅ | 390×844 iframe 实时预览 |
++| FR-2-5 演示播放(顺序/暂停/步进) | P0 ✅ | 播放栏 + 空格/左右方向键 |
++| FR-2-6 本地目录导入 | P1 ✅ | `uigen_import_dir` |
++| FR-2-7 历史版本 | P1 ✅ | `uigen_list_versions` / `uigen_get_version` |
++| FR-2-8 导出 | P1 ✅ | `uigen_export`(产物 + manifest.json) |
++
++## 架构(文字图)
++
++```
++ZCode 宿主(host)
++│  plugin.json: ui.surfaces[{id:"hba-uigen", server:"hba-uigen",
++│                            resourceUri:"ui://hba-uigen/panel.html",
++│                            mimeType:"text/html;profile=mcp-app"}]
++│
++├── 面板 iframe(ui/panel.html,内联 ui/bridge.js)
++│      │  MCP JSON-RPC 2.0 over window.parent.postMessage
++│      │  (initialize → notifications/initialized → ui/initialize)
++│      │  callTool(name,args) / onResourceUpdate(cb) / onProgress(cb)
++│      ▼
++├── MCP server(plugins/hba-uigen/server.mjs,stdio,零依赖)
++│      │  tools: uigen_generate / uigen_list_versions / uigen_get_version
++│      │        uigen_export / uigen_import_dir
++│      │  resources: ui://hba-uigen/{panel.html,bridge.js,state.json}
++│      │  notifications/progress + notifications/message(生成进度)
++│      │  子进程 JSON(stdin/stdout)
++│      ▼
++└── Python sidecar(sidecar/uigen_sidecar.py,标准库)
++       │  try: import app.ui_gen(HBA_ROOT) → 复用 HBA prompts 元数据
++       │  except: 降级内置演示生成器(与 server.mjs 内置演示器行为一致)
++       ▼
++   版本存储 <store>/​.hba/uigen/ 或 $UIGEN_STORE_DIR
++   versions.json + <versionId>/{meta.json, screens/sN.{html,jsx,vue}}
++```
++
++生成链路:`server.mjs` 优先拉起 sidecar(`uigen_generate`);sidecar 不可用
++(python 缺失/超时/崩溃)时回退到 server.mjs 内置演示生成器,保证端到端可跑。
++store 布局在 server.mjs 与 sidecar 间共享(`UIGEN_STORE_DIR` 穿透子进程)。
++
++## 桥协议发现记录(解剖 D:\ZCode\resources\glm\packages\pdf-plugin)
++
++从官方 pdf-plugin(`.zcode-plugin/plugin.json`、`dist/server.mjs`、`dist/ui/bundle-0.txt`)
++与 `resources/app.asar` 反推,证据与结论:
++
++1. **清单 schema**(pdf-plugin `.zcode-plugin/plugin.json` 原文证实):
++   `ui.surfaces = [{ id, title:{"zh-CN","en-US"}, icon, server, resourceUri,
++   availability:"session" }]`;`mcpServers.<name> = { type:"stdio", command, args,
++   cwd, env, isolation:"workspace" }`,args 用 `${ZCODE_PLUGIN_ROOT}` /
++   `${ZCODE_PROJECT_DIR}` 占位符。本插件 plugin.json 按此结构书写。
++2. **面板资源经 MCP resources/read 提供**,URI 形如 `ui://<server>/<path>`
++   (pdf 为 `ui://pdf/panel.html`),MIME 为 `text/html;profile=mcp-app`
++   (bundle 中常量 `HTML_MIME = "text/html;profile=mcp-app"`,server.mjs 中同名)。
++3. **面板是 MCP client,不是自定义 RPC**:bundle 内嵌 MCP client SDK,
++   `connect(new Transport(window.parent, window.parent))`,传输层为
++   `window.parent.postMessage(msg, "*")` + `window "message"` 事件,信封即标准
++   JSON-RPC 2.0(`jsonrpc:"2.0"`),并有 zod 校验(`Ignoring non-JSON-RPC message`)。
++   可用方法含 `tools/call`、`resources/read`、`notifications/progress`、
++   `notifications/resources/updated` 等(在 bundle 中逐一出现)。
++4. **自定义握手**:`super.connect()`(即 MCP initialize + initialized)完成后追加
++   请求 `ui/initialize` `{ appInfo, appCapabilities, protocolVersion }`
++   (bundle 原文:`this.request({method:"ui/initialize",params:{appInfo,...}})`)。
++5. **宿主侧桥**(app.asar):`PluginUiBridge` 与 RPC 方法族
++   `mcp/uiCallTool`、`mcp/uiReadResource`、`mcp/uiListResources`、
++   `mcp/uiSubscribeResource`、`mcp/uiUnsubscribeResource`、`mcp/uiRegisterAppTools`、
++   `mcp/uiUnregisterAppTools`、`mcp/uiClaimAppToolCall`、`mcp/uiResolveAppToolCall`、
++   `mcp/uiSampling`、`mcp/uiOpenInstance`、`mcp/uiValidateInstance`、
++   `mcp/uiCloseInstance`;事件 op 含 `pluginUi.resourceUpdated`、
++   `pluginUi.resourceListChanged`、`pluginUi.instanceClosed`、`pluginUi.appToolCall`、
++   `pluginUi.followUp`、`pluginUi.pin/unpin` 等。appTools 是"模型调用面板内工具"
++   的注册通道(claim/resolve 两段式),本插件暂不使用。
++6. **面板状态持久化**:`getHostCapabilities()?.experimental?.["zcode/surface"]?.stateKey`
++   → localStorage(窗口位置记忆),可选增强,本插件未接。
++
++**落地**:`ui/bridge.js` 按上述协议实现适配层,接口
++`callTool(name,args)` / `onResourceUpdate(cb)` / `onProgress(cb)` / `connect()`。
++`ui/panel.html` 内联同一份 bridge 代码(单文件面板)。握手超时(默认 2.5s)或
++`window.parent === window` 时降级 `standalone` 本地演示后端,面板功能不受影响。
++
++**集成阶段校验项**(本机无宿主环境,未能实测的部分):
++- `ui/initialize` 的 `appCapabilities` 具体 schema(推断自 bundle 字段名,
++  `displayModes:["inline","fullscreen"]`),需在 ZCode 宿主里确认参数兼容性;
++- 宿主 proxy 是否把 `tools/call` 直接路由到 `mcpServers.hba-uigen`(机制推断如此);
++- `notifications/progress` 的 `progressToken` 透传(`params._meta.progressToken`);
++- appTools(registerAppTools)如需"模型唤起面板操作",为后续增强项。
++
++## HBA ui_gen 复用边界(只读参考)
++
++- HBA 真实生成栈:`app/ui_gen/` FastAPI(`routers/` 挂 `/api/ui-gen`,WS
++  `/ws/generate`、`/ws/generate-app`)、`services/model_bridge.py`(LLM 流式)、
++  `prompts/{html_css,html_tailwind,react_tailwind,vue_tailwind,planner,...}`、
++  `db/models.py`(Project/Screen/ScreenVersion/FlowEdge)。
++- **已复用**:`prompts/` 三个 `SYSTEM_PROMPT` 为纯字符串模块(其 `__init__.py`
++  全部为空,不触发 fastapi 依赖),sidecar 在 `HBA_ROOT` 可用时 import 并回传
++  prompt 元数据(`engine:"demo+hba-prompts"`,含 `MOBILE_WIDTH=390` 常量);
++  产物格式(html/jsx/vue)、390px 视口、多屏 + 热点(对应 HBA `FlowEdge`)的
++  概念模型均对齐 HBA 设计。
++- **未复用(依赖缺失即降级)**:`services/model_bridge.py` 的 LLM 真实生成、
++  WS 协议、SQLModel 存储、`diff_apply.py` 迭代编辑。这些需要 fastapi/sqlmodel/
++  structlog/LLM provider,超出零依赖约束;sidecar 的 `try_hba()` 任何 import
++  失败都静默降级为演示生成器(行为与 server.mjs 内置演示器一致:同屏幕命名表、
++  同卡片文案、同热点几何 y=774/h=70、同产物模板结构)。
++- 后续如接入真实生成:在 sidecar `cmd_generate` 内把 `demo_generate(...)` 替换为
++  HBA `UiGenModelBridge.stream_generate` 调用即可,接口返回结构保持不变。
++
++## 运行方式
++
++```bash
++# MCP server(stdio JSON-RPC 2.0,换行分隔;stdin 结束且无在途请求时退出)
++node plugins/hba-uigen/server.mjs
++
++# Python sidecar(子命令:generate/list_versions/get_version/export/import_dir)
++python sidecar/uigen_sidecar.py generate '{"prompt":"借阅 App","format":"html","screenCount":3}'
++echo '{"dir":"./protos"}' | python sidecar/uigen_sidecar.py import_dir
++
++# 测试(两套都要过)
++node --test tests/uigen/test-server.mjs
++python tests/uigen/test_sidecar.py        # 亦兼容: python -m pytest tests/uigen/test_sidecar.py
++
++# 面板(集成态走 ZCode 宿主;独立调试可静态托管)
++cd plugins/hba-uigen && python -m http.server 8931   # 打开 http://127.0.0.1:8931/ui/panel.html
++```
++
++环境变量:
++
++| 变量 | 含义 | 默认 |
++|---|---|---|
++| `UIGEN_STORE_DIR` | 版本存储目录 | `<cwd>/.hba/uigen` |
++| `UIGEN_SIDECAR` | sidecar 脚本路径 | `<plugin>/../../sidecar/uigen_sidecar.py` |
++| `UIGEN_PYTHON` | python 解释器 | `python`/`py`/`python3` 依次探测 |
++| `UIGEN_SIDECAR_TIMEOUT` | sidecar 超时(ms) | 20000 |
++| `UIGEN_FORCE_DEMO` | 置 1 跳过 sidecar 用内置演示器 | (未设) |
++| `HBA_ROOT` | HBA 仓库根(启用 HBA prompts 复用) | plugin.json 传 `${ZCODE_PROJECT_DIR}/HBA` |
++
++存储布局(server.mjs 与 sidecar 一致):
++`versions.json`(索引,新版本在后)、`<versionId>/meta.json`(含全部产物)、
++`<versionId>/screens/sN.{html,jsx,vue}`;`uigen_export` 默认导出到
++`<versionId>/export/`,产物 + `manifest.json`。
++
++## 遗留事项
++
++1. **桥协议集成校验**:上文"集成阶段校验项"4 条需在真实 ZCode 宿主里跑一遍
++   (panel ↔ host 的 `ui/initialize` 参数、progressToken 透传、资源订阅推送)。
++   bridge 已做超时降级,协议差异不会白屏。
++2. **真实 LLM 生成**:当前生成为演示生成器(结构完整、可预览/播放/导出);
++   接 HBA `UiGenModelBridge` 需放开零依赖约束或经 sidecar 外挂依赖环境。
++3. **打包形态**:plugin.json 的 `mcpServers.args` 指向 `${ZCODE_PLUGIN_ROOT}/server.mjs`,
++   sidecar 在插件目录外(`hba-on-zcode/sidecar/`);正式分发时把 sidecar 拷入插件
++   目录或用 `UIGEN_SIDECAR` 指定,README 已注明。
++4. **appTools / pin / followUp** 等宿主增强通道未接(非 FR-2 范围)。
++5. **演示播放**为定速 2.2s/屏顺序播放,无自定义时长/转场(FR-2-5 范围内)。
++6. **导入**仅认 `*.html`(与 HBA import_local 的多格式能力相比收敛);
++   JSX/Vue 导入产物为占位包装,原 HTML 内嵌注释保留。
+diff --git a/apps/zcode-cli/packages/hba-uigen-plugin/package.json b/apps/zcode-cli/packages/hba-uigen-plugin/package.json
+new file mode 100644
+index 00000000..0511b961
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-uigen-plugin/package.json
+@@ -0,0 +1,9 @@
++{
++  "$schema": "https://json.schemastore.org/package.json",
++  "name": "@zcode/hba-uigen-plugin",
++  "version": "0.1.1",
++  "private": true,
++  "description": "UI prototype generation panel (HBA FR-2): multi-screen canvas, 390px preview, demo playback, HTML/JSX/Vue artifacts, versions, import/export.",
++  "license": "Apache-2.0",
++  "type": "module"
++}
+diff --git a/apps/zcode-cli/packages/hba-uigen-plugin/server.mjs b/apps/zcode-cli/packages/hba-uigen-plugin/server.mjs
+new file mode 100644
+index 00000000..06952671
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-uigen-plugin/server.mjs
+@@ -0,0 +1,763 @@
++#!/usr/bin/env node
++/**
++ * hba-uigen MCP server — hand-written MCP stdio JSON-RPC 2.0, zero dependencies.
++ *
++ * Wire format (MCP stdio transport): newline-delimited JSON-RPC 2.0 messages
++ * on stdin/stdout. Nothing else is ever written to stdout (diagnostics go to
++ * stderr).
++ *
++ * Methods implemented:
++ *   initialize / notifications/initialized / ping
++ *   tools/list / tools/call
++ *       uigen_generate      — multi-screen prototype (sidecar first, built-in demo fallback)
++ *       uigen_list_versions — history (FR-2-7)
++ *       uigen_get_version   — full record incl. HTML/JSX/Vue artifacts (FR-2-3)
++ *       uigen_export        — write artifacts to a directory (FR-2-8)
++ *       uigen_import_dir    — import local *.html directory (FR-2-6)
++ *   resources/list / resources/read / resources/subscribe / resources/unsubscribe
++ *       ui://hba-uigen/panel.html   (text/html;profile=mcp-app)  — the panel UI
++ *       ui://hba-uigen/bridge.js    (text/javascript)            — panel bridge adapter
++ *       ui://hba-uigen/state.json   (application/json)           — live version index
++ *
++ * Generation emits notifications/progress (when the caller passes
++ * params._meta.progressToken) and notifications/message logs.
++ */
++
++import { spawn } from "node:child_process";
++import fs from "node:fs";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++
++const __dirname = path.dirname(fileURLToPath(import.meta.url));
++const SERVER_NAME = "hba-uigen";
++const SERVER_VERSION = "0.1.0";
++const PANEL_URI = `ui://${SERVER_NAME}/panel.html`;
++const BRIDGE_URI = `ui://${SERVER_NAME}/bridge.js`;
++const STATE_URI = `ui://${SERVER_NAME}/state.json`;
++const HTML_MIME = "text/html;profile=mcp-app";
++const PROTOCOL_FALLBACK = "2025-06-18";
++
++// ---------------------------------------------------------------------------
++// store — shared layout with sidecar/uigen_sidecar.py
++//   <storeDir>/versions.json          index: { versions: [...newest last], seq }
++//   <storeDir>/<versionId>/meta.json  full record (artifacts inline)
++//   <storeDir>/<versionId>/screens/   s1.html / s1.jsx / s1.vue per screen
++// ---------------------------------------------------------------------------
++
++function storeDir() {
++  const dir = process.env.UIGEN_STORE_DIR && process.env.UIGEN_STORE_DIR.trim();
++  return path.resolve(dir || path.join(process.cwd(), ".hba", "uigen"));
++}
++
++function ensureDir(p) {
++  fs.mkdirSync(p, { recursive: true });
++  return p;
++}
++
++function readIndex() {
++  const file = path.join(storeDir(), "versions.json");
++  try {
++    const idx = JSON.parse(fs.readFileSync(file, "utf8"));
++    if (idx && Array.isArray(idx.versions)) return idx;
++  } catch {
++    /* first run */
++  }
++  return { versions: [], seq: 0 };
++}
++
++function writeIndex(idx) {
++  ensureDir(storeDir());
++  fs.writeFileSync(path.join(storeDir(), "versions.json"), JSON.stringify(idx, null, 2), "utf8");
++}
++
++function newVersionId(idx) {
++  const ts = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
++  idx.seq = (idx.seq || 0) + 1;
++  return `v${ts}-${String(idx.seq).padStart(3, "0")}`;
++}
++
++function saveVersion(record) {
++  const idx = readIndex();
++  const id = record.id || newVersionId(idx);
++  const full = { ...record, id };
++  const vdir = ensureDir(path.join(storeDir(), id));
++  const sdir = ensureDir(path.join(vdir, "screens"));
++  for (const s of full.screens || []) {
++    fs.writeFileSync(path.join(sdir, `${s.id}.html`), s.html || "", "utf8");
++    fs.writeFileSync(path.join(sdir, `${s.id}.jsx`), s.jsx || "", "utf8");
++    fs.writeFileSync(path.join(sdir, `${s.id}.vue`), s.vue || "", "utf8");
++  }
++  fs.writeFileSync(path.join(vdir, "meta.json"), JSON.stringify(full, null, 2), "utf8");
++  idx.versions = idx.versions.filter((v) => v.id !== id);
++  idx.versions.push({
++    id,
++    createdAt: full.createdAt,
++    prompt: full.prompt,
++    format: full.format,
++    screenCount: (full.screens || []).length,
++    source: full.source || "generate",
++  });
++  writeIndex(idx);
++  return full;
++}
++
++function listVersions(limit = 20) {
++  const idx = readIndex();
++  return [...idx.versions].reverse().slice(0, Math.max(1, limit | 0 || 20));
++}
++
++function getVersion(versionId) {
++  const meta = path.join(storeDir(), versionId, "meta.json");
++  try {
++    return JSON.parse(fs.readFileSync(meta, "utf8"));
++  } catch {
++    return null;
++  }
++}
++
++function exportVersion(versionId, targetDir) {
++  const rec = getVersion(versionId);
++  if (!rec) return { ok: false, error: `version not found: ${versionId}` };
++  const dest = ensureDir(path.resolve(targetDir || path.join(storeDir(), versionId, "export")));
++  const files = [];
++  for (const s of rec.screens || []) {
++    for (const [ext, body] of [["html", s.html], ["jsx", s.jsx], ["vue", s.vue]]) {
++      if (typeof body !== "string" || !body.trim()) continue;
++      const name = `${s.id}-${sanitizeName(s.name || s.id)}.${ext}`;
++      fs.writeFileSync(path.join(dest, name), body, "utf8");
++      files.push({ name, bytes: Buffer.byteLength(body, "utf8") });
++    }
++  }
++  const manifest = {
++    versionId,
++    prompt: rec.prompt,
++    format: rec.format,
++    createdAt: rec.createdAt,
++    screens: (rec.screens || []).map((s) => ({ id: s.id, name: s.name })),
++    files: files.map((f) => f.name),
++  };
++  fs.writeFileSync(path.join(dest, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
++  files.push({ name: "manifest.json", bytes: Buffer.byteLength(JSON.stringify(manifest, null, 2), "utf8") });
++  return { ok: true, versionId, targetDir: dest, files };
++}
++
++function sanitizeName(n) {
++  return String(n).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40) || "screen";
++}
++
++function importDir(dir) {
++  const src = path.resolve(dir);
++  let entries;
++  try {
++    entries = fs.readdirSync(src, { withFileTypes: true });
++  } catch (e) {
++    return { ok: false, error: `cannot read dir ${src}: ${e.message}` };
++  }
++  const htmlFiles = entries
++    .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".html"))
++    .map((e) => e.name)
++    .sort();
++  if (!htmlFiles.length) return { ok: false, error: `no *.html files in ${src}` };
++  const screens = htmlFiles.map((name, i) => {
++    const html = fs.readFileSync(path.join(src, name), "utf8");
++    const stem = name.replace(/\.html?$/i, "");
++    return {
++      id: `s${i + 1}`,
++      name: stem.slice(0, 20),
++      html,
++      jsx: importedWrapper("jsx", stem, html),
++      vue: importedWrapper("vue", stem, html),
++      hotspots: [],
++    };
++  });
++  const rec = saveVersion({
++    prompt: `(导入自 ${src})`,
++    format: "html",
++    createdAt: new Date().toISOString(),
++    screens,
++    source: "import_dir",
++  });
++  return {
++    ok: true,
++    versionId: rec.id,
++    imported: screens.length,
++    dir: src,
++    screens: screens.map((s) => ({ id: s.id, name: s.name })),
++  };
++}
++
++function importedWrapper(kind, stem, html) {
++  const banner = `/* imported from ${stem}.html — original markup embedded below */\n`;
++  if (kind === "jsx") {
++    return (
++      `${banner}export default function ${toIdent(stem)}() {\n` +
++      `  // Original HTML kept for reference; port to JSX as needed.\n` +
++      `  /*\n${html.replace(/\*\//g, "* /").slice(0, 20000)}\n  */\n` +
++      `  return <div data-imported="${stem}" />;\n}\n`
++    );
++  }
++  return (
++    `<template>\n  <!-- imported from ${stem}.html -->\n  <div data-imported="${stem}" />\n</template>\n\n` +
++    `<script>\n${banner}export default {\n  name: "${toIdent(stem)}"\n};\n</script>\n`
++  );
++}
++
++function toIdent(s) {
++  const cleaned = String(s).replace(/[^A-Za-z0-9_$]/g, "") || "ImportedScreen";
++  return /^[0-9]/.test(cleaned) ? `Screen${cleaned}` : cleaned;
++}
++
++// ---------------------------------------------------------------------------
++// built-in demo generator — behaviour mirrored by sidecar/uigen_sidecar.py.
++// Produces N mobile screens (390x844) with tab-bar hotspots plus the three
++// artifacts (html / jsx / vue) so the panel can switch formats (FR-2-3).
++// ---------------------------------------------------------------------------
++
++const SCREEN_NAMES = ["首页", "列表页", "详情页", "个人中心", "设置页", "搜索页", "消息页", "订单页", "登录页", "结果页"];
++
++function demoGenerate(prompt, format, screenCount, onScreen) {
++  const count = Math.min(10, Math.max(1, screenCount || 3));
++  const fmt = ["html", "jsx", "vue"].includes(format) ? format : "html";
++  const title = String(prompt || "").trim().slice(0, 12) || "UI 原型";
++  const shortPrompt = String(prompt || "").trim().slice(0, 40);
++  const screens = [];
++  const tabs = Math.min(count, 5);
++  for (let i = 0; i < count; i++) {
++    const id = `s${i + 1}`;
++    const name = SCREEN_NAMES[i % SCREEN_NAMES.length];
++    const hotspots = [];
++    for (let j = 0; j < tabs; j++) {
++      hotspots.push({
++        to: `s${j + 1}`,
++        label: SCREEN_NAMES[j % SCREEN_NAMES.length],
++        x: Math.round((j * 390) / tabs),
++        y: 774,
++        w: Math.floor(390 / tabs),
++        h: 70,
++      });
++    }
++    screens.push({
++      id,
++      name,
++      html: demoHtml(i, title, shortPrompt, hotspots),
++      jsx: demoJsx(i, title, shortPrompt),
++      vue: demoVue(i, title, shortPrompt),
++      hotspots,
++    });
++    if (onScreen) onScreen(i + 1, count);
++  }
++  return {
++    id: "",
++    prompt: String(prompt || ""),
++    format: fmt,
++    createdAt: new Date().toISOString(),
++    screens,
++    source: "demo",
++  };
++}
++
++function demoCards(i) {
++  return [
++    { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++    { t: "核心功能", d: `围绕「${["浏览", "管理", "设置", "发现"][i % 4]}」场景打磨的关键能力。` },
++    { t: "帮助与支持", d: "常见问题与在线客服入口。" },
++  ];
++}
++
++function demoHtml(i, title, prompt, hotspots) {
++  const name = SCREEN_NAMES[i % SCREEN_NAMES.length];
++  const cards = demoCards(i)
++    .map((c) => `      <div class="card"><h2>${c.t}</h2><p>${c.d}</p></div>`)
++    .join("\n");
++  const tabsHtml = (hotspots || [])
++    .map((h) => `      <a class="tab${h.to === `s${i + 1}` ? " on" : ""}" data-uigen-goto="${h.to}">${h.label}</a>`)
++    .join("\n");
++  return `<!doctype html>
++<html lang="zh-CN">
++<head>
++  <meta charset="utf-8">
++  <meta name="viewport" content="width=390, initial-scale=1">
++  <title>${name} · ${title}</title>
++  <style>
++    * { box-sizing: border-box; margin: 0; }
++    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }
++    .app-bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }
++    main { padding: 16px; padding-bottom: 96px; }
++    h1 { font-size: 22px; margin-bottom: 6px; }
++    .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
++    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
++    .card h2 { font-size: 15px; margin-bottom: 6px; }
++    .card p { font-size: 13px; color: #4b5563; line-height: 1.6; }
++    .tab-bar { position: fixed; left: 0; bottom: 0; width: 390px; height: 70px; display: flex; background: #fff; border-top: 1px solid #e5e7eb; }
++    .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; text-decoration: none; }
++    .tab.on { color: #2b6cb0; font-weight: 600; }
++  </style>
++</head>
++<body>
++  <header class="app-bar">${title}</header>
++  <main>
++    <h1>${name}</h1>
++    <p class="sub">uigen 演示生成 · 需求：${prompt || "(空)"}</p>
++${cards}
++  </main>
++  <nav class="tab-bar">
++${tabsHtml}
++  </nav>
++  <script type="application/json" id="uigen-hotspots">${JSON.stringify(hotspots || [])}</script>
++</body>
++</html>
++`;
++}
++
++function demoJsx(i, title, prompt) {
++  const name = SCREEN_NAMES[i % SCREEN_NAMES.length];
++  const cards = demoCards(i)
++    .map((c) => `        <div className="card"><h2>${c.t}</h2><p>${c.d}</p></div>`)
++    .join("\n");
++  return `// uigen demo artifact — screen ${i + 1}: ${name}
++export default function Screen${i + 1}() {
++  return (
++    <div className="phone" style={{ width: 390, minHeight: 844 }}>
++      <header className="app-bar">${title}</header>
++      <main>
++        <h1>${name}</h1>
++        <p className="sub">uigen 演示生成 · 需求：${prompt || "(空)"}</p>
++${cards}
++      </main>
++      <nav className="tab-bar">{/* hotspots: see ui state */}</nav>
++    </div>
++  );
++}
++`;
++}
++
++function demoVue(i, title, prompt) {
++  const name = SCREEN_NAMES[i % SCREEN_NAMES.length];
++  const cards = demoCards(i)
++    .map((c) => `      <div class="card"><h2>${c.t}</h2><p>${c.d}</p></div>`)
++    .join("\n");
++  return `<template>
++  <div class="phone">
++    <header class="app-bar">${title}</header>
++    <main>
++      <h1>${name}</h1>
++      <p class="sub">uigen 演示生成 · 需求：${prompt || "(空)"}</p>
++${cards}
++    </main>
++    <nav class="tab-bar"><!-- hotspots: see ui state --></nav>
++  </div>
++</template>
++
++<script>
++// uigen demo artifact — screen ${i + 1}: ${name}
++export default {
++  name: "Screen${i + 1}"
++};
++</script>
++
++<style scoped>
++.phone { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; }
++</style>
++`;
++}
++
++// ---------------------------------------------------------------------------
++// sidecar delegation (Python) — best effort, falls back to the demo generator.
++// ---------------------------------------------------------------------------
++
++function sidecarPath() {
++  const env = process.env.UIGEN_SIDECAR && process.env.UIGEN_SIDECAR.trim();
++  if (env) return path.resolve(env);
++  return path.resolve(__dirname, "..", "..", "sidecar", "uigen_sidecar.py");
++}
++
++function pythonCandidates() {
++  if (process.env.UIGEN_PYTHON && process.env.UIGEN_PYTHON.trim()) return [process.env.UIGEN_PYTHON.trim()];
++  return process.platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
++}
++
++function runSidecar(subcmd, payload, timeoutMs = 20000) {
++  return new Promise((resolve) => {
++    const script = sidecarPath();
++    if (!fs.existsSync(script)) return resolve(null);
++    const candidates = pythonCandidates();
++    let idx = 0;
++    const tryNext = () => {
++      if (idx >= candidates.length) return resolve(null);
++      const bin = candidates[idx++];
++      let child;
++      try {
++        child = spawn(bin, [script, subcmd], {
++          stdio: ["pipe", "pipe", "pipe"],
++          env: { ...process.env, HBA_ROOT: process.env.HBA_ROOT || "", PYTHONIOENCODING: "utf-8" },
++        });
++      } catch {
++        return tryNext();
++      }
++      let out = "";
++      let err = "";
++      const timer = setTimeout(() => {
++        try { child.kill(); } catch { /* ignore */ }
++        resolve(null);
++      }, timeoutMs);
++      child.stdout.on("data", (d) => { out += d; });
++      child.stderr.on("data", (d) => { err += d; });
++      child.on("error", () => { clearTimeout(timer); tryNext(); });
++      child.on("close", (code) => {
++        clearTimeout(timer);
++        if (code !== 0) {
++          log("info", `sidecar ${subcmd} exited ${code}, falling back: ${err.slice(0, 200)}`);
++          return tryNext();
++        }
++        try {
++          resolve(JSON.parse(out));
++        } catch {
++          resolve(null);
++        }
++      });
++      child.stdin.write(JSON.stringify(payload));
++      child.stdin.end();
++    };
++    tryNext();
++  });
++}
++
++// ---------------------------------------------------------------------------
++// JSON-RPC plumbing
++// ---------------------------------------------------------------------------
++
++const subscribers = new Set();
++let progressToken = null;
++
++function send(msg) {
++  process.stdout.write(JSON.stringify(msg) + "\n");
++}
++
++function reply(id, result) {
++  send({ jsonrpc: "2.0", id, result });
++}
++
++function replyError(id, code, message) {
++  send({ jsonrpc: "2.0", id, error: { code, message } });
++}
++
++function notify(method, params) {
++  send({ jsonrpc: "2.0", method, params });
++}
++
++function log(level, data) {
++  try {
++    notify("notifications/message", { level, data });
++  } catch { /* never break the loop */ }
++}
++
++function progress(progress, total, message) {
++  if (progressToken === null || progressToken === undefined) return;
++  notify("notifications/progress", { progressToken, progress, total, message });
++}
++
++function notifyStateUpdated() {
++  if (subscribers.has(STATE_URI)) notify("notifications/resources/updated", { uri: STATE_URI });
++}
++
++const TOOLS = [
++  {
++    name: "uigen_generate",
++    description:
++      "Generate a multi-screen UI prototype (FR-2-1) from a requirement prompt. Returns N mobile screens (390x844) each with HTML/JSX/Vue artifacts (FR-2-3) and tab-bar jump hotspots (FR-2-2). Saves a history version (FR-2-7).",
++    inputSchema: {
++      type: "object",
++      properties: {
++        prompt: { type: "string", description: "Requirement text describing the app to prototype." },
++        format: { type: "string", enum: ["html", "jsx", "vue"], default: "html", description: "Primary artifact format (all three are generated)." },
++        screenCount: { type: "integer", minimum: 1, maximum: 10, default: 3, description: "Number of screens to generate." },
++      },
++      required: ["prompt"],
++    },
++  },
++  {
++    name: "uigen_list_versions",
++    description: "List saved prototype history versions (newest first) — FR-2-7.",
++    inputSchema: {
++      type: "object",
++      properties: { limit: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
++    },
++  },
++  {
++    name: "uigen_get_version",
++    description: "Get one history version with its full screens and HTML/JSX/Vue artifacts.",
++    inputSchema: {
++      type: "object",
++      properties: { versionId: { type: "string", description: "Version id from uigen_list_versions." } },
++      required: ["versionId"],
++    },
++  },
++  {
++    name: "uigen_export",
++    description: "Export a version's artifacts (*.html/*.jsx/*.vue + manifest.json) to a directory — FR-2-8.",
++    inputSchema: {
++      type: "object",
++      properties: {
++        versionId: { type: "string", description: "Version id to export." },
++        targetDir: { type: "string", description: "Destination directory (default: store/<versionId>/export)." },
++      },
++      required: ["versionId"],
++    },
++  },
++  {
++    name: "uigen_import_dir",
++    description: "Import a local directory of *.html prototypes as a new history version — FR-2-6.",
++    inputSchema: {
++      type: "object",
++      properties: { dir: { type: "string", description: "Directory containing *.html files." } },
++      required: ["dir"],
++    },
++  },
++];
++
++const RESOURCES = [
++  { uri: PANEL_URI, name: "panel.html", mimeType: HTML_MIME, description: "UI prototype panel (mcp-app surface)." },
++  { uri: BRIDGE_URI, name: "bridge.js", mimeType: "text/javascript", description: "Panel <-> host MCP bridge adapter layer." },
++  { uri: STATE_URI, name: "state.json", mimeType: "application/json", description: "Live version index for the panel." },
++];
++
++function readResourceFile(name) {
++  return fs.readFileSync(path.join(__dirname, "ui", name), "utf8");
++}
++
++// ---------------------------------------------------------------------------
++// tools/call handlers
++// ---------------------------------------------------------------------------
++
++async function toolGenerate(args) {
++  const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
++  if (!prompt) return { ok: false, error: "prompt is required" };
++  const format = ["html", "jsx", "vue"].includes(args.format) ? args.format : "html";
++  const screenCount = Math.min(10, Math.max(1, parseInt(args.screenCount, 10) || 3));
++  const total = screenCount + 2;
++  progress(0, total, "准备生成");
++  let record = null;
++  let engine = "demo";
++  if (!process.env.UIGEN_FORCE_DEMO) {
++    const res = await runSidecar("generate", { prompt, format, screenCount }, Number(process.env.UIGEN_SIDECAR_TIMEOUT || 20000));
++    if (res && res.ok && Array.isArray(res.screens) && res.screens.length) {
++      record = res;
++      engine = "sidecar";
++    }
++  }
++  if (!record) {
++    record = demoGenerate(prompt, format, screenCount, (done, n) => {
++      progress(done, total, `生成屏幕 ${done}/${n}`);
++    });
++    engine = process.env.UIGEN_FORCE_DEMO ? "demo(forced)" : "demo(fallback)";
++  } else {
++    progress(screenCount, total, `sidecar 生成 ${screenCount} 屏完成`);
++  }
++  progress(total - 1, total, "写入版本存储");
++  // The sidecar persists its own version; only persist here when we generated
++  // locally. Both writers share the same store dir (UIGEN_STORE_DIR passes
++  // through the child env).
++  const persistedId = record.id || record.versionId || "";
++  const saved = persistedId ? { ...record, id: persistedId } : saveVersion({ ...record, format, prompt });
++  progress(total, total, "完成");
++  log("info", `uigen_generate: engine=${engine} version=${saved.id} screens=${saved.screens.length}`);
++  notifyStateUpdated();
++  return {
++    ok: true,
++    engine,
++    versionId: saved.id,
++    prompt: saved.prompt,
++    format: saved.format,
++    screenCount: saved.screens.length,
++    screens: saved.screens.map((s) => ({
++      id: s.id,
++      name: s.name,
++      html: s.html,
++      jsx: s.jsx,
++      vue: s.vue,
++      hotspots: s.hotspots || [],
++    })),
++  };
++}
++
++async function toolListVersions(args) {
++  return { ok: true, versions: listVersions(Number(args.limit) || 20) };
++}
++
++async function toolGetVersion(args) {
++  const rec = getVersion(String(args.versionId || ""));
++  if (!rec) return { ok: false, error: `version not found: ${args.versionId}` };
++  return { ok: true, version: rec };
++}
++
++async function toolExport(args) {
++  return exportVersion(String(args.versionId || ""), args.targetDir);
++}
++
++async function toolImportDir(args) {
++  const res = importDir(String(args.dir || ""));
++  if (res.ok) notifyStateUpdated();
++  return res;
++}
++
++const TOOL_HANDLERS = {
++  uigen_generate: toolGenerate,
++  uigen_list_versions: toolListVersions,
++  uigen_get_version: toolGetVersion,
++  uigen_export: toolExport,
++  uigen_import_dir: toolImportDir,
++};
++
++async function handleToolsCall(params, id) {
++  const name = params && params.name;
++  const handler = TOOL_HANDLERS[name];
++  if (!handler) {
++    inFlight -= 1;
++    maybeExit();
++    return replyError(id, -32602, `unknown tool: ${name}`);
++  }
++  const meta = (params && params._meta) || {};
++  progressToken = meta.progressToken !== undefined ? meta.progressToken : null;
++  try {
++    const result = await handler((params && params.arguments) || {});
++    reply(id, {
++      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
++      structuredContent: result,
++      isError: result && result.ok === false,
++    });
++  } catch (e) {
++    reply(id, {
++      content: [{ type: "text", text: `tool failed: ${e.message}` }],
++      isError: true,
++    });
++  } finally {
++    progressToken = null;
++    inFlight -= 1;
++    maybeExit();
++  }
++}
++
++// ---------------------------------------------------------------------------
++// dispatch
++// ---------------------------------------------------------------------------
++
++function handleRequest(msg) {
++  const { id, method, params } = msg;
++  switch (method) {
++    case "initialize": {
++      const wanted = params && params.protocolVersion;
++      reply(id, {
++        protocolVersion: typeof wanted === "string" ? wanted : PROTOCOL_FALLBACK,
++        capabilities: { tools: {}, resources: { subscribe: true, listChanged: false } },
++        serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
++      });
++      break;
++    }
++    case "ping":
++      reply(id, {});
++      break;
++    case "tools/list":
++      reply(id, {
++        tools: TOOLS.map((t) => ({
++          ...t,
++          _meta: {
++            ui: {
++              resourceUri: PANEL_URI,
++              surface: "hba-uigen",
++              visibility: ["model", "app"],
++            },
++          },
++        })),
++      });
++      break;
++    case "tools/call":
++      inFlight += 1;
++      handleToolsCall(params, id);
++      break;
++    case "resources/list":
++      reply(id, { resources: RESOURCES });
++      break;
++    case "resources/read": {
++      const uri = params && params.uri;
++      if (uri === PANEL_URI) {
++        reply(id, { contents: [{ uri, mimeType: HTML_MIME, text: readResourceFile("panel.html") }] });
++      } else if (uri === BRIDGE_URI) {
++        reply(id, { contents: [{ uri, mimeType: "text/javascript", text: readResourceFile("bridge.js") }] });
++      } else if (uri === STATE_URI) {
++        reply(id, {
++          contents: [{ uri, mimeType: "application/json", text: JSON.stringify({ versions: listVersions(50) }, null, 2) }],
++        });
++      } else {
++        replyError(id, -32002, `resource not found: ${uri}`);
++      }
++      break;
++    }
++    case "resources/subscribe":
++      if (params && params.uri) subscribers.add(params.uri);
++      reply(id, {});
++      break;
++    case "resources/unsubscribe":
++      if (params && params.uri) subscribers.delete(params.uri);
++      reply(id, {});
++      break;
++    default:
++      replyError(id, -32601, `method not found: ${method}`);
++  }
++}
++
++function handleNotification(msg) {
++  switch (msg.method) {
++    case "notifications/initialized":
++    case "notifications/cancelled":
++      break;
++    default:
++      break; // ignore unknown notifications
++  }
++}
++
++function handleLine(line) {
++  let msg;
++  try {
++    msg = JSON.parse(line);
++  } catch {
++    send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } });
++    return;
++  }
++  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
++    send({ jsonrpc: "2.0", id: msg && msg.id !== undefined ? msg.id : null, error: { code: -32600, message: "invalid request" } });
++    return;
++  }
++  if (msg.id === undefined || msg.id === null) {
++    handleNotification(msg);
++  } else {
++    try {
++      handleRequest(msg);
++    } catch (e) {
++      replyError(msg.id, -32603, `internal error: ${e.message}`);
++    }
++  }
++}
++
++let buffer = "";
++let inFlight = 0;
++let stdinClosed = false;
++
++function maybeExit() {
++  if (stdinClosed && inFlight <= 0) process.exit(0);
++}
++
++process.stdin.setEncoding("utf8");
++process.stdin.on("data", (chunk) => {
++  buffer += chunk;
++  let idx;
++  while ((idx = buffer.indexOf("\n")) >= 0) {
++    const line = buffer.slice(0, idx).replace(/\r$/, "").trim();
++    buffer = buffer.slice(idx + 1);
++    if (line) handleLine(line);
++  }
++});
++process.stdin.on("end", () => {
++  stdinClosed = true;
++  maybeExit();
++});
++process.stdin.on("error", () => process.exit(0));
+diff --git a/apps/zcode-cli/packages/hba-uigen-plugin/ui/bridge.js b/apps/zcode-cli/packages/hba-uigen-plugin/ui/bridge.js
+new file mode 100644
+index 00000000..f80ff1e5
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-uigen-plugin/ui/bridge.js
+@@ -0,0 +1,365 @@
++/*!
++ * UiGenBridge — panel <-> host MCP bridge adapter for the hba-uigen panel.
++ *
++ * Protocol (reverse-engineered from the official ZCode pdf-plugin):
++ *  - The panel runs as an mcp-app iframe ("text/html;profile=mcp-app").
++ *  - It is an MCP *client*: newline-free JSON-RPC 2.0 envelopes are exchanged
++ *    with the host over window.parent.postMessage(msg, "*") and the window
++ *    "message" event (see pdf-plugin dist/ui bundle: transport constructor
++ *    `new ...Transport(window.parent, window.parent)`).
++ *  - Handshake: MCP "initialize" -> "notifications/initialized" -> custom
++ *    request "ui/initialize" { appInfo, appCapabilities, protocolVersion }.
++ *  - "tools/call" reaches the plugin MCP server declared in
++ *    plugin.json ui.surfaces[].server ("hba-uigen").
++ *  - "notifications/progress" carries generation progress
++ *    (params: { progressToken, progress, total, message }).
++ *  - "notifications/resources/updated" carries resource change pushes
++ *    (host-side ops pluginUi.resourceUpdated / pluginUi.resourceListChanged).
++ *
++ * This adapter exposes the minimal interface required by the migration:
++ *    callTool(name, args)        -> Promise<structuredContent>
++ *    onResourceUpdate(cb)        -> subscribe to resource updates
++ *    onProgress(cb)              -> subscribe to generation progress
++ *    connect()                   -> Promise<"mcp" | "standalone">
++ *
++ * If no host answers (opened outside ZCode, or during integration bring-up),
++ * the bridge degrades to a local in-page demo backend so the panel stays fully
++ * usable. Integration-phase verification notes live in README.md.
++ */
++(function (global) {
++  "use strict";
++
++  var PROTOCOL_VERSION = "2025-06-18";
++  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.1.0" };
++  var APP_INFO = { name: "hba-uigen", version: "0.1.0" };
++
++  // -------------------------------------------------------------------------
++  // local demo backend — compact mirror of server.mjs / uigen_sidecar.py demo
++  // -------------------------------------------------------------------------
++  var DEMO_NAMES = ["首页", "列表页", "详情页", "个人中心", "设置页", "搜索页", "消息页", "订单页", "登录页", "结果页"];
++
++  function demoScreens(prompt, format, count) {
++    var title = String(prompt || "").trim().slice(0, 12) || "UI 原型";
++    var short = String(prompt || "").trim().slice(0, 40);
++    var tabs = Math.min(count, 5);
++    var screens = [];
++    for (var i = 0; i < count; i++) {
++      var hotspots = [];
++      for (var j = 0; j < tabs; j++) {
++        hotspots.push({
++          to: "s" + (j + 1),
++          label: DEMO_NAMES[j % DEMO_NAMES.length],
++          x: Math.round((j * 390) / tabs),
++          y: 774,
++          w: Math.floor(390 / tabs),
++          h: 70
++        });
++      }
++      screens.push({
++        id: "s" + (i + 1),
++        name: DEMO_NAMES[i % DEMO_NAMES.length],
++        html: demoHtml(i, title, short, hotspots),
++        jsx: demoJsx(i, title, short),
++        vue: demoVue(i, title, short),
++        hotspots: hotspots
++      });
++    }
++    return screens;
++  }
++
++  function demoHtml(i, title, prompt, hotspots) {
++    var name = DEMO_NAMES[i % DEMO_NAMES.length];
++    var cards = [
++      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
++      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
++    ].map(function (c) {
++      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
++    }).join("\n");
++    var tabsHtml = (hotspots || []).map(function (h) {
++      return '      <a class="tab' + (h.to === "s" + (i + 1) ? " on" : "") + '" data-uigen-goto="' + h.to + '">' + h.label + "</a>";
++    }).join("\n");
++    return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
++      "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
++      "  <title>" + name + " · " + title + "</title>\n" +
++      "  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
++      "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
++      "    .app-bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
++      "    main { padding: 16px; padding-bottom: 96px; }\n    h1 { font-size: 22px; margin-bottom: 6px; }\n" +
++      "    .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }\n" +
++      "    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }\n" +
++      "    .card h2 { font-size: 15px; margin-bottom: 6px; }\n    .card p { font-size: 13px; color: #4b5563; line-height: 1.6; }\n" +
++      "    .tab-bar { position: fixed; left: 0; bottom: 0; width: 390px; height: 70px; display: flex; background: #fff; border-top: 1px solid #e5e7eb; }\n" +
++      "    .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; text-decoration: none; }\n" +
++      "    .tab.on { color: #2b6cb0; font-weight: 600; }\n  </style>\n</head>\n<body>\n" +
++      '  <header class="app-bar">' + title + "</header>\n  <main>\n    <h1>" + name + "</h1>\n" +
++      '    <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards + "\n  </main>\n" +
++      '  <nav class="tab-bar">\n' + tabsHtml + "\n  </nav>\n" +
++      '  \x3cscript type="application/json" id="uigen-hotspots">' + JSON.stringify(hotspots || []) + "\x3c/script>\n</body>\n</html>\n";
++  }
++
++  function demoJsx(i, title, prompt) {
++    var name = DEMO_NAMES[i % DEMO_NAMES.length];
++    var cards = [
++      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
++      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
++    ].map(function (c) {
++      return '        <div className="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
++    }).join("\n");
++    return "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default function Screen" + (i + 1) + "() {\n  return (\n" +
++      '    <div className="phone" style={{ width: 390, minHeight: 844 }}>\n' +
++      '      <header className="app-bar">' + title + "</header>\n      <main>\n        <h1>" + name + "</h1>\n" +
++      '        <p className="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
++      '\n      </main>\n      <nav className="tab-bar">{/* hotspots: see ui state */}</nav>\n    </div>\n  );\n}\n';
++  }
++
++  function demoVue(i, title, prompt) {
++    var name = DEMO_NAMES[i % DEMO_NAMES.length];
++    var cards = [
++      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
++      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
++    ].map(function (c) {
++      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
++    }).join("\n");
++    return "<template>\n  <div class=\"phone\">\n    <header class=\"app-bar\">" + title + "</header>\n    <main>\n      <h1>" + name + "</h1>\n" +
++      '      <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
++      "\n    </main>\n    <nav class=\"tab-bar\"><!-- hotspots: see ui state --></nav>\n  </div>\n</template>\n\n\x3cscript>\n" +
++      "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default {\n  name: \"Screen" + (i + 1) + "\"\n};\n\x3c/script>\n\n" +
++      "<style scoped>\n.phone { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; }\n</style>\n";
++  }
++
++  function localBackend() {
++    var versions = [];
++    var seq = 0;
++
++    function save(rec) {
++      seq += 1;
++      var id = rec.id || ("v" + String(seq).padStart(3, "0") + "-local");
++      rec = Object.assign({}, rec, { id: id });
++      versions = versions.filter(function (v) { return v.id !== id; });
++      versions.push({
++        id: id,
++        createdAt: rec.createdAt,
++        prompt: rec.prompt,
++        format: rec.format,
++        screenCount: (rec.screens || []).length,
++        source: rec.source || "generate"
++      });
++      rec._index = versions[versions.length - 1];
++      rec._full = true;
++      store[id] = rec;
++      return rec;
++    }
++    var store = {};
++
++    return {
++      callTool: function (name, args, emitProgress) {
++        return new Promise(function (resolve, reject) {
++          setTimeout(function () {
++            try {
++              if (name === "uigen_generate") {
++                var prompt = String((args && args.prompt) || "").trim();
++                if (!prompt) return reject(new Error("prompt is required"));
++                var format = (args && args.format) || "html";
++                var count = Math.min(10, Math.max(1, parseInt(args && args.screenCount, 10) || 3));
++                if (emitProgress) emitProgress({ progress: 0, total: count + 2, message: "准备生成(本地演示)" });
++                var screens = demoScreens(prompt, format, count);
++                if (emitProgress) {
++                  for (var i = 0; i < count; i++) emitProgress({ progress: i + 1, total: count + 2, message: "生成屏幕 " + (i + 1) + "/" + count });
++                }
++                var rec = save({
++                  prompt: prompt,
++                  format: format,
++                  createdAt: new Date().toISOString(),
++                  screens: screens,
++                  source: "demo-local"
++                });
++                if (emitProgress) emitProgress({ progress: count + 2, total: count + 2, message: "完成" });
++                resolve({
++                  ok: true,
++                  engine: "demo(panel-local)",
++                  versionId: rec.id,
++                  prompt: rec.prompt,
++                  format: rec.format,
++                  screenCount: screens.length,
++                  screens: screens
++                });
++              } else if (name === "uigen_list_versions") {
++                var limit = Math.max(1, parseInt(args && args.limit, 10) || 20);
++                resolve({ ok: true, versions: versions.slice().reverse().slice(0, limit) });
++              } else if (name === "uigen_get_version") {
++                var rec2 = store[String((args && args.versionId) || "")];
++                if (!rec2) return reject(new Error("version not found: " + (args && args.versionId)));
++                resolve({ ok: true, version: rec2 });
++              } else if (name === "uigen_export") {
++                var rec3 = store[String((args && args.versionId) || "")];
++                if (!rec3) return reject(new Error("version not found: " + (args && args.versionId)));
++                var files = [];
++                (rec3.screens || []).forEach(function (s) {
++                  ["html", "jsx", "vue"].forEach(function (ext) {
++                    if (s[ext] && String(s[ext]).trim()) files.push({ name: s.id + "-" + s.name + "." + ext, bytes: String(s[ext]).length });
++                  });
++                });
++                resolve({ ok: true, versionId: rec3.id, targetDir: "(panel-local, 未写盘)", files: files });
++              } else if (name === "uigen_import_dir") {
++                reject(new Error("panel-local 模式不支持目录导入,请在 ZCode 宿主内使用"));
++              } else {
++                reject(new Error("unknown tool: " + name));
++              }
++            } catch (e) {
++              reject(e);
++            }
++          }, 30);
++        });
++      }
++    };
++  }
++
++  // -------------------------------------------------------------------------
++  // bridge
++  // -------------------------------------------------------------------------
++  function createUiGenBridge(options) {
++    options = options || {};
++    var mode = "unknown";
++    var pending = new Map();
++    var seq = 0;
++    var resourceCbs = [];
++    var progressCbs = [];
++    var backend = localBackend();
++    var connected = false;
++
++    function post(msg) {
++      var target = global.parent && global.parent !== global ? global.parent : null;
++      if (!target) return false;
++      try {
++        target.postMessage(msg, "*");
++        return true;
++      } catch (e) {
++        return false;
++      }
++    }
++
++    function sendRequest(method, params, timeoutMs) {
++      return new Promise(function (resolve, reject) {
++        seq += 1;
++        var id = seq;
++        var timer = setTimeout(function () {
++          pending.delete(id);
++          reject(new Error("bridge timeout: " + method));
++        }, timeoutMs || options.requestTimeoutMs || 15000);
++        pending.set(id, {
++          resolve: function (v) { clearTimeout(timer); resolve(v); },
++          reject: function (e) { clearTimeout(timer); reject(e); }
++        });
++        if (!post({ jsonrpc: "2.0", id: id, method: method, params: params || {} })) {
++          clearTimeout(timer);
++          pending.delete(id);
++          reject(new Error("no host window"));
++        }
++      });
++    }
++
++    function sendNotification(method, params) {
++      post({ jsonrpc: "2.0", method: method, params: params || {} });
++    }
++
++    function onMessage(ev) {
++      var msg = ev && ev.data;
++      if (!msg || msg.jsonrpc !== "2.0") return;
++      if (msg.id !== undefined && msg.id !== null && (msg.result !== undefined || msg.error !== undefined)) {
++        var entry = pending.get(msg.id);
++        if (!entry) return;
++        pending.delete(msg.id);
++        if (msg.error) entry.reject(new Error(msg.error.message || "bridge error"));
++        else entry.resolve(msg.result);
++        return;
++      }
++      if (typeof msg.method === "string") {
++        if (msg.method === "notifications/progress" && msg.params) {
++          progressCbs.forEach(function (cb) { try { cb(msg.params); } catch (e) { /* cb error */ } });
++        } else if (
++          msg.method === "notifications/resources/updated" ||
++          msg.method === "notifications/resources/list_changed"
++        ) {
++          resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
++        } else if (msg.method === "pluginUi.resourceUpdated" || (msg.params && msg.params.op === "pluginUi.resourceUpdated")) {
++          resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
++        }
++      }
++    }
++
++    function extractResult(raw) {
++      if (raw && raw.structuredContent !== undefined) return raw.structuredContent;
++      if (raw && Array.isArray(raw.content)) {
++        for (var i = 0; i < raw.content.length; i++) {
++          if (raw.content[i].type === "text") {
++            try { return JSON.parse(raw.content[i].text); } catch (e) { /* keep raw */ }
++          }
++        }
++      }
++      return raw;
++    }
++
++    var bridge = {
++      get mode() { return mode; },
++      onResourceUpdate: function (cb) { if (typeof cb === "function") resourceCbs.push(cb); },
++      onProgress: function (cb) { if (typeof cb === "function") progressCbs.push(cb); },
++
++      connect: function () {
++        return new Promise(function (resolve) {
++          if (global.parent && global.parent !== global) {
++            global.addEventListener("message", onMessage);
++            var timeoutMs = options.connectTimeoutMs || 2500;
++            sendRequest("initialize", {
++              protocolVersion: PROTOCOL_VERSION,
++              capabilities: {},
++              clientInfo: CLIENT_INFO
++            }, timeoutMs).then(function (initResult) {
++              connected = true;
++              mode = "mcp";
++              sendNotification("notifications/initialized", {});
++              // custom post-init handshake seen in the pdf-plugin bundle
++              sendRequest("ui/initialize", {
++                appInfo: APP_INFO,
++                appCapabilities: { tools: {}, displayModes: ["inline", "fullscreen"] },
++                protocolVersion: (initResult && initResult.protocolVersion) || PROTOCOL_VERSION
++              }, timeoutMs).catch(function () { /* optional, tolerate older hosts */ });
++              resolve(mode);
++            }).catch(function () {
++              mode = "standalone";
++              resolve(mode);
++            });
++          } else {
++            mode = "standalone";
++            resolve(mode);
++          }
++        });
++      },
++
++      callTool: function (name, args) {
++        if (mode === "mcp" && connected) {
++          var token = "uigen-" + (++seq);
++          return sendRequest("tools/call", {
++            name: name,
++            arguments: args || {},
++            _meta: { progressToken: token }
++          }).then(extractResult);
++        }
++        return backend.callTool(name, args || {}, function (p) {
++          progressCbs.forEach(function (cb) { try { cb(p); } catch (e) { /* cb error */ } });
++        });
++      },
++
++      // low-level escape hatch (integration bring-up / diagnostics)
++      request: sendRequest,
++      notify: sendNotification
++    };
++    return bridge;
++  }
++
++  var api = { create: createUiGenBridge, version: "0.1.0" };
++  if (typeof module !== "undefined" && module.exports) module.exports = api;
++  global.UiGenBridge = api;
++})(typeof window !== "undefined" ? window : globalThis);
+diff --git a/apps/zcode-cli/packages/hba-uigen-plugin/ui/panel.html b/apps/zcode-cli/packages/hba-uigen-plugin/ui/panel.html
+new file mode 100644
+index 00000000..d98d0919
+--- /dev/null
++++ b/apps/zcode-cli/packages/hba-uigen-plugin/ui/panel.html
+@@ -0,0 +1,1043 @@
++<!doctype html>
++<html lang="zh-CN">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width,initial-scale=1">
++<title>UI 原型 · hba-uigen</title>
++<style>
++  * { box-sizing: border-box; margin: 0; }
++  html, body { height: 100%; }
++  body {
++    font: 13px/1.5 system-ui, "Segoe UI", sans-serif;
++    background: #14171c; color: #d7dce2;
++    display: flex; flex-direction: column; overflow: hidden;
++  }
++  button {
++    font: inherit; color: inherit; background: #232a33; border: 1px solid #35404d;
++    border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap;
++  }
++  button:hover { background: #2c3540; }
++  button:disabled { opacity: .45; cursor: default; }
++  button.primary { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
++  button.primary:hover { background: #3178bd; }
++  select, textarea {
++    font: inherit; color: inherit; background: #1b2129; border: 1px solid #35404d;
++    border-radius: 6px; padding: 6px 8px;
++  }
++  /* ---- top bar ---- */
++  #top-bar {
++    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
++    background: #1b2129; border-bottom: 1px solid #2a323c; flex: none;
++  }
++  #top-bar .brand { font-weight: 600; font-size: 14px; }
++  #top-bar .spacer { flex: 1; }
++  .badge {
++    font-size: 11px; padding: 2px 8px; border-radius: 10px;
++    background: #2a323c; color: #9fb0c0;
++  }
++  .badge.ok { background: #1d4430; color: #7ee2a8; }
++  .badge.warn { background: #4a3a1c; color: #ffd479; }
++  /* ---- layout ---- */
++  #layout { flex: 1; display: flex; min-height: 0; }
++  #control-pane {
++    width: 264px; flex: none; display: flex; flex-direction: column; gap: 10px;
++    padding: 12px; border-right: 1px solid #2a323c; overflow-y: auto;
++  }
++  #req-input { width: 100%; height: 120px; resize: vertical; }
++  .row { display: flex; gap: 8px; }
++  .row > * { flex: 1; }
++  .field-label { font-size: 11px; color: #8b98a5; margin-bottom: 4px; }
++  #gen-status { font-size: 12px; color: #9fb0c0; min-height: 18px; }
++  #gen-status.err { color: #ff9c9c; }
++  #progress-track { height: 6px; border-radius: 3px; background: #232a33; overflow: hidden; }
++  #progress-fill { height: 100%; width: 0; background: #2b6cb0; transition: width .25s; }
++  #gen-log {
++    list-style: none; padding: 0; margin: 0; font-size: 11px; color: #8b98a5;
++    max-height: 140px; overflow-y: auto;
++  }
++  #gen-log li { padding: 2px 0; border-bottom: 1px dashed #262e37; }
++  #version-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
++  #version-list li {
++    padding: 6px 8px; border-radius: 6px; cursor: pointer;
++    border: 1px solid transparent;
++  }
++  #version-list li:hover { background: #232a33; }
++  #version-list li.on { border-color: #2b6cb0; background: #1d2b3a; }
++  #version-list .v-id { font-size: 11px; color: #6fb1ff; }
++  #version-list .v-meta { font-size: 11px; color: #8b98a5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++  /* ---- canvas ---- */
++  #canvas-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
++  #canvas-toolbar {
++    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
++    border-bottom: 1px solid #2a323c; flex: none;
++  }
++  #canvas-toolbar .spacer { flex: 1; }
++  #zoom-label { min-width: 48px; text-align: center; color: #9fb0c0; }
++  #canvas-hint { font-size: 11px; color: #6b7684; }
++  #screen-canvas {
++    flex: 1; overflow: auto; padding: 16px;
++    background:
++      linear-gradient(#1a1f26 1px, transparent 1px) 0 0 / 24px 24px,
++      linear-gradient(90deg, #1a1f26 1px, transparent 1px) 0 0 / 24px 24px,
++      #14171c;
++  }
++  #canvas-grid {
++    display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
++    gap: 14px; transform-origin: top left;
++  }
++  .screen-card {
++    background: #1b2129; border: 1px solid #2f3945; border-radius: 10px;
++    padding: 10px; cursor: grab; user-select: none;
++  }
++  .screen-card.selected { border-color: #2b6cb0; box-shadow: 0 0 0 2px rgba(43,108,176,.35); }
++  .screen-card.dragging { opacity: .4; }
++  .screen-card .thumb {
++    height: 110px; border-radius: 6px; overflow: hidden; position: relative;
++    background: #f5f6f8; border: 1px solid #2f3945;
++  }
++  .screen-card .thumb .t-bar { height: 18px; background: #2b6cb0; }
++  .screen-card .thumb .t-body { padding: 6px; }
++  .screen-card .thumb .t-line { height: 7px; border-radius: 3px; background: #d9dee5; margin-bottom: 5px; }
++  .screen-card .thumb .t-line.short { width: 55%; }
++  .screen-card .thumb .t-tabs {
++    position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
++    background: #fff; border-top: 1px solid #e5e7eb; display: flex;
++  }
++  .screen-card .thumb .t-tabs i { flex: 1; border-right: 1px solid #eef0f3; }
++  .screen-card .card-name { margin-top: 8px; font-weight: 600; }
++  .screen-card .card-id { font-size: 11px; color: #8b98a5; }
++  .screen-card .card-order { float: right; font-size: 11px; color: #6fb1ff; }
++  .canvas-empty {
++    grid-column: 1 / -1; text-align: center; color: #6b7684; padding: 48px 0;
++    border: 1px dashed #2f3945; border-radius: 10px;
++  }
++  /* ---- preview pane ---- */
++  #preview-pane {
++    width: 432px; flex: none; display: flex; flex-direction: column;
++    border-left: 1px solid #2a323c; min-height: 0;
++  }
++  #preview-head { padding: 8px 12px; border-bottom: 1px solid #2a323c; font-size: 12px; color: #9fb0c0; }
++  #preview-title { color: #6fb1ff; }
++  #preview-stage {
++    flex: 1; overflow: auto; padding: 12px; display: flex; justify-content: center;
++    background: #10131a; min-height: 0;
++  }
++  #phone-frame {
++    width: 390px; height: 844px; flex: none; position: relative;
++    border-radius: 18px; overflow: hidden; border: 1px solid #35404d;
++    box-shadow: 0 12px 32px rgba(0,0,0,.45); background: #fff;
++  }
++  #preview-frame { width: 390px; height: 844px; border: 0; display: block; background: #fff; }
++  #hotspot-layer { position: absolute; inset: 0; pointer-events: none; }
++  .hotspot {
++    position: absolute; pointer-events: auto; cursor: pointer;
++    background: rgba(255, 176, 32, .28); border: 2px dashed #ffb020; border-radius: 6px;
++  }
++  .hotspot:hover { background: rgba(255, 176, 32, .5); }
++  .hotspot .hs-label {
++    position: absolute; left: 50%; top: -20px; transform: translateX(-50%);
++    font-size: 10px; background: #ffb020; color: #14171c; padding: 1px 6px; border-radius: 8px;
++    white-space: nowrap;
++  }
++  #play-bar {
++    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
++    border-top: 1px solid #2a323c; border-bottom: 1px solid #2a323c; flex: none;
++  }
++  #play-status { font-size: 11px; color: #9fb0c0; }
++  #format-tabs {
++    display: flex; align-items: center; gap: 6px; padding: 8px 12px 0; flex: none;
++  }
++  #format-tabs button { padding: 4px 12px; font-size: 12px; }
++  #format-tabs button.on { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
++  #format-tabs .spacer { flex: 1; }
++  #artifact-view {
++    flex: 1; min-height: 0; margin: 8px 12px 12px; padding: 10px;
++    background: #10131a; border: 1px solid #2a323c; border-radius: 8px;
++    overflow: auto; font: 11px/1.6 Consolas, Menlo, monospace; color: #c6d2dd;
++    white-space: pre; tab-size: 2;
++  }
++</style>
++</head>
++<body>
++  <header id="top-bar">
++    <span class="brand">UI 原型 · hba-uigen</span>
++    <span id="bridge-status" class="badge">桥连接中…</span>
++    <span class="spacer"></span>
++    <button id="btn-import" title="从本地目录导入 *.html 原型(FR-2-6)">导入目录</button>
++    <button id="btn-export" title="导出当前版本产物(FR-2-8)">导出</button>
++    <button id="btn-refresh-versions" title="刷新历史版本(FR-2-7)">刷新版本</button>
++  </header>
++
++  <div id="layout">
++    <!-- 左:需求输入 + 生成 + 版本历史 -->
++    <aside id="control-pane">
++      <div>
++        <div class="field-label">需求描述(FR-2-1)</div>
++        <textarea id="req-input" placeholder="例如:一款社区图书馆借阅 App,含首页推荐、图书列表、详情页与个人中心"></textarea>
++      </div>
++      <div class="row">
++        <div>
++          <div class="field-label">产物格式</div>
++          <select id="format-select">
++            <option value="html">HTML</option>
++            <option value="jsx">JSX</option>
++            <option value="vue">Vue</option>
++          </select>
++        </div>
++        <div>
++          <div class="field-label">屏幕数</div>
++          <select id="count-select">
++            <option>1</option><option>2</option><option selected>3</option><option>4</option>
++            <option>5</option><option>6</option><option>7</option><option>8</option>
++            <option>9</option><option>10</option>
++          </select>
++        </div>
++      </div>
++      <button id="btn-generate" class="primary">生成原型</button>
++      <div id="gen-status">就绪</div>
++      <div id="progress-track"><div id="progress-fill"></div></div>
++      <ul id="gen-log"></ul>
++      <div class="field-label">历史版本(FR-2-7)</div>
++      <ul id="version-list"><li class="v-meta">暂无版本</li></ul>
++    </aside>
++
++    <!-- 中:多屏画布 -->
++    <section id="canvas-pane">
++      <div id="canvas-toolbar">
++        <button id="zoom-out" title="缩小">−</button>
++        <span id="zoom-label">100%</span>
++        <button id="zoom-in" title="放大">+</button>
++        <button id="zoom-reset">重置</button>
++        <label title="在预览上叠加可点击的跳转热点(FR-2-2)">
++          <input type="checkbox" id="hotspot-toggle" checked> 显示跳转热点
++        </label>
++        <span class="spacer"></span>
++        <span id="canvas-hint">拖拽卡片可排序 · 点击选中</span>
++      </div>
++      <div id="screen-canvas">
++        <div id="canvas-grid">
++          <div class="canvas-empty">还没有原型。在左侧输入需求,点击「生成原型」。</div>
++        </div>
++      </div>
++    </section>
++
++    <!-- 右:390px 预览 + 演示播放 + 产物查看 -->
++    <aside id="preview-pane">
++      <div id="preview-head">390px 手机预览(FR-2-4) · <span id="preview-title">未选择屏幕</span></div>
++      <div id="preview-stage">
++        <div id="phone-frame">
++          <iframe id="preview-frame" title="390px 手机预览" sandbox="allow-scripts"></iframe>
++          <div id="hotspot-layer"></div>
++        </div>
++      </div>
++      <div id="play-bar">
++        <button id="btn-step-prev" title="上一屏">⏮ 上一屏</button>
++        <button id="btn-play" class="primary">▶ 播放</button>
++        <button id="btn-step-next" title="下一屏">下一屏 ⏭</button>
++        <span id="play-status">已暂停</span>
++      </div>
++      <div id="format-tabs">
++        <button data-fmt="html" class="on">HTML</button>
++        <button data-fmt="jsx">JSX</button>
++        <button data-fmt="vue">Vue</button>
++        <span class="spacer"></span>
++        <button id="btn-copy">复制产物</button>
++      </div>
++      <pre id="artifact-view"><code id="artifact-code">(选择屏幕后查看产物)</code></pre>
++    </aside>
++  </div>
++
++<script>
++/*!
++ * UiGenBridge — panel <-> host MCP bridge adapter for the hba-uigen panel.
++ *
++ * Protocol (reverse-engineered from the official ZCode pdf-plugin):
++ *  - The panel runs as an mcp-app iframe ("text/html;profile=mcp-app").
++ *  - It is an MCP *client*: newline-free JSON-RPC 2.0 envelopes are exchanged
++ *    with the host over window.parent.postMessage(msg, "*") and the window
++ *    "message" event (see pdf-plugin dist/ui bundle: transport constructor
++ *    `new ...Transport(window.parent, window.parent)`).
++ *  - Handshake: MCP "initialize" -> "notifications/initialized" -> custom
++ *    request "ui/initialize" { appInfo, appCapabilities, protocolVersion }.
++ *  - "tools/call" reaches the plugin MCP server declared in
++ *    plugin.json ui.surfaces[].server ("hba-uigen").
++ *  - "notifications/progress" carries generation progress
++ *    (params: { progressToken, progress, total, message }).
++ *  - "notifications/resources/updated" carries resource change pushes
++ *    (host-side ops pluginUi.resourceUpdated / pluginUi.resourceListChanged).
++ *
++ * This adapter exposes the minimal interface required by the migration:
++ *    callTool(name, args)        -> Promise<structuredContent>
++ *    onResourceUpdate(cb)        -> subscribe to resource updates
++ *    onProgress(cb)              -> subscribe to generation progress
++ *    connect()                   -> Promise<"mcp" | "standalone">
++ *
++ * If no host answers (opened outside ZCode, or during integration bring-up),
++ * the bridge degrades to a local in-page demo backend so the panel stays fully
++ * usable. Integration-phase verification notes live in README.md.
++ */
++(function (global) {
++  "use strict";
++
++  var PROTOCOL_VERSION = "2025-06-18";
++  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.1.0" };
++  var APP_INFO = { name: "hba-uigen", version: "0.1.0" };
++
++  // -------------------------------------------------------------------------
++  // local demo backend — compact mirror of server.mjs / uigen_sidecar.py demo
++  // -------------------------------------------------------------------------
++  var DEMO_NAMES = ["首页", "列表页", "详情页", "个人中心", "设置页", "搜索页", "消息页", "订单页", "登录页", "结果页"];
++
++  function demoScreens(prompt, format, count) {
++    var title = String(prompt || "").trim().slice(0, 12) || "UI 原型";
++    var short = String(prompt || "").trim().slice(0, 40);
++    var tabs = Math.min(count, 5);
++    var screens = [];
++    for (var i = 0; i < count; i++) {
++      var hotspots = [];
++      for (var j = 0; j < tabs; j++) {
++        hotspots.push({
++          to: "s" + (j + 1),
++          label: DEMO_NAMES[j % DEMO_NAMES.length],
++          x: Math.round((j * 390) / tabs),
++          y: 774,
++          w: Math.floor(390 / tabs),
++          h: 70
++        });
++      }
++      screens.push({
++        id: "s" + (i + 1),
++        name: DEMO_NAMES[i % DEMO_NAMES.length],
++        html: demoHtml(i, title, short, hotspots),
++        jsx: demoJsx(i, title, short),
++        vue: demoVue(i, title, short),
++        hotspots: hotspots
++      });
++    }
++    return screens;
++  }
++
++  function demoHtml(i, title, prompt, hotspots) {
++    var name = DEMO_NAMES[i % DEMO_NAMES.length];
++    var cards = [
++      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
++      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
++    ].map(function (c) {
++      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
++    }).join("\n");
++    var tabsHtml = (hotspots || []).map(function (h) {
++      return '      <a class="tab' + (h.to === "s" + (i + 1) ? " on" : "") + '" data-uigen-goto="' + h.to + '">' + h.label + "</a>";
++    }).join("\n");
++    return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
++      "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
++      "  <title>" + name + " · " + title + "</title>\n" +
++      "  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
++      "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
++      "    .app-bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
++      "    main { padding: 16px; padding-bottom: 96px; }\n    h1 { font-size: 22px; margin-bottom: 6px; }\n" +
++      "    .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }\n" +
++      "    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }\n" +
++      "    .card h2 { font-size: 15px; margin-bottom: 6px; }\n    .card p { font-size: 13px; color: #4b5563; line-height: 1.6; }\n" +
++      "    .tab-bar { position: fixed; left: 0; bottom: 0; width: 390px; height: 70px; display: flex; background: #fff; border-top: 1px solid #e5e7eb; }\n" +
++      "    .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; text-decoration: none; }\n" +
++      "    .tab.on { color: #2b6cb0; font-weight: 600; }\n  </style>\n</head>\n<body>\n" +
++      '  <header class="app-bar">' + title + "</header>\n  <main>\n    <h1>" + name + "</h1>\n" +
++      '    <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards + "\n  </main>\n" +
++      '  <nav class="tab-bar">\n' + tabsHtml + "\n  </nav>\n" +
++      '  \x3cscript type="application/json" id="uigen-hotspots">' + JSON.stringify(hotspots || []) + "\x3c/script>\n</body>\n</html>\n";
++  }
++
++  function demoJsx(i, title, prompt) {
++    var name = DEMO_NAMES[i % DEMO_NAMES.length];
++    var cards = [
++      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
++      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
++    ].map(function (c) {
++      return '        <div className="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
++    }).join("\n");
++    return "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default function Screen" + (i + 1) + "() {\n  return (\n" +
++      '    <div className="phone" style={{ width: 390, minHeight: 844 }}>\n' +
++      '      <header className="app-bar">' + title + "</header>\n      <main>\n        <h1>" + name + "</h1>\n" +
++      '        <p className="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
++      '\n      </main>\n      <nav className="tab-bar">{/* hotspots: see ui state */}</nav>\n    </div>\n  );\n}\n';
++  }
++
++  function demoVue(i, title, prompt) {
++    var name = DEMO_NAMES[i % DEMO_NAMES.length];
++    var cards = [
++      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
++      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
++      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
++    ].map(function (c) {
++      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
++    }).join("\n");
++    return "<template>\n  <div class=\"phone\">\n    <header class=\"app-bar\">" + title + "</header>\n    <main>\n      <h1>" + name + "</h1>\n" +
++      '      <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
++      "\n    </main>\n    <nav class=\"tab-bar\"><!-- hotspots: see ui state --></nav>\n  </div>\n</template>\n\n\x3cscript>\n" +
++      "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default {\n  name: \"Screen" + (i + 1) + "\"\n};\n\x3c/script>\n\n" +
++      "<style scoped>\n.phone { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; }\n</style>\n";
++  }
++
++  function localBackend() {
++    var versions = [];
++    var seq = 0;
++
++    function save(rec) {
++      seq += 1;
++      var id = rec.id || ("v" + String(seq).padStart(3, "0") + "-local");
++      rec = Object.assign({}, rec, { id: id });
++      versions = versions.filter(function (v) { return v.id !== id; });
++      versions.push({
++        id: id,
++        createdAt: rec.createdAt,
++        prompt: rec.prompt,
++        format: rec.format,
++        screenCount: (rec.screens || []).length,
++        source: rec.source || "generate"
++      });
++      rec._index = versions[versions.length - 1];
++      rec._full = true;
++      store[id] = rec;
++      return rec;
++    }
++    var store = {};
++
++    return {
++      callTool: function (name, args, emitProgress) {
++        return new Promise(function (resolve, reject) {
++          setTimeout(function () {
++            try {
++              if (name === "uigen_generate") {
++                var prompt = String((args && args.prompt) || "").trim();
++                if (!prompt) return reject(new Error("prompt is required"));
++                var format = (args && args.format) || "html";
++                var count = Math.min(10, Math.max(1, parseInt(args && args.screenCount, 10) || 3));
++                if (emitProgress) emitProgress({ progress: 0, total: count + 2, message: "准备生成(本地演示)" });
++                var screens = demoScreens(prompt, format, count);
++                if (emitProgress) {
++                  for (var i = 0; i < count; i++) emitProgress({ progress: i + 1, total: count + 2, message: "生成屏幕 " + (i + 1) + "/" + count });
++                }
++                var rec = save({
++                  prompt: prompt,
++                  format: format,
++                  createdAt: new Date().toISOString(),
++                  screens: screens,
++                  source: "demo-local"
++                });
++                if (emitProgress) emitProgress({ progress: count + 2, total: count + 2, message: "完成" });
++                resolve({
++                  ok: true,
++                  engine: "demo(panel-local)",
++                  versionId: rec.id,
++                  prompt: rec.prompt,
++                  format: rec.format,
++                  screenCount: screens.length,
++                  screens: screens
++                });
++              } else if (name === "uigen_list_versions") {
++                var limit = Math.max(1, parseInt(args && args.limit, 10) || 20);
++                resolve({ ok: true, versions: versions.slice().reverse().slice(0, limit) });
++              } else if (name === "uigen_get_version") {
++                var rec2 = store[String((args && args.versionId) || "")];
++                if (!rec2) return reject(new Error("version not found: " + (args && args.versionId)));
++                resolve({ ok: true, version: rec2 });
++              } else if (name === "uigen_export") {
++                var rec3 = store[String((args && args.versionId) || "")];
++                if (!rec3) return reject(new Error("version not found: " + (args && args.versionId)));
++                var files = [];
++                (rec3.screens || []).forEach(function (s) {
++                  ["html", "jsx", "vue"].forEach(function (ext) {
++                    if (s[ext] && String(s[ext]).trim()) files.push({ name: s.id + "-" + s.name + "." + ext, bytes: String(s[ext]).length });
++                  });
++                });
++                resolve({ ok: true, versionId: rec3.id, targetDir: "(panel-local, 未写盘)", files: files });
++              } else if (name === "uigen_import_dir") {
++                reject(new Error("panel-local 模式不支持目录导入,请在 ZCode 宿主内使用"));
++              } else {
++                reject(new Error("unknown tool: " + name));
++              }
++            } catch (e) {
++              reject(e);
++            }
++          }, 30);
++        });
++      }
++    };
++  }
++
++  // -------------------------------------------------------------------------
++  // bridge
++  // -------------------------------------------------------------------------
++  function createUiGenBridge(options) {
++    options = options || {};
++    var mode = "unknown";
++    var pending = new Map();
++    var seq = 0;
++    var resourceCbs = [];
++    var progressCbs = [];
++    var backend = localBackend();
++    var connected = false;
++
++    function post(msg) {
++      var target = global.parent && global.parent !== global ? global.parent : null;
++      if (!target) return false;
++      try {
++        target.postMessage(msg, "*");
++        return true;
++      } catch (e) {
++        return false;
++      }
++    }
++
++    function sendRequest(method, params, timeoutMs) {
++      return new Promise(function (resolve, reject) {
++        seq += 1;
++        var id = seq;
++        var timer = setTimeout(function () {
++          pending.delete(id);
++          reject(new Error("bridge timeout: " + method));
++        }, timeoutMs || options.requestTimeoutMs || 15000);
++        pending.set(id, {
++          resolve: function (v) { clearTimeout(timer); resolve(v); },
++          reject: function (e) { clearTimeout(timer); reject(e); }
++        });
++        if (!post({ jsonrpc: "2.0", id: id, method: method, params: params || {} })) {
++          clearTimeout(timer);
++          pending.delete(id);
++          reject(new Error("no host window"));
++        }
++      });
++    }
++
++    function sendNotification(method, params) {
++      post({ jsonrpc: "2.0", method: method, params: params || {} });
++    }
++
++    function onMessage(ev) {
++      var msg = ev && ev.data;
++      if (!msg || msg.jsonrpc !== "2.0") return;
++      if (msg.id !== undefined && msg.id !== null && (msg.result !== undefined || msg.error !== undefined)) {
++        var entry = pending.get(msg.id);
++        if (!entry) return;
++        pending.delete(msg.id);
++        if (msg.error) entry.reject(new Error(msg.error.message || "bridge error"));
++        else entry.resolve(msg.result);
++        return;
++      }
++      if (typeof msg.method === "string") {
++        if (msg.method === "notifications/progress" && msg.params) {
++          progressCbs.forEach(function (cb) { try { cb(msg.params); } catch (e) { /* cb error */ } });
++        } else if (
++          msg.method === "notifications/resources/updated" ||
++          msg.method === "notifications/resources/list_changed"
++        ) {
++          resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
++        } else if (msg.method === "pluginUi.resourceUpdated" || (msg.params && msg.params.op === "pluginUi.resourceUpdated")) {
++          resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
++        }
++      }
++    }
++
++    function extractResult(raw) {
++      if (raw && raw.structuredContent !== undefined) return raw.structuredContent;
++      if (raw && Array.isArray(raw.content)) {
++        for (var i = 0; i < raw.content.length; i++) {
++          if (raw.content[i].type === "text") {
++            try { return JSON.parse(raw.content[i].text); } catch (e) { /* keep raw */ }
++          }
++        }
++      }
++      return raw;
++    }
++
++    var bridge = {
++      get mode() { return mode; },
++      onResourceUpdate: function (cb) { if (typeof cb === "function") resourceCbs.push(cb); },
++      onProgress: function (cb) { if (typeof cb === "function") progressCbs.push(cb); },
++
++      connect: function () {
++        return new Promise(function (resolve) {
++          if (global.parent && global.parent !== global) {
++            global.addEventListener("message", onMessage);
++            var timeoutMs = options.connectTimeoutMs || 2500;
++            sendRequest("initialize", {
++              protocolVersion: PROTOCOL_VERSION,
++              capabilities: {},
++              clientInfo: CLIENT_INFO
++            }, timeoutMs).then(function (initResult) {
++              connected = true;
++              mode = "mcp";
++              sendNotification("notifications/initialized", {});
++              // custom post-init handshake seen in the pdf-plugin bundle
++              sendRequest("ui/initialize", {
++                appInfo: APP_INFO,
++                appCapabilities: { tools: {}, displayModes: ["inline", "fullscreen"] },
++                protocolVersion: (initResult && initResult.protocolVersion) || PROTOCOL_VERSION
++              }, timeoutMs).catch(function () { /* optional, tolerate older hosts */ });
++              resolve(mode);
++            }).catch(function () {
++              mode = "standalone";
++              resolve(mode);
++            });
++          } else {
++            mode = "standalone";
++            resolve(mode);
++          }
++        });
++      },
++
++      callTool: function (name, args) {
++        if (mode === "mcp" && connected) {
++          var token = "uigen-" + (++seq);
++          return sendRequest("tools/call", {
++            name: name,
++            arguments: args || {},
++            _meta: { progressToken: token }
++          }).then(extractResult);
++        }
++        return backend.callTool(name, args || {}, function (p) {
++          progressCbs.forEach(function (cb) { try { cb(p); } catch (e) { /* cb error */ } });
++        });
++      },
++
++      // low-level escape hatch (integration bring-up / diagnostics)
++      request: sendRequest,
++      notify: sendNotification
++    };
++    return bridge;
++  }
++
++  var api = { create: createUiGenBridge, version: "0.1.0" };
++  if (typeof module !== "undefined" && module.exports) module.exports = api;
++  global.UiGenBridge = api;
++})(typeof window !== "undefined" ? window : globalThis);
++
++</script>
++<script>
++(function () {
++  "use strict";
++
++  // ------------------------------------------------------------------
++  // state
++  // ------------------------------------------------------------------
++  var state = {
++    screens: [],          // [{id,name,html,jsx,vue,hotspots}]
++    selected: -1,
++    versionId: "",
++    zoom: 1,
++    format: "html",
++    playing: false,
++    playTimer: null
++  };
++
++  var $ = function (id) { return document.getElementById(id); };
++
++  // ------------------------------------------------------------------
++  // bridge wiring
++  // ------------------------------------------------------------------
++  var bridge = window.UiGenBridge.create({ connectTimeoutMs: 2500 });
++
++  function setBridgeStatus() {
++    var el = $("bridge-status");
++    if (bridge.mode === "mcp") {
++      el.textContent = "MCP 桥已连接";
++      el.className = "badge ok";
++    } else {
++      el.textContent = "本地演示模式(未检测到宿主桥)";
++      el.className = "badge warn";
++    }
++  }
++
++  bridge.onProgress(function (p) {
++    var total = p.total || 1;
++    var done = typeof p.progress === "number" ? p.progress : 0;
++    $("progress-fill").style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
++    if (p.message) logLine(p.message);
++    $("gen-status").textContent = "生成中… " + (p.message || "");
++  });
++
++  bridge.onResourceUpdate(function () {
++    refreshVersions();
++  });
++
++  // ------------------------------------------------------------------
++  // generate (FR-2-1)
++  // ------------------------------------------------------------------
++  function logLine(text) {
++    var li = document.createElement("li");
++    li.textContent = new Date().toLocaleTimeString() + "  " + text;
++    var log = $("gen-log");
++    log.insertBefore(li, log.firstChild);
++    while (log.children.length > 40) log.removeChild(log.lastChild);
++  }
++
++  function setStatus(text, isErr) {
++    var el = $("gen-status");
++    el.textContent = text;
++    el.className = isErr ? "err" : "";
++  }
++
++  async function doGenerate() {
++    var prompt = $("req-input").value.trim();
++    if (!prompt) { setStatus("请先输入需求描述", true); return; }
++    var format = $("format-select").value;
++    var screenCount = parseInt($("count-select").value, 10) || 3;
++    $("btn-generate").disabled = true;
++    $("progress-fill").style.width = "0%";
++    setStatus("生成中…");
++    logLine("开始生成:" + prompt.slice(0, 30) + (prompt.length > 30 ? "…" : ""));
++    try {
++      var res = await bridge.callTool("uigen_generate", {
++        prompt: prompt, format: format, screenCount: screenCount
++      });
++      if (res && res.ok && Array.isArray(res.screens) && res.screens.length) {
++        state.screens = res.screens;
++        state.versionId = res.versionId || "";
++        $("progress-fill").style.width = "100%";
++        setStatus("完成 · 引擎:" + (res.engine || "?") + " · 版本 " + (res.versionId || "-"));
++        logLine("生成完成:" + res.screens.length + " 屏,版本 " + (res.versionId || "-"));
++        renderCanvas();
++        selectScreen(0);
++        refreshVersions();
++      } else {
++        setStatus("生成失败:" + (res && res.error ? res.error : "未知错误"), true);
++      }
++    } catch (e) {
++      setStatus("生成失败:" + e.message, true);
++      logLine("错误:" + e.message);
++    } finally {
++      $("btn-generate").disabled = false;
++    }
++  }
++
++  // ------------------------------------------------------------------
++  // canvas: grid, zoom, drag reorder, select (FR-2-2)
++  // ------------------------------------------------------------------
++  function renderCanvas() {
++    var grid = $("canvas-grid");
++    grid.textContent = "";
++    if (!state.screens.length) {
++      var empty = document.createElement("div");
++      empty.className = "canvas-empty";
++      empty.textContent = "还没有原型。在左侧输入需求,点击「生成原型」。";
++      grid.appendChild(empty);
++      return;
++    }
++    state.screens.forEach(function (s, i) {
++      var card = document.createElement("div");
++      card.className = "screen-card" + (i === state.selected ? " selected" : "");
++      card.draggable = true;
++      card.dataset.index = String(i);
++
++      var thumb = document.createElement("div");
++      thumb.className = "thumb";
++      thumb.innerHTML =
++        '<div class="t-bar"></div><div class="t-body">' +
++        '<div class="t-line"></div><div class="t-line short"></div>' +
++        '<div class="t-line"></div><div class="t-line short"></div></div>' +
++        '<div class="t-tabs"><i></i><i></i><i></i><i></i></div>';
++
++      var name = document.createElement("div");
++      name.className = "card-name";
++      name.textContent = s.name || s.id;
++
++      var meta = document.createElement("div");
++      meta.className = "card-id";
++      meta.innerHTML = '<span class="card-order">#' + (i + 1) + "</span>" + (s.id || "");
++
++      card.appendChild(thumb);
++      card.appendChild(name);
++      card.appendChild(meta);
++
++      card.addEventListener("click", function () { selectScreen(i); });
++      card.addEventListener("dragstart", function (ev) {
++        card.classList.add("dragging");
++        ev.dataTransfer.setData("text/plain", String(i));
++        ev.dataTransfer.effectAllowed = "move";
++      });
++      card.addEventListener("dragend", function () { card.classList.remove("dragging"); });
++      card.addEventListener("dragover", function (ev) {
++        ev.preventDefault();
++        ev.dataTransfer.dropEffect = "move";
++      });
++      card.addEventListener("drop", function (ev) {
++        ev.preventDefault();
++        var from = parseInt(ev.dataTransfer.getData("text/plain"), 10);
++        var to = i;
++        if (isNaN(from) || from === to) return;
++        var moved = state.screens.splice(from, 1)[0];
++        state.screens.splice(to, 0, moved);
++        if (state.selected === from) state.selected = to;
++        else if (from < state.selected && to >= state.selected) state.selected -= 1;
++        else if (from > state.selected && to <= state.selected) state.selected += 1;
++        logLine("排序调整:" + moved.name + " → 第 " + (to + 1) + " 位");
++        renderCanvas();
++        renderPreview();
++      });
++
++      grid.appendChild(card);
++    });
++    applyZoom();
++  }
++
++  function applyZoom() {
++    var grid = $("canvas-grid");
++    grid.style.transform = "scale(" + state.zoom + ")";
++    $("zoom-label").textContent = Math.round(state.zoom * 100) + "%";
++  }
++
++  function setZoom(z) {
++    state.zoom = Math.min(1.6, Math.max(0.5, z));
++    applyZoom();
++  }
++
++  // ------------------------------------------------------------------
++  // preview 390px + hotspots (FR-2-2 / FR-2-4)
++  // ------------------------------------------------------------------
++  function currentScreen() {
++    return state.screens[state.selected] || null;
++  }
++
++  function renderPreview() {
++    var s = currentScreen();
++    var frame = $("preview-frame");
++    var layer = $("hotspot-layer");
++    layer.textContent = "";
++    if (!s) {
++      frame.srcdoc = "<!doctype html><html><body style=\"font-family:system-ui;color:#888;padding:24px\">未选择屏幕</body></html>";
++      $("preview-title").textContent = "未选择屏幕";
++      renderArtifact();
++      return;
++    }
++    frame.srcdoc = s.html || "<!doctype html><html><body>该屏幕没有 HTML 产物</body></html>";
++    $("preview-title").textContent = (s.name || s.id) + " · 390 × 844";
++    if ($("hotspot-toggle").checked) {
++      (s.hotspots || []).forEach(function (h) {
++        var el = document.createElement("div");
++        el.className = "hotspot";
++        el.style.left = h.x + "px";
++        el.style.top = h.y + "px";
++        el.style.width = h.w + "px";
++        el.style.height = h.h + "px";
++        var label = document.createElement("span");
++        label.className = "hs-label";
++        label.textContent = "→ " + (h.label || h.to);
++        el.appendChild(label);
++        el.addEventListener("click", function () {
++          var target = state.screens.findIndex(function (x) { return x.id === h.to; });
++          if (target >= 0) {
++            selectScreen(target);
++            logLine("热点跳转:" + (s.name || s.id) + " → " + (state.screens[target].name || h.to));
++          }
++        });
++        layer.appendChild(el);
++      });
++    }
++  }
++
++  function renderArtifact() {
++    var s = currentScreen();
++    var code = $("artifact-code");
++    if (!s) { code.textContent = "(选择屏幕后查看产物)"; return; }
++    code.textContent = s[state.format] || "(该格式无产物)";
++  }
++
++  function selectScreen(i) {
++    if (i < 0 || i >= state.screens.length) return;
++    state.selected = i;
++    renderCanvas();
++    renderPreview();
++    renderArtifact();
++    updatePlayStatus();
++  }
++
++  // ------------------------------------------------------------------
++  // demo playback (FR-2-5): play / pause / step
++  // ------------------------------------------------------------------
++  function updatePlayStatus() {
++    var n = state.screens.length;
++    var pos = state.selected >= 0 ? (state.selected + 1) + "/" + n : "-/" + n;
++    $("play-status").textContent = (state.playing ? "播放中 " : "已暂停 ") + pos;
++    $("btn-play").textContent = state.playing ? "⏸ 暂停" : "▶ 播放";
++  }
++
++  function step(delta) {
++    if (!state.screens.length) return;
++    var next = state.selected + delta;
++    if (next < 0) next = state.screens.length - 1;
++    if (next >= state.screens.length) next = 0;
++    selectScreen(next);
++    updatePlayStatus();
++  }
++
++  function togglePlay() {
++    if (!state.screens.length) { setStatus("没有可播放的屏幕", true); return; }
++    state.playing = !state.playing;
++    if (state.playing) {
++      state.playTimer = setInterval(function () { step(1); }, 2200);
++      logLine("演示播放开始");
++    } else {
++      clearInterval(state.playTimer);
++      state.playTimer = null;
++      logLine("演示播放暂停");
++    }
++    updatePlayStatus();
++  }
++
++  // ------------------------------------------------------------------
++  // versions / import / export (FR-2-6 / FR-2-7 / FR-2-8)
++  // ------------------------------------------------------------------
++  async function refreshVersions() {
++    try {
++      var res = await bridge.callTool("uigen_list_versions", { limit: 30 });
++      var list = $("version-list");
++      list.textContent = "";
++      var versions = (res && res.versions) || [];
++      if (!versions.length) {
++        var li0 = document.createElement("li");
++        li0.className = "v-meta";
++        li0.textContent = "暂无版本";
++        list.appendChild(li0);
++        return;
++      }
++      versions.forEach(function (v) {
++        var li = document.createElement("li");
++        if (v.id === state.versionId) li.className = "on";
++        var t = document.createElement("div");
++        t.className = "v-id";
++        t.textContent = v.id;
++        var m = document.createElement("div");
++        m.className = "v-meta";
++        m.textContent = (v.screenCount + " 屏 · " + (v.createdAt || "").slice(0, 19).replace("T", " ") + " · " + (v.prompt || "").slice(0, 24));
++        li.appendChild(t);
++        li.appendChild(m);
++        li.addEventListener("click", function () { loadVersion(v.id); });
++        list.appendChild(li);
++      });
++    } catch (e) {
++      logLine("版本列表刷新失败:" + e.message);
++    }
++  }
++
++  async function loadVersion(id) {
++    try {
++      var res = await bridge.callTool("uigen_get_version", { versionId: id });
++      if (res && res.ok && res.version && Array.isArray(res.version.screens)) {
++        state.screens = res.version.screens;
++        state.versionId = id;
++        renderCanvas();
++        selectScreen(0);
++        setStatus("已载入版本 " + id);
++        logLine("载入版本:" + id);
++        refreshVersions();
++      } else {
++        setStatus("载入失败:" + (res && res.error ? res.error : "未知错误"), true);
++      }
++    } catch (e) {
++      setStatus("载入失败:" + e.message, true);
++    }
++  }
++
++  async function doImport() {
++    var dir = window.prompt("要导入的本地目录(含 *.html):");
++    if (!dir) return;
++    try {
++      var res = await bridge.callTool("uigen_import_dir", { dir: dir });
++      if (res && res.ok) {
++        setStatus("已导入 " + res.imported + " 个原型 → 版本 " + res.versionId);
++        logLine("目录导入:" + res.dir + " → " + res.versionId);
++        await loadVersion(res.versionId);
++      } else {
++        setStatus("导入失败:" + (res && res.error ? res.error : "未知错误"), true);
++      }
++    } catch (e) {
++      setStatus("导入失败:" + e.message, true);
++    }
++  }
++
++  async function doExport() {
++    if (!state.versionId) { setStatus("请先生成或载入一个版本", true); return; }
++    try {
++      var res = await bridge.callTool("uigen_export", { versionId: state.versionId });
++      if (res && res.ok) {
++        var names = (res.files || []).map(function (f) { return f.name; }).join(", ");
++        setStatus("已导出 " + (res.files || []).length + " 个文件 → " + res.targetDir);
++        logLine("导出:" + res.targetDir + " (" + names.slice(0, 80) + ")");
++      } else {
++        setStatus("导出失败:" + (res && res.error ? res.error : "未知错误"), true);
++      }
++    } catch (e) {
++      setStatus("导出失败:" + e.message, true);
++    }
++  }
++
++  // ------------------------------------------------------------------
++  // events
++  // ------------------------------------------------------------------
++  $("btn-generate").addEventListener("click", doGenerate);
++  $("btn-import").addEventListener("click", doImport);
++  $("btn-export").addEventListener("click", doExport);
++  $("btn-refresh-versions").addEventListener("click", refreshVersions);
++  $("zoom-in").addEventListener("click", function () { setZoom(state.zoom + 0.1); });
++  $("zoom-out").addEventListener("click", function () { setZoom(state.zoom - 0.1); });
++  $("zoom-reset").addEventListener("click", function () { setZoom(1); });
++  $("hotspot-toggle").addEventListener("change", renderPreview);
++  $("btn-play").addEventListener("click", togglePlay);
++  $("btn-step-prev").addEventListener("click", function () { step(-1); });
++  $("btn-step-next").addEventListener("click", function () { step(1); });
++
++  Array.prototype.forEach.call(document.querySelectorAll("#format-tabs [data-fmt]"), function (btn) {
++    btn.addEventListener("click", function () {
++      Array.prototype.forEach.call(document.querySelectorAll("#format-tabs [data-fmt]"), function (b) {
++        b.classList.remove("on");
++      });
++      btn.classList.add("on");
++      state.format = btn.dataset.fmt;
++      renderArtifact();
++    });
++  });
++
++  $("btn-copy").addEventListener("click", function () {
++    var s = currentScreen();
++    if (!s) return;
++    var text = s[state.format] || "";
++    function done() { setStatus("已复制 " + state.format + " 产物(" + text.length + " 字符)"); }
++    if (navigator.clipboard && navigator.clipboard.writeText) {
++      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
++    } else {
++      fallbackCopy(text, done);
++    }
++  });
++
++  function fallbackCopy(text, done) {
++    var ta = document.createElement("textarea");
++    ta.value = text;
++    document.body.appendChild(ta);
++    ta.select();
++    try { document.execCommand("copy"); done(); } catch (e) { setStatus("复制失败:" + e.message, true); }
++    document.body.removeChild(ta);
++  }
++
++  document.addEventListener("keydown", function (ev) {
++    if (ev.target && (ev.target.tagName === "TEXTAREA" || ev.target.tagName === "INPUT")) return;
++    if (ev.key === "ArrowRight") { step(1); }
++    else if (ev.key === "ArrowLeft") { step(-1); }
++    else if (ev.key === " ") { ev.preventDefault(); togglePlay(); }
++  });
++
++  // ------------------------------------------------------------------
++  // boot
++  // ------------------------------------------------------------------
++  renderCanvas();
++  renderPreview();
++  updatePlayStatus();
++  bridge.connect().then(function () {
++    setBridgeStatus();
++    refreshVersions();
++  });
++})();
++</script>
++</body>
++</html>
+diff --git a/packages/desktop/scripts/prepare-agent-node-bundle.mjs b/packages/desktop/scripts/prepare-agent-node-bundle.mjs
+index 11f63ff1..5c3aaa68 100644
+--- a/packages/desktop/scripts/prepare-agent-node-bundle.mjs
++++ b/packages/desktop/scripts/prepare-agent-node-bundle.mjs
+@@ -247,6 +247,23 @@ const officialPluginPackages = [
+     requiresRuntime: false,
+     stagedPath: "packages/zcode-guide-plugin",
+   },
++  {
++    // HBA 迁移（fr6）：UI 原型面板。零外部依赖（node 内置模块），无 runtime 构建；
++    // server.mjs 与 ui/ 面板资源靠 includedOfficialPluginTopLevelPaths 白名单进包。
++    packageName: "@zcode/hba-uigen-plugin",
++    relativePath: "apps/zcode-cli/packages/hba-uigen-plugin",
++    requiresRuntime: false,
++    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/bridge.js", "ui/panel.html"],
++    stagedPath: "packages/hba-uigen-plugin",
++  },
++  {
++    // HBA 迁移（fr6）：运行面板。同上，纯 JS 插件，直接 stage。
++    packageName: "@zcode/hba-run-plugin",
++    relativePath: "apps/zcode-cli/packages/hba-run-plugin",
++    requiresRuntime: false,
++    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/panel.html"],
++    stagedPath: "packages/hba-run-plugin",
++  },
+   {
+     // node_repl 宿主：Browser Use 与 Computer Use 共用的 MCP runtime，本轮抽成独立包。
+     // 它没有 listing（不进插件市场展示面），但生产包首启 seed 必须拿到它的 dist runtime，
+@@ -293,8 +310,12 @@ const includedOfficialPluginTopLevelPaths = new Set([
+   "output-styles",
+   "package.json",
+   "scripts",
++  // 与 bootstrap/bundled-plugins.ts 的 includedTopLevelPaths 保持同步：
++  // HBA UI 插件的 server.mjs（包根）与 ui/（面板资源）必须进包。
++  "server.mjs",
+   "skills",
+   "templates",
++  "ui",
+ ]);
+ const excludedOfficialPluginAssetNames = new Set([
+   ".DS_Store",
+diff --git a/packages/shared/src/plugin-marketplaces.ts b/packages/shared/src/plugin-marketplaces.ts
+index 3e976241..b2fa518b 100644
+--- a/packages/shared/src/plugin-marketplaces.ts
++++ b/packages/shared/src/plugin-marketplaces.ts
+@@ -33,6 +33,9 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
+   // visualize（交互视图）随 UI 插件合入时 CLI 定义已标 defaultEnabled，但这里漏加，
+   // Settings 会把它当成默认关闭，与 CLI 实际启用状态不一致。
+   "visualize@zcode-plugins-official",
++  // HBA 迁移（fr6）内置 UI 面板：UI 原型 / 运行面板，默认启用，launcher 常驻入口。
++  "hba-uigen@zcode-plugins-official",
++  "hba-run@zcode-plugins-official",
+   // 电脑控制回退为默认关闭，故 computer-use 不在此名单内。
+   // 该集合必须与 official-plugin-definitions.ts 里标了 defaultEnabled 的插件逐一对应，
+   // bootstrap 的「Settings 默认启用集合与 CLI 的官方插件声明一致」单测机械对照两者。

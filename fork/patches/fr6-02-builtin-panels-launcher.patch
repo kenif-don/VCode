@@ -1,0 +1,109 @@
+diff --git a/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts b/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
+index 4a2c3266..ad98a011 100644
+--- a/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
++++ b/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
+@@ -1,8 +1,40 @@
+ import { useEffect, useState } from "react";
+ import type { ClientConfigSnapshot } from "@zcode/shared";
++import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID } from "@zcode/shared";
+ import { useOptionalServices } from "@/hooks/useServices.js";
+ import { logger } from "@/logger.js";
+ 
++type UiPluginRecommendation = ClientConfigSnapshot["uiPluginRecommendations"][number];
++
++// 本地内置面板推荐（fr6）：HBA UI 原型 / 运行面板随内置插件包发布，
++// 不依赖云端下发——clientConfig 的 uiPluginRecommendations 为空、不可达或未含它们时，
++// launcher 也要常驻这两个入口。与云端结果合并去重，内置条目固定靠前。
++export const BUILTIN_UI_PLUGIN_RECOMMENDATIONS: readonly UiPluginRecommendation[] = [
++  {
++    pluginId: "hba-uigen@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
++    surfaceId: "hba-uigen",
++  },
++  {
++    pluginId: "hba-run@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
++    surfaceId: "hba-run",
++  },
++];
++
++// 内置条目在前，云端条目随后；按 pluginId+surfaceId 去重，云端可调整顺序但不重复追加。
++export function mergeUiPluginRecommendations(
++  cloud: readonly UiPluginRecommendation[],
++): UiPluginRecommendation[] {
++  const seen = new Set<string>();
++  const merged: UiPluginRecommendation[] = [];
++  for (const entry of [...BUILTIN_UI_PLUGIN_RECOMMENDATIONS, ...cloud]) {
++    const key = entry.pluginId + " " + entry.surfaceId;
++    if (seen.has(key)) continue;
++    seen.add(key);
++    merged.push(entry);
++  }
++  return merged;
++}
++
+ /** 缓存和请求合并归 Host 配置服务；此处只持有当前入口的展示投影。 */
+ export function useUiPluginRecommendations(enabled: boolean) {
+   const service = useOptionalServices()?.clientConfigService;
+@@ -16,11 +48,16 @@ export function useUiPluginRecommendations(enabled: boolean) {
+     if (enabled && service) {
+       void service.getSnapshot().then(
+         ({ uiPluginRecommendations }) => {
+-          if (active) setSnapshot({ service, recommendations: uiPluginRecommendations ?? [] });
++          if (active)
++            setSnapshot({
++              service,
++              recommendations: mergeUiPluginRecommendations(uiPluginRecommendations ?? []),
++            });
+         },
+         () => {
+           if (active) {
+-            setSnapshot({ service, recommendations: [] });
++            // 云端下发失败不影响本地内置面板：内置推荐照常下发。
++            setSnapshot({ service, recommendations: mergeUiPluginRecommendations([]) });
+             logger.warn("[plugin-ui] 推荐配置读取失败");
+           }
+         },
+diff --git a/packages/ui/test/useUiPluginRecommendations.test.ts b/packages/ui/test/useUiPluginRecommendations.test.ts
+index fcd88bdf..c13885d9 100644
+--- a/packages/ui/test/useUiPluginRecommendations.test.ts
++++ b/packages/ui/test/useUiPluginRecommendations.test.ts
+@@ -1,7 +1,10 @@
+ // @vitest-environment jsdom
+ import { act, cleanup, renderHook } from "@testing-library/react";
+ import { afterEach, expect, it, vi } from "vitest";
+-import { useUiPluginRecommendations } from "@/plugin-ui/adapters/useUiPluginRecommendations.js";
++import {
++  mergeUiPluginRecommendations,
++  useUiPluginRecommendations,
++} from "@/plugin-ui/adapters/useUiPluginRecommendations.js";
+ 
+ const context = vi.hoisted(() => ({ service: { getSnapshot: vi.fn() } }));
+ vi.mock("@/hooks/useServices.js", () => ({
+@@ -27,7 +30,7 @@ it("禁用不请求，启用读取，关闭后忽略迟到结果", async () => {
+   expect(result.current.recommendations).toEqual([]);
+ });
+ 
+-it("切换服务立即清空投影，丢弃旧服务迟到结果，失败为空", async () => {
++it("切换服务立即清空投影，丢弃旧服务迟到结果，失败仍保内置推荐", async () => {
+   const pending = Promise.withResolvers<{ uiPluginRecommendations: typeof recommendations }>();
+   context.service = { getSnapshot: vi.fn().mockReturnValue(pending.promise) };
+   const { result, rerender } = renderHook(() => useUiPluginRecommendations(true));
+@@ -37,15 +40,16 @@ it("切换服务立即清空投影，丢弃旧服务迟到结果，失败为空"
+   };
+   rerender();
+   await act(async () => {});
+-  expect(result.current.recommendations).toEqual(recommendations);
++  expect(result.current.recommendations).toEqual(mergeUiPluginRecommendations(recommendations));
+   expect(result.current.loading).toBe(false);
+   await act(async () => pending.resolve({ uiPluginRecommendations: [] }));
+-  expect(result.current.recommendations).toEqual(recommendations);
++  expect(result.current.recommendations).toEqual(mergeUiPluginRecommendations(recommendations));
+   expect(result.current.loading).toBe(false);
+   context.service = { getSnapshot: vi.fn().mockRejectedValue(new Error("offline")) };
+   rerender();
+   expect(result.current.recommendations).toEqual([]);
+   await act(async () => {});
+-  expect(result.current.recommendations).toEqual([]);
++  // 云端读取失败只丢云端条目，本地内置面板推荐照常下发。
++  expect(result.current.recommendations).toEqual(mergeUiPluginRecommendations([]));
+   expect(result.current.loading).toBe(false);
+ });

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "hba-on-zcode.session-fixture/1",
+  "tool": "session-fixtures.mjs",
+  "generatedAt": "2026-10-27T17:32:30.384Z",
+  "params": {
+    "rounds": 500,
+    "toolRatio": 0.4,
+    "seed": 42
+  },
+  "files": [
+    {
+      "name": "session.json",
+      "bytes": 1644298,
+      "sha256": "8250150f251db0675c2d4c920d01868502117c2446d33aa79d0f4cfa30867b0c",
+      "messageCount": 1542,
+      "rounds": 500
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "dev-hba-on-zcode-fc91674a",
+  "plugins": [
+    {
+      "name": "hba-uigen",
+      "source": "./hba-uigen",
+      "version": "0.1.2",
+      "description": "UI prototype generation panel (HBA FR-2): multi-screen canvas, 390px preview, demo playback, HTML/JSX/Vue artifacts, versions, import/export.",
+      "displayName": "hba-uigen"
+    },
+    {
+      "name": "hba-run",
+      "source": "./hba-run",
+      "version": "0.1.1",
+      "description": "Run panel plugin (FR-4): run configurations, one-click run/stop with live output, task history and preview linking, persisted to .hba/run.json.",
+      "displayName": "hba-run"
+    }
+  ]
+}

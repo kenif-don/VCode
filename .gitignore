@@ -1,0 +1,25 @@
+# Build artifacts / large binaries (dist/ 含 156M 单文件 exe,GitHub 100M 限制会拒绝)
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.benchmarks/
+
+# Node
+node_modules/
+
+# Test / temp output
+*.log
+tmp/
+temp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

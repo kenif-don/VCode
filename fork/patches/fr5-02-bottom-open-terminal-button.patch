@@ -1,0 +1,240 @@
+diff --git a/packages/ui/src/WorkspaceOpenTerminalButton.tsx b/packages/ui/src/WorkspaceOpenTerminalButton.tsx
+new file mode 100644
+index 0000000..0ca47f8
+--- /dev/null
++++ b/packages/ui/src/WorkspaceOpenTerminalButton.tsx
+@@ -0,0 +1,56 @@
++import { SquareTerminalIcon } from "lucide-react";
++import { cn } from "@/components/lib/utils.js";
++import { Button } from "@/components/ui/button.js";
++import { ControlHintTooltip } from "@/ControlHintTooltip.js";
++import { useZCodeIntl } from "@/i18n/IntlProvider.js";
++import { useTerminalEntryStore } from "@/store/terminalEntryStore.js";
++import { runUserAction } from "@/lib/userActionTelemetry.js";
++
++/**
++ * FR-5-2 底部“打开终端”按钮：点击在右侧面板打开终端标签页；再次点击聚焦已有终端。
++ *
++ * 挂载于 composer 左下（leadingActionsNode）。按钮只负责发起 terminalEntryStore 单例桥
++ * 请求；打开/聚焦的实际动作由 useAppPanels 的 useTerminalEntryBridge 按 workspaceKey 消费，
++ * 与顶部栏旧 toggleTerminal 按钮（FR-5-1 已移除）各管各的终端形态。
++ */
++export function WorkspaceOpenTerminalButton({
++  workspacePath,
++  workspaceIdentity,
++  disabledReason,
++}: {
++  workspacePath: string;
++  workspaceIdentity?: string;
++  disabledReason?: string;
++}) {
++  const { intl } = useZCodeIntl();
++  const label = intl.formatMessage({ id: "terminal.show" });
++  const workspaceKey = workspaceIdentity?.trim() || workspacePath;
++
++  return (
++    <ControlHintTooltip title={disabledReason ?? label} side="top">
++      <Button
++        type="button"
++        variant="ghost"
++        size="icon-md"
++        className={cn("text-foreground hover:bg-hover hover:text-foreground")}
++        aria-label={label}
++        disabled={Boolean(disabledReason)}
++        onClick={() =>
++          runUserAction({
++            input: {
++              featureId: "workbench.terminal",
++              action: "open",
++              trigger: "button",
++            },
++            operation: () =>
++              useTerminalEntryStore.getState().requestOpen({ workspaceKey }),
++            completed: { resultSource: "local_commit" },
++            failureStage: "terminal_open",
++          })
++        }
++      >
++        <SquareTerminalIcon className="size-4" />
++      </Button>
++    </ControlHintTooltip>
++  );
++}
+diff --git a/packages/ui/src/hooks/useAppPanels.ts b/packages/ui/src/hooks/useAppPanels.ts
+index b912514..d76cad8 100644
+--- a/packages/ui/src/hooks/useAppPanels.ts
++++ b/packages/ui/src/hooks/useAppPanels.ts
+@@ -90,6 +90,7 @@ import { getPathLeaf, joinFilePath, toFileUrl } from "@/lib/path.js";
+ import { shouldOpenWorkflowArtifactInBrowser } from "@/lib/workflowArtifactOpen.js";
+ import { useWhiteboardStore } from "@/store/whiteboardStore.js";
+ import { useModelTrajectoryOpenBridge } from "@/hooks/useModelTrajectoryOpenBridge.js";
++import { useTerminalEntryBridge } from "@/hooks/useTerminalEntryBridge.js";
+ import { useServices } from "@/hooks/useServices.js";
+ import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
+ import { clearSelectionSideChat } from "@/lib/selectionSideChatRuntime.js";
+@@ -906,6 +907,38 @@ export function useAppPanels(options: {
+     workspaceRemoteSessionId,
+   ]);
+ 
++  // FR-5-2：底部“打开终端”按钮的打开/聚焦语义——已有终端 tab 时只聚焦，没有才新建；
++  // 与 quickpick add-terminal-tab 的“始终新建页签”语义分开，重复点击不再堆叠终端。
++  const handleOpenOrFocusTerminalTab = useCallback(() => {
++    if (isOfficeMode) return;
++    revealSidePaneForCurrentOwner();
++    commitOpenedSidePaneState((current) => {
++      const existing = current?.tabs.find((tab) => tab.type === "terminal");
++      if (existing) {
++        logger.info(
++          `[App] 聚焦右侧终端 tab=${existing.title} workspace=${workspaceAbsPath} tabs=${current?.tabs.length ?? 0}`,
++        );
++        return setActiveSidePaneTab(current, existing.id);
++      }
++      const title = createTerminalSidePaneTitle(current, workspaceAbsPath);
++      const next = openTerminalSidePane(current, {
++        title,
++        cwd: workspaceAbsPath,
++        remoteSessionId: workspaceRemoteSessionId,
++      });
++      logger.info(
++        `[App] 新建右侧终端 tab=${title} workspace=${workspaceAbsPath} tabs=${next.tabs.length}`,
++      );
++      return next;
++    });
++  }, [
++    isOfficeMode,
++    commitOpenedSidePaneState,
++    revealSidePaneForCurrentOwner,
++    workspaceAbsPath,
++    workspaceRemoteSessionId,
++  ]);
++
+   const handleOpenModelTrajectory = useCallback(
+     (params: { taskId: string; title?: string | null }) => {
+       if (!params.taskId) {
+@@ -1337,6 +1370,13 @@ export function useAppPanels(options: {
+     handleOpenModelTrajectory,
+   );
+ 
++  // FR-5-2：底部“打开终端”按钮挂载位置很深（composer 左下），经 terminalEntryStore 单例桥
++  // 发起请求，这里按 workspaceKey 匹配消费，避免把侧栏控制器回调贯穿 composer 树。
++  useTerminalEntryBridge(
++    workspaceIdentity?.trim() || workspaceAbsPath,
++    handleOpenOrFocusTerminalTab,
++  );
++
+   const handleToggleTerminal = useCallback(() => {
+     setIsTerminalOpen((open) => {
+       if (isOfficeMode && !open) return open;
+@@ -1675,6 +1715,7 @@ export function useAppPanels(options: {
+     handleOpenPluginMarket,
+     handleOpenNewSidePaneTab,
+     handleOpenTerminalTab,
++    handleOpenOrFocusTerminalTab,
+     handleOpenModelTrajectory,
+     handleOpenSubagentSession,
+     handleOpenBackgroundBash,
+diff --git a/packages/ui/src/hooks/useTerminalEntryBridge.ts b/packages/ui/src/hooks/useTerminalEntryBridge.ts
+new file mode 100644
+index 0000000..22deb98
+--- /dev/null
++++ b/packages/ui/src/hooks/useTerminalEntryBridge.ts
+@@ -0,0 +1,29 @@
++import { useEffect } from "react";
++import { useTerminalEntryStore } from "@/store/terminalEntryStore.js";
++
++/**
++ * 订阅“打开/聚焦右侧终端 tab”请求并交给当前 workspace 的侧边栏控制器（FR-5-2）。
++ *
++ * 触发入口是 composer 左下的“打开终端”按钮，经 terminalEntryStore 单例 store 发起请求；
++ * 这里按 workspaceKey 匹配后调用 onOpen 打开/聚焦侧边栏终端 tab，再消费请求，
++ * 避免多 workspace 实例串开。形态与 useModelTrajectoryOpenBridge 保持一致。
++ */
++export function useTerminalEntryBridge(ownWorkspaceKey: string, onOpen: () => void): void {
++  useEffect(() => {
++    const handlePending = (
++      pendingRequest: ReturnType<typeof useTerminalEntryStore.getState>["pendingRequest"],
++    ) => {
++      if (!pendingRequest || pendingRequest.workspaceKey !== ownWorkspaceKey) {
++        return;
++      }
++      onOpen();
++      useTerminalEntryStore.getState().consumeRequest(pendingRequest.requestId);
++    };
++
++    // 订阅期间可能已有 pending 请求（点击与挂载存在竞态），先处理一次当前值。
++    handlePending(useTerminalEntryStore.getState().pendingRequest);
++    return useTerminalEntryStore.subscribe((state) => {
++      handlePending(state.pendingRequest);
++    });
++  }, [onOpen, ownWorkspaceKey]);
++}
+diff --git a/packages/ui/src/store/terminalEntryStore.ts b/packages/ui/src/store/terminalEntryStore.ts
+new file mode 100644
+index 0000000..7a11b13
+--- /dev/null
++++ b/packages/ui/src/store/terminalEntryStore.ts
+@@ -0,0 +1,40 @@
++import { create } from "zustand";
++
++/**
++ * 打开/聚焦“右侧终端 tab”的请求桥接 store（FR-5-2）。
++ *
++ * 背景：底部“打开终端”按钮挂在 composer 左下（leadingActionsNode），位置很深；而右侧
++ * side pane 的终端 tab 状态由每个 workspace 的 useAppPanels 持有。为避免把侧栏控制器
++ * 回调贯穿整棵 composer/SessionPane 树，这里用轻量单例 store 作为桥：按钮写入 pending
++ * 请求，目标 workspace 的 useAppPanels 经 useTerminalEntryBridge 订阅并消费（按
++ * workspaceKey 匹配，避免多 workspace 实例串开）。形态与 modelTrajectoryStore 保持一致。
++ */
++export interface TerminalEntryOpenRequest {
++  /** 唯一请求 id，保证同一按钮连续点击也能触发消费。 */
++  requestId: string;
++  /** workspaceIdentity?.trim() || workspacePath，用于定位目标 workspace 侧边栏。 */
++  workspaceKey: string;
++}
++
++interface TerminalEntryStoreState {
++  pendingRequest: TerminalEntryOpenRequest | null;
++  requestOpen: (request: { workspaceKey: string }) => void;
++  consumeRequest: (requestId: string) => void;
++}
++
++let requestSeq = 0;
++
++export const useTerminalEntryStore = create<TerminalEntryStoreState>((set) => ({
++  pendingRequest: null,
++  requestOpen: (request) => {
++    requestSeq += 1;
++    set({
++      pendingRequest: { ...request, requestId: `terminal-entry-open:${requestSeq}` },
++    });
++  },
++  consumeRequest: (requestId) => {
++    set((state) =>
++      state.pendingRequest?.requestId === requestId ? { pendingRequest: null } : state,
++    );
++  },
++}));
+diff --git a/packages/ui/src/v4/ConversationComposer.tsx b/packages/ui/src/v4/ConversationComposer.tsx
+index 8b19443..fdd93a6 100644
+--- a/packages/ui/src/v4/ConversationComposer.tsx
++++ b/packages/ui/src/v4/ConversationComposer.tsx
+@@ -82,6 +82,7 @@ import {
+   AttachmentPreview,
+ } from "@/components/ai-elements/attachments.js";
+ import { Button } from "@/components/ui/button.js";
++import { WorkspaceOpenTerminalButton } from "@/WorkspaceOpenTerminalButton.js";
+ import {
+   Dialog,
+   DialogClose,
+@@ -2469,6 +2470,11 @@ function ConversationComposerImpl({
+   const leadingActionsNode = useMemo(
+     () => (
+       <>
++        {/* FR-5-2：底部“打开终端”入口（点击在右侧面板打开/聚焦终端页签）。 */}
++        <WorkspaceOpenTerminalButton
++          workspacePath={workspacePath}
++          workspaceIdentity={workspaceIdentity}
++        />
+         <V4ComposerModeSwitch
+           workspacePath={workspacePath}
+           workspaceIdentity={workspaceIdentity}

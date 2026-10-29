@@ -1,0 +1,309 @@
+diff --git a/packages/ui/src/GitPane.tsx b/packages/ui/src/GitPane.tsx
+index 88ca2a9..2e993ad 100644
+--- a/packages/ui/src/GitPane.tsx
++++ b/packages/ui/src/GitPane.tsx
+@@ -5,7 +5,7 @@ import type { GitChangeSourceId, GitDiffResult } from "@zcode/shared";
+ import { TID_GIT_PANE } from "@zcode/shared/test-ids";
+ import { cn } from "@/components/lib/utils.js";
+ import { Button } from "@/components/ui/button.js";
+-import { FileTextIcon, RefreshCw } from "lucide-react";
++import { FileTextIcon, GitForkIcon, RefreshCw } from "lucide-react";
+ import {
+   Select,
+   SelectContent,
+@@ -15,6 +15,8 @@ import {
+ } from "@/components/ui/select.js";
+ import { type GitPaneFileChange, type GitPaneRepositoryState } from "@/hooks/useGitRepository.js";
+ import { useServices } from "@/hooks/useServices.js";
++import type { CreateTaskRequest } from "@/app-shell/types.js";
++import { GitWorktreeDialog } from "@/GitWorktreeDialog.js";
+ import { useFileContextActions } from "@/hooks/useFileContextActions.js";
+ import { useWorkspaceOpenInEditorTarget } from "@/hooks/useWorkspaceOpenInEditorTarget.js";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+@@ -53,6 +55,7 @@ export function GitPane({
+   onClose: _onClose,
+   onRefresh,
+   onRevealFileInTree,
++  onCreateTask,
+   workspaceIdentity,
+   workspaceRemoteSessionId,
+ }: {
+@@ -70,6 +73,8 @@ export function GitPane({
+   onClose: () => void;
+   onRefresh: () => void;
+   onRevealFileInTree?: (path: string) => void;
++  /** FR-3-2：worktree 创建成功后在新会话打开（targetWorkspace 指向 worktree 路径）。 */
++  onCreateTask?: (request?: CreateTaskRequest) => void;
+ }) {
+   const { gitService } = useServices();
+   const { intl } = useZCodeIntl();
+@@ -90,6 +95,7 @@ export function GitPane({
+   });
+   const resolvedTheme = resolveTheme(theme);
+   const [expandedPath, setExpandedPath] = useState<string | null>(null);
++  const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
+   const [diffStateByKey, setDiffStateByKey] = useState<Record<string, GitDiffLoadState>>({});
+   const diffGenerationRef = useRef(0);
+   const pendingDiffKeysRef = useRef(new Set<string>());
+@@ -474,6 +480,16 @@ export function GitPane({
+             <RefreshCw className={cn("size-3.5", gitState.loading && "animate-spin")} />
+             {intl.formatMessage({ id: "git.action.refresh" })}
+           </Button>
++          {/* FR-3-2：worktree 隔离会话创建入口（P1）。 */}
++          <Button
++            type="button"
++            variant="ghost"
++            size="lg"
++            onClick={() => setWorktreeDialogOpen(true)}
++          >
++            <GitForkIcon className="size-3.5" />
++            {intl.formatMessage({ id: "git.worktree.create" })}
++          </Button>
+         </div>
+       </div>
+ 
+@@ -541,6 +557,12 @@ export function GitPane({
+           </div>
+         )}
+       </div>
++      <GitWorktreeDialog
++        open={worktreeDialogOpen}
++        onOpenChange={setWorktreeDialogOpen}
++        workspacePath={workspacePath}
++        onCreateTask={onCreateTask}
++      />
+     </section>
+   );
+ }
+diff --git a/packages/ui/src/GitWorktreeDialog.tsx b/packages/ui/src/GitWorktreeDialog.tsx
+new file mode 100644
+index 0000000..3234b67
+--- /dev/null
++++ b/packages/ui/src/GitWorktreeDialog.tsx
+@@ -0,0 +1,166 @@
++import { useCallback, useState } from "react";
++import { Button } from "@/components/ui/button.js";
++import {
++  Dialog,
++  DialogClose,
++  DialogContent,
++  DialogDescription,
++  DialogFooter,
++  DialogHeader,
++  DialogTitle,
++} from "@/components/ui/dialog.js";
++import type { CreateTaskRequest } from "@/app-shell/types.js";
++import { useServices } from "@/hooks/useServices.js";
++import { useZCodeIntl } from "@/i18n/IntlProvider.js";
++import { logger } from "@/logger.js";
++
++/**
++ * FR-3-2 worktree 隔离会话创建对话框（GitPane 入口）。
++ *
++ * 流程：`git worktree add -b <branch> <repoRoot>/.hba/worktrees/<name>`（gitService
++ * createWorktree）→ 创建成功后在 worktree 路径打开新会话（onCreateTask 带 targetWorkspace，
++ * 与跨项目发起会话同一条路径）。worktree 与主工作区状态隔离，用于高风险实验。
++ */
++export function GitWorktreeDialog({
++  open,
++  onOpenChange,
++  workspacePath,
++  onCreateTask,
++}: {
++  open: boolean;
++  onOpenChange: (open: boolean) => void;
++  workspacePath: string;
++  onCreateTask?: (request?: CreateTaskRequest) => void;
++}) {
++  const { gitService } = useServices();
++  const { intl } = useZCodeIntl();
++  const [name, setName] = useState("");
++  const [branchName, setBranchName] = useState("");
++  const [startPoint, setStartPoint] = useState("");
++  const [creating, setCreating] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++
++  const normalizedBranchName = branchName.trim() || `hba/${name.trim()}`;
++  const nameValid = /^[A-Za-z0-9._-]+$/.test(name.trim());
++
++  const handleCreate = useCallback(async () => {
++    const normalizedName = name.trim();
++    if (!/^[A-Za-z0-9._-]+$/.test(normalizedName) || normalizedName === "." || normalizedName === "..") {
++      setError(intl.formatMessage({ id: "git.worktree.error.invalidName" }));
++      return;
++    }
++    setCreating(true);
++    setError(null);
++    try {
++      const result = await gitService.createWorktree({
++        workspacePath,
++        name: normalizedName,
++        branchName: normalizedBranchName,
++        ...(startPoint.trim() ? { startPoint: startPoint.trim() } : {}),
++      });
++      if (!result.ok) {
++        setError(result.issues[0]?.message ?? intl.formatMessage({ id: "git.worktree.error.failed" }));
++        return;
++      }
++      logger.info(
++        `[GitWorktree] worktree 创建成功 workspace=${workspacePath} path=${result.worktreePath} branch=${result.branchName}`,
++      );
++      // 在 worktree 路径打开新会话;onCreateTask 缺省时仅创建 worktree(入口降级可用)。
++      onCreateTask?.({
++        targetWorkspace: { workspacePath: result.worktreePath },
++      });
++      setName("");
++      setBranchName("");
++      setStartPoint("");
++      onOpenChange(false);
++    } catch (cause) {
++      logger.warn("[GitWorktree] worktree 创建失败", { workspacePath, error: cause });
++      setError(
++        cause instanceof Error
++          ? cause.message
++          : intl.formatMessage({ id: "git.worktree.error.failed" }),
++      );
++    } finally {
++      setCreating(false);
++    }
++  }, [
++    gitService,
++    intl,
++    name,
++    normalizedBranchName,
++    onCreateTask,
++    onOpenChange,
++    startPoint,
++    workspacePath,
++  ]);
++
++  return (
++    <Dialog open={open} onOpenChange={onOpenChange}>
++      <DialogContent>
++        <DialogHeader>
++          <DialogTitle>{intl.formatMessage({ id: "git.worktree.dialog.title" })}</DialogTitle>
++          <DialogDescription>
++            {intl.formatMessage({ id: "git.worktree.dialog.description" })}
++          </DialogDescription>
++        </DialogHeader>
++        <div className="flex flex-col gap-3">
++          <label className="flex flex-col gap-1">
++            <span className="text-ui-sm text-foreground-subtle">
++              {intl.formatMessage({ id: "git.worktree.name.label" })}
++            </span>
++            <input
++              className="h-8 rounded-md border border-input-border bg-background px-2 text-ui-base"
++              value={name}
++              placeholder={intl.formatMessage({ id: "git.worktree.name.placeholder" })}
++              disabled={creating}
++              onChange={(event) => setName(event.target.value)}
++            />
++          </label>
++          <label className="flex flex-col gap-1">
++            <span className="text-ui-sm text-foreground-subtle">
++              {intl.formatMessage({ id: "git.worktree.branch.label" })}
++            </span>
++            <input
++              className="h-8 rounded-md border border-input-border bg-background px-2 text-ui-base"
++              value={branchName}
++              placeholder={normalizedBranchName}
++              disabled={creating}
++              onChange={(event) => setBranchName(event.target.value)}
++            />
++          </label>
++          <label className="flex flex-col gap-1">
++            <span className="text-ui-sm text-foreground-subtle">
++              {intl.formatMessage({ id: "git.worktree.base.label" })}
++            </span>
++            <input
++              className="h-8 rounded-md border border-input-border bg-background px-2 text-ui-base"
++              value={startPoint}
++              placeholder="HEAD"
++              disabled={creating}
++              onChange={(event) => setStartPoint(event.target.value)}
++            />
++          </label>
++          {error ? (
++            <p role="alert" className="text-ui-sm text-destructive">
++              {error}
++            </p>
++          ) : null}
++        </div>
++        <DialogFooter>
++          <DialogClose asChild>
++            <Button type="button" variant="ghost" disabled={creating}>
++              {intl.formatMessage({ id: "common.cancel" })}
++            </Button>
++          </DialogClose>
++          <Button
++            type="button"
++            disabled={creating || !nameValid}
++            onClick={() => void handleCreate()}
++          >
++            {intl.formatMessage({ id: "git.worktree.submit" })}
++          </Button>
++        </DialogFooter>
++      </DialogContent>
++    </Dialog>
++  );
++}
+diff --git a/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx b/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx
+index 1ee15e5..22912e6 100644
+--- a/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx
++++ b/packages/ui/src/app-shell/AnimatedSidePanePanel.tsx
+@@ -1351,6 +1351,7 @@ export function AnimatedSidePanePanel({
+                             onClose={onCloseGit}
+                             onRefresh={onRefreshGit}
+                             onRevealFileInTree={onRevealGitFileInTree}
++                            onCreateTask={onCreateTask}
+                           />
+                         ) : tab.type === "treemapping" ? (
+                           <TreemappingPane
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index c703f29..bbf2ffe 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -1851,6 +1851,19 @@ const enUS: Record<string, string> = {
+   "git.actionMenu.pushDialog.error.requestFailed": "Push failed: {error}",
+   "git.actionMenu.pushDialog.toast.success": "Pushed to {target}",
+   "git.branchSwitcher.label": "Branch",
++
++  // FR-3-2 worktree isolated session creation
++  "git.worktree.create": "Worktree session",
++  "git.worktree.dialog.title": "New worktree isolated session",
++  "git.worktree.dialog.description":
++    "Create an isolated worktree (new branch) under .hba/worktrees/<name> and open a new session rooted there for high-risk experiments.",
++  "git.worktree.name.label": "Name",
++  "git.worktree.name.placeholder": "feature-x",
++  "git.worktree.branch.label": "New branch (default hba/<name>)",
++  "git.worktree.base.label": "Start point (optional)",
++  "git.worktree.submit": "Create and open session",
++  "git.worktree.error.invalidName": "Name may only contain letters, digits, dot, underscore and dash.",
++  "git.worktree.error.failed": "Failed to create worktree. See logs.",
+   "git.branchSwitcher.trigger.ariaLabel": "Switch Git branch",
+   "git.branchSwitcher.searchPlaceholder": "Search branches",
+   "git.branchSwitcher.section.branches": "Branches",
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 5be5b8a..4f0c62f 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -1708,6 +1708,19 @@ const zhCN: Record<string, string> = {
+   "git.actionMenu.pushDialog.error.requestFailed": "推送失败：{error}",
+   "git.actionMenu.pushDialog.toast.success": "已推送到 {target}",
+   "git.branchSwitcher.label": "分支",
++
++  // FR-3-2 worktree 隔离会话创建
++  "git.worktree.create": "Worktree 会话",
++  "git.worktree.dialog.title": "新建 worktree 隔离会话",
++  "git.worktree.dialog.description":
++    "在 .hba/worktrees/<名称> 创建独立 worktree（新分支），并以该目录为工作区打开新会话，用于高风险实验。",
++  "git.worktree.name.label": "名称",
++  "git.worktree.name.placeholder": "feature-x",
++  "git.worktree.branch.label": "新分支（缺省 hba/<名称>）",
++  "git.worktree.base.label": "起始引用（可选）",
++  "git.worktree.submit": "创建并打开会话",
++  "git.worktree.error.invalidName": "名称仅允许字母、数字、点、下划线与连字符。",
++  "git.worktree.error.failed": "worktree 创建失败，请查看日志。",
+   "git.branchSwitcher.trigger.ariaLabel": "切换 Git 分支",
+   "git.branchSwitcher.searchPlaceholder": "搜索分支",
+   "git.branchSwitcher.section.branches": "分支",

@@ -1,0 +1,1755 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI 原型设计 · hba-uigen</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────
+   * hba-uigen 面板 — HBA UI 原型设计页布局(暖琥珀主题)。
+   * 变量移植自 HBA web/src/features/ui-gen/ui-gen.css(openstitch),
+   * 深/浅两盘;documentElement[data-theme] 由桥 onThemeChange 驱动
+   * (独立模式跟 prefers-color-scheme,默认 dark)。
+   * 面板运行在独立 iframe 内,变量直接挂 :root 无宿主冲突。
+   * ───────────────────────────────────────────────────────────── */
+  :root, :root[data-theme="dark"] {
+    --primary:          #f59e0b;
+    --primary-dark:     #d97706;
+    --primary-hover:    #fbbf24;
+    --primary-muted:    #fef3c7;
+    --primary-text:     #92400e;
+    --primary-fg:       #0f0f0f;
+
+    --bg-app:           #0f0f0f;
+    --bg-canvas:        #141414;
+    --bg-surface:       #1c1c1c;
+    --bg-surface-raised:#242424;
+    --bg-subtle:        #2a2a2a;
+    --bg-muted:         #333333;
+    --bg-input:         #1a1a1a;
+    --bg-hover:         #2e2e2e;
+
+    --border:           #2e2e2e;
+    --border-strong:    #3d3d3d;
+    --border-focus:     #f59e0b;
+
+    --text:             #ededed;
+    --text-secondary:   #a3a3a3;
+    --text-muted:       #a3a3a3;
+    --text-inverse:     #0f0f0f;
+
+    --status-green:     #22c55e;
+    --status-amber:     #f59e0b;
+    --status-red:       #ef4444;
+    --err-fg:           #ff9c9c;
+
+    --fw-html:          #e34c26;
+    --fw-html-bg:       rgba(227, 76, 38, 0.12);
+    --fw-react:         #61dafb;
+    --fw-react-bg:      rgba(97, 218, 251, 0.1);
+    --fw-vue:           #42b883;
+    --fw-vue-bg:        rgba(66, 184, 131, 0.1);
+
+    --grid-dot:         #242424;
+    --track-bg:         #2a2a2a;
+    --code-bg:          #101010;
+    --code-fg:          #d4d4d4;
+    --overlay-bg:       rgba(0, 0, 0, 0.72);
+
+    --radius-sm:   3px;
+    --radius-md:   6px;
+    --radius-lg:   10px;
+    --radius-xl:   14px;
+    --radius-full: 9999px;
+
+    --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md:  0 4px 12px rgba(0,0,0,0.5);
+    --shadow-lg:  0 8px 24px rgba(0,0,0,0.6);
+    --shadow-xl:  0 16px 48px rgba(0,0,0,0.7);
+
+    --transition-fast: 80ms ease;
+    --transition:      140ms ease;
+
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --primary:          #3F3429;
+    --primary-dark:     #2D241B;
+    --primary-hover:    #4B3E32;
+    --primary-muted:    #F0E9D4;
+    --primary-text:     #3F3429;
+    --primary-fg:       #FFFDF7;
+
+    --bg-app:           #FAF6EC;
+    --bg-canvas:        #F5EFDD;
+    --bg-surface:       #FFFDF7;
+    --bg-surface-raised:#F5EBD8;
+    --bg-subtle:        #F0E9D4;
+    --bg-muted:         #F0E9D4;
+    --bg-input:         #FAF6EC;
+    --bg-hover:         #F0E9D4;
+
+    --border:           #D9CFA9;
+    --border-strong:    #B8A47E;
+    --border-focus:     #3F3429;
+
+    --text:             #1A1714;
+    --text-secondary:   #4B3E32;
+    --text-muted:       #6E604F;
+    --text-inverse:     #FFFDF7;
+
+    --status-green:     #3DA66A;
+    --status-amber:     #F59E3B;
+    --status-red:       #A71C24;
+    --err-fg:           #A71C24;
+
+    --fw-html:          #e34c26;
+    --fw-html-bg:       rgba(227, 76, 38, 0.12);
+    --fw-react:         #2b8fc7;
+    --fw-react-bg:      rgba(43, 143, 199, 0.12);
+    --fw-vue:           #42b883;
+    --fw-vue-bg:        rgba(66, 184, 131, 0.12);
+
+    --grid-dot:         #E2D9BC;
+    --track-bg:         #EAE1C4;
+    --code-bg:          #F2ECDA;
+    --code-fg:          #2D241B;
+    --overlay-bg:       rgba(26, 23, 20, 0.4);
+
+    --shadow-sm:  0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md:  0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg:  0 8px 24px rgba(0,0,0,0.12);
+    --shadow-xl:  0 16px 48px rgba(0,0,0,0.15);
+
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg-app); color: var(--text);
+    display: flex; flex-direction: column; overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  button {
+    font: inherit; color: var(--text); background: var(--bg-subtle);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    padding: 5px 10px; cursor: pointer; white-space: nowrap;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+  }
+  button:hover { background: var(--bg-hover); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary {
+    background: var(--primary); border-color: var(--primary);
+    color: var(--primary-fg); font-weight: 600;
+  }
+  button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  select, textarea, input[type="text"] {
+    font: inherit; color: var(--text); background: var(--bg-input);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    padding: 6px 8px;
+  }
+  select:focus, textarea:focus, input:focus { outline: none; border-color: var(--border-focus); }
+
+  /* ── 顶栏(约 40px):左=工作区项目名+路径;右=播放/刷新/导入/导出/生成应用 ── */
+  #top-bar {
+    height: 40px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+  }
+  #proj-block { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  #proj-name { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+  #proj-path {
+    font-size: 11px; color: var(--text-muted); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 42vw;
+  }
+  #top-bar .spacer { flex: 1; }
+  #bridge-dot {
+    width: 8px; height: 8px; border-radius: var(--radius-full);
+    background: var(--status-amber); flex: none;
+  }
+  #bridge-dot.ok { background: var(--status-green); }
+  #btn-play-top { padding: 4px 12px; }
+  #btn-gen-top { padding: 4px 14px; }
+
+  /* ── 版本下拉 ── */
+  .dropdown { position: relative; }
+  .dropdown-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+    min-width: 300px; max-height: 380px; overflow-y: auto;
+    background: var(--bg-surface-raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+    padding: 6px; display: none;
+  }
+  .dropdown-menu.open { display: block; }
+  .dropdown-menu .v-item {
+    padding: 7px 10px; border-radius: var(--radius-md); cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .dropdown-menu .v-item:hover { background: var(--bg-hover); }
+  .dropdown-menu .v-item.on { border-color: var(--primary); background: var(--bg-hover); }
+  .dropdown-menu .v-id { font-size: 11px; color: var(--primary); font-family: Consolas, Menlo, monospace; }
+  .dropdown-menu .v-meta {
+    font-size: 11px; color: var(--text-muted); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dropdown-menu .v-empty { padding: 14px 10px; text-align: center; color: var(--text-muted); font-size: 12px; }
+
+  /* ── 主体:左页面树(220px,可折叠) + 右画布 ── */
+  #layout { flex: 1; display: flex; min-height: 0; }
+
+  #sidebar {
+    width: 220px; flex: none; display: flex; flex-direction: column;
+    border-right: 1px solid var(--border); background: var(--bg-surface);
+    min-height: 0; transition: width var(--transition);
+  }
+  #sidebar.collapsed { width: 0; border-right: none; overflow: hidden; }
+  #sidebar-head {
+    flex: none; display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--text-secondary); font-weight: 600;
+  }
+  #sidebar-head .count { color: var(--text-muted); font-weight: 400; }
+  #sidebar-head .spacer { flex: 1; }
+  #sidebar-head button { padding: 2px 8px; font-size: 12px; }
+  #screen-tree { flex: 1; overflow-y: auto; padding: 6px; }
+  #btn-sidebar-open {
+    position: absolute; left: 8px; top: 50px; z-index: 40; display: none;
+    padding: 4px 8px; box-shadow: var(--shadow-sm);
+  }
+  #btn-sidebar-open.show { display: block; }
+
+  .tree-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    border-radius: var(--radius-md); cursor: pointer; user-select: none;
+    border: 1px solid transparent; margin-bottom: 2px;
+  }
+  .tree-row:hover { background: var(--bg-hover); }
+  .tree-row.on { border-color: var(--primary); background: var(--bg-hover); }
+  .tree-row.drag-over { border-top: 2px solid var(--primary); border-radius: 0; }
+  .tree-row .t-thumb {
+    width: 26px; height: 38px; flex: none; border-radius: 3px; overflow: hidden;
+    background: #f5f6f8; border: 1px solid var(--border); position: relative;
+  }
+  .tree-row .t-thumb .tt-bar { height: 7px; background: var(--primary); opacity: .85; }
+  .tree-row .t-thumb .tt-line { height: 3px; margin: 3px 3px 0; border-radius: 2px; background: #d9dee5; }
+  .tree-row .t-info { flex: 1; min-width: 0; }
+  .tree-row .t-name {
+    font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tree-row .t-badge { font-size: 10px; margin-top: 1px; }
+  .badge-html  { color: var(--fw-html);  background: var(--fw-html-bg); }
+  .badge-jsx   { color: var(--fw-react); background: var(--fw-react-bg); }
+  .badge-vue   { color: var(--fw-vue);   background: var(--fw-vue-bg); }
+  .tree-row .t-badge span {
+    display: inline-block; padding: 0 5px; border-radius: var(--radius-full);
+  }
+  .tree-row .t-more {
+    flex: none; opacity: 0; padding: 1px 7px; font-size: 13px;
+    border-radius: var(--radius-md); background: transparent;
+    border: 1px solid var(--border-strong);
+  }
+  .tree-row:hover .t-more { opacity: 1; }
+  .tree-empty { padding: 24px 10px; text-align: center; color: var(--text-muted); font-size: 12px; }
+</style>
+<style>
+  /* ── 右侧画布:点状网格 + 屏幕卡片(绝对定位拖拽) ── */
+  #canvas-pane { flex: 1; position: relative; display: flex; flex-direction: column; min-width: 0; }
+  #screen-canvas {
+    flex: 1; overflow: auto; position: relative;
+    background-color: var(--bg-canvas);
+  }
+  #screen-canvas.grid-on {
+    background-image: radial-gradient(var(--grid-dot) 1.2px, transparent 1.2px);
+    background-size: 22px 22px;
+  }
+  .canvas-world {
+    position: relative; transform-origin: 0 0;
+    width: 4000px; height: 3000px;
+  }
+
+  /* 左缘竖排工具栏:+ / − / fit / 网格开关 */
+  #canvas-tools {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    z-index: 30; display: flex; flex-direction: column; gap: 4px;
+    background: var(--bg-surface-raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg); padding: 6px 4px; box-shadow: var(--shadow-md);
+  }
+  #canvas-tools button {
+    width: 30px; height: 30px; padding: 0; display: flex;
+    align-items: center; justify-content: center; font-size: 14px;
+    background: transparent; border-color: transparent;
+  }
+  #canvas-tools button:hover { background: var(--bg-hover); }
+  #canvas-tools button.on { color: var(--primary); background: var(--bg-hover); }
+  #zoom-label {
+    font-size: 10px; color: var(--text-muted); text-align: center;
+    user-select: none; padding: 2px 0;
+  }
+
+  /* 视口 pill:390 / 768 / 1280 切换卡片预设宽 */
+  #viewport-pill {
+    position: absolute; right: 12px; top: 12px; z-index: 30;
+    display: flex; gap: 2px; padding: 3px;
+    background: var(--bg-surface-raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full); box-shadow: var(--shadow-sm);
+  }
+  #viewport-pill button {
+    padding: 3px 12px; font-size: 11px; border-radius: var(--radius-full);
+    background: transparent; border-color: transparent; color: var(--text-secondary);
+  }
+  #viewport-pill button.on { background: var(--primary); color: var(--primary-fg); font-weight: 600; }
+
+  /* 屏幕卡片:标题栏(名称+编辑)+ iframe/代码 内容区 */
+  .screen-card {
+    position: absolute; display: flex; flex-direction: column;
+    background: var(--bg-surface); border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-lg); overflow: hidden;
+    box-shadow: var(--shadow-sm); user-select: none;
+  }
+  .screen-card.selected { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(245,158,11,.25), var(--shadow-md); }
+  .screen-card .card-head {
+    flex: none; height: 34px; display: flex; align-items: center; gap: 6px;
+    padding: 0 10px; background: var(--bg-surface-raised);
+    border-bottom: 1px solid var(--border); cursor: grab;
+  }
+  .screen-card .card-head:active { cursor: grabbing; }
+  .screen-card .card-name {
+    flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .screen-card .card-edit {
+    flex: none; opacity: 0; padding: 1px 6px; font-size: 12px;
+    background: transparent; border-color: transparent;
+  }
+  .screen-card:hover .card-edit { opacity: 1; }
+  .screen-card .card-body { flex: 1; position: relative; background: #fff; min-height: 0; }
+  .screen-card iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: 0; display: block; background: #fff;
+  }
+  .screen-card .card-code {
+    position: absolute; inset: 0; overflow: auto; margin: 0; padding: 10px;
+    background: var(--code-bg); color: var(--code-fg);
+    font: 11px/1.6 Consolas, Menlo, monospace; white-space: pre; tab-size: 2;
+  }
+  .canvas-empty {
+    position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+    text-align: center; color: var(--text-muted); pointer-events: none;
+  }
+  .canvas-empty .big { font-size: 15px; margin-bottom: 6px; color: var(--text-secondary); }
+
+  /* ── 「生成应用」弹层 ── */
+  #gen-overlay {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    align-items: center; justify-content: center; background: var(--overlay-bg);
+  }
+  #gen-overlay.open { display: flex; }
+  #gen-dialog {
+    width: min(560px, 92vw); background: var(--bg-surface-raised);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl); padding: 18px;
+  }
+  #gen-dialog h3 { font-size: 15px; margin-bottom: 4px; }
+  #gen-dialog .hint { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
+  #gen-prompt { width: 100%; height: 110px; resize: vertical; }
+  #gen-dialog .row { display: flex; gap: 10px; margin: 10px 0; }
+  #gen-dialog .row > div { flex: 1; }
+  #gen-dialog .field-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  #gen-dialog select { width: 100%; }
+  #gen-progress { height: 6px; border-radius: 3px; background: var(--track-bg); overflow: hidden; margin: 8px 0 4px; }
+  #gen-progress-fill { height: 100%; width: 0; background: var(--primary); transition: width .25s; }
+  #gen-msg { font-size: 11.5px; color: var(--text-secondary); min-height: 17px; }
+  #gen-msg.err { color: var(--err-fg); }
+  #gen-dialog .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  /* ── 全屏播放层 ── */
+  #play-overlay {
+    position: fixed; inset: 0; z-index: 90; display: none;
+    flex-direction: column; background: var(--overlay-bg);
+  }
+  #play-overlay.open { display: flex; }
+  #play-head {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; background: var(--bg-surface); border-bottom: 1px solid var(--border);
+  }
+  #play-title { font-weight: 600; }
+  #play-pos { color: var(--text-muted); font-size: 12px; }
+  #play-head .spacer { flex: 1; }
+  #play-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 16px; }
+  #play-frame {
+    height: 100%; aspect-ratio: 390 / 844; max-width: 100%;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+    background: #fff; box-shadow: var(--shadow-xl);
+  }
+
+  /* ── 提示条 ── */
+  #toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 120; padding: 7px 16px; border-radius: var(--radius-full);
+    background: var(--bg-surface-raised); color: var(--text);
+    border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg);
+    font-size: 12px; opacity: 0; pointer-events: none;
+    transition: opacity var(--transition);
+  }
+  #toast.show { opacity: 1; }
+  #toast.err { border-color: var(--status-red); color: var(--err-fg); }
+</style>
+</head>
+<body>
+  <!-- 顶栏:左=工作区项目名(只读);右=播放/刷新/导入/导出/生成应用 -->
+  <header id="top-bar">
+    <div id="proj-block">
+      <span id="proj-name">—</span>
+      <span id="proj-path" title=""></span>
+    </div>
+    <span class="spacer"></span>
+    <span id="bridge-dot" title="桥接状态"></span>
+    <button id="btn-play-top" title="全屏顺序播放各屏">&#9654; 播放</button>
+    <button id="btn-reload" title="从磁盘重新读取 screens 清单">刷新</button>
+    <button id="btn-import" title="从本地目录导入 *.html 原型(FR-2-6)">导入</button>
+    <button id="btn-export" title="导出当前 screens 产物(FR-2-8)">导出</button>
+    <button id="btn-gen-top" class="primary" title="从需求生成多屏 UI 原型(FR-2-1)">&#9889; 生成应用</button>
+  </header>
+
+  <div id="layout">
+    <!-- 左:页面树(220px,可折叠) -->
+    <aside id="sidebar">
+      <div id="sidebar-head">
+        <span>页面</span><span class="count" id="page-count">(0)</span>
+        <span class="spacer"></span>
+        <button id="btn-add-page" title="新建空白页面">＋</button>
+        <button id="btn-sidebar-collapse" title="收起侧栏">&#171;</button>
+      </div>
+      <div id="screen-tree"></div>
+    </aside>
+    <button id="btn-sidebar-open" title="展开页面树">&#187;</button>
+
+    <!-- 右:画布(点状网格 + 绝对定位卡片) -->
+    <section id="canvas-pane">
+      <div id="screen-canvas" class="grid-on">
+        <div id="canvas-grid" class="canvas-world"><!-- 屏幕卡片挂载点 --></div>
+      </div>
+
+      <!-- 左缘竖排工具 -->
+      <div id="canvas-tools">
+        <button id="btn-zoom-in" title="放大">＋</button>
+        <button id="btn-zoom-out" title="缩小">&#8722;</button>
+        <span id="zoom-label">100%</span>
+        <button id="btn-zoom-fit" title="适应窗口">&#9974;</button>
+        <button id="btn-grid-toggle" class="on" title="点状网格开关">&#9707;</button>
+      </div>
+
+      <!-- 视口 pill:切换卡片预设宽 -->
+      <div id="viewport-pill">
+        <button data-vp="390" class="on">390</button>
+        <button data-vp="768">768</button>
+        <button data-vp="1280">1280</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- 「生成应用」弹层 -->
+  <div id="gen-overlay">
+    <div id="gen-dialog">
+      <h3>生成应用</h3>
+      <div class="hint">描述需求,生成多屏 UI 原型(HTML 产物实时预览;JSX/Vue 为代码产物,实时渲染列二期)。</div>
+      <textarea id="gen-prompt" placeholder="例如:一款社区图书馆借阅 App,含首页推荐、图书列表、详情页与个人中心"></textarea>
+      <div class="row">
+        <div>
+          <div class="field-label">产物格式</div>
+          <select id="gen-format">
+            <option value="html">HTML</option>
+            <option value="jsx">JSX</option>
+            <option value="vue">Vue</option>
+          </select>
+        </div>
+        <div>
+          <div class="field-label">屏幕数</div>
+          <select id="gen-count">
+            <option>1</option><option>2</option><option selected>3</option><option>4</option>
+            <option>5</option><option>6</option><option>7</option><option>8</option>
+            <option>9</option><option>10</option>
+          </select>
+        </div>
+      </div>
+      <div id="gen-progress"><div id="gen-progress-fill"></div></div>
+      <div id="gen-msg">就绪</div>
+      <div class="dlg-actions">
+        <button id="btn-gen-cancel">关闭</button>
+        <button id="btn-gen-start" class="primary">开始生成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全屏播放层 -->
+  <div id="play-overlay">
+    <div id="play-head">
+      <span id="play-title">—</span>
+      <span id="play-pos">-/-</span>
+      <span class="spacer"></span>
+      <button id="btn-play-prev" title="上一屏">&#9198; 上一屏</button>
+      <button id="btn-play-toggle" class="primary">⏸ 暂停</button>
+      <button id="btn-play-next" title="下一屏">下一屏 &#9197;</button>
+      <button id="btn-play-close" title="退出播放 (Esc)">&#10005; 退出</button>
+    </div>
+    <div id="play-stage">
+      <iframe id="preview-frame" title="原型播放预览"></iframe>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+/* 内联桥副本 — 与 ui/bridge.js 逐字节一致(部署脚本同步);宿主经资源加载,独立打开走内联。 */
+/*!
+ * UiGenBridge — panel <-> host MCP bridge adapter for the hba-uigen panel.
+ *
+ * Protocol (reverse-engineered from the official ZCode pdf-plugin):
+ *  - The panel runs as an mcp-app iframe ("text/html;profile=mcp-app").
+ *  - It is an MCP *client*: newline-free JSON-RPC 2.0 envelopes are exchanged
+ *    with the host over window.parent.postMessage(msg, "*") and the window
+ *    "message" event (see pdf-plugin dist/ui bundle: transport constructor
+ *    `new ...Transport(window.parent, window.parent)`).
+ *  - Handshake: MCP "initialize" -> "notifications/initialized" -> custom
+ *    request "ui/initialize" { appInfo, appCapabilities, protocolVersion }.
+ *  - "tools/call" reaches the plugin MCP server declared in
+ *    plugin.json ui.surfaces[].server ("hba-uigen").
+ *  - "notifications/progress" carries generation progress
+ *    (params: { progressToken, progress, total, message }).
+ *  - "notifications/resources/updated" carries resource change pushes
+ *    (host-side ops pluginUi.resourceUpdated / pluginUi.resourceListChanged).
+ *  - "ui/notifications/host-context-changed" carries partial host context
+ *    increments (may contain only { theme: "light" | "dark" }); the initial
+ *    theme also rides in the ui/initialize response's hostContext.
+ *
+ * This adapter exposes the minimal interface required by the migration:
+ *    callTool(name, args)        -> Promise<structuredContent>
+ *    onResourceUpdate(cb)        -> subscribe to resource updates
+ *    onProgress(cb)              -> subscribe to generation progress
+ *    onThemeChange(cb)           -> subscribe to host theme changes (ctx.theme)
+ *    connect()                   -> Promise<"mcp" | "standalone">
+ *
+ * If no host answers (opened outside ZCode, or during integration bring-up),
+ * the bridge degrades to a local in-page demo backend so the panel stays fully
+ * usable. Integration-phase verification notes live in README.md.
+ */
+(function (global) {
+  "use strict";
+
+  var PROTOCOL_VERSION = "2025-06-18";
+  var UI_PROTOCOL_VERSION = "2026-01-26";
+  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.3.0" };
+  var APP_INFO = { name: "hba-uigen", version: "0.3.0" };
+
+  // -------------------------------------------------------------------------
+  // local demo backend — compact mirror of server.mjs / uigen_sidecar.py demo
+  // -------------------------------------------------------------------------
+  var DEMO_NAMES = ["首页", "列表页", "详情页", "个人中心", "设置页", "搜索页", "消息页", "订单页", "登录页", "结果页"];
+
+  function demoScreens(prompt, format, count) {
+    var title = String(prompt || "").trim().slice(0, 12) || "UI 原型";
+    var short = String(prompt || "").trim().slice(0, 40);
+    var tabs = Math.min(count, 5);
+    var screens = [];
+    for (var i = 0; i < count; i++) {
+      var hotspots = [];
+      for (var j = 0; j < tabs; j++) {
+        hotspots.push({
+          to: "s" + (j + 1),
+          label: DEMO_NAMES[j % DEMO_NAMES.length],
+          x: Math.round((j * 390) / tabs),
+          y: 774,
+          w: Math.floor(390 / tabs),
+          h: 70
+        });
+      }
+      screens.push({
+        id: "s" + (i + 1),
+        name: DEMO_NAMES[i % DEMO_NAMES.length],
+        html: demoHtml(i, title, short, hotspots),
+        jsx: demoJsx(i, title, short),
+        vue: demoVue(i, title, short),
+        hotspots: hotspots
+      });
+    }
+    return screens;
+  }
+
+  function demoHtml(i, title, prompt, hotspots) {
+    var name = DEMO_NAMES[i % DEMO_NAMES.length];
+    var cards = [
+      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
+      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
+      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
+    ].map(function (c) {
+      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
+    }).join("\n");
+    var tabsHtml = (hotspots || []).map(function (h) {
+      return '      <a class="tab' + (h.to === "s" + (i + 1) ? " on" : "") + '" data-uigen-goto="' + h.to + '">' + h.label + "</a>";
+    }).join("\n");
+    return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
+      "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
+      "  <title>" + name + " · " + title + "</title>\n" +
+      "  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
+      "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
+      "    .app-bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
+      "    main { padding: 16px; padding-bottom: 96px; }\n    h1 { font-size: 22px; margin-bottom: 6px; }\n" +
+      "    .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }\n" +
+      "    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }\n" +
+      "    .card h2 { font-size: 15px; margin-bottom: 6px; }\n    .card p { font-size: 13px; color: #4b5563; line-height: 1.6; }\n" +
+      "    .tab-bar { position: fixed; left: 0; bottom: 0; width: 390px; height: 70px; display: flex; background: #fff; border-top: 1px solid #e5e7eb; }\n" +
+      "    .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; text-decoration: none; }\n" +
+      "    .tab.on { color: #2b6cb0; font-weight: 600; }\n  </style>\n</head>\n<body>\n" +
+      '  <header class="app-bar">' + title + "</header>\n  <main>\n    <h1>" + name + "</h1>\n" +
+      '    <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards + "\n  </main>\n" +
+      '  <nav class="tab-bar">\n' + tabsHtml + "\n  </nav>\n" +
+      '  \x3cscript type="application/json" id="uigen-hotspots">' + JSON.stringify(hotspots || []) + "\x3c/script>\n</body>\n</html>\n";
+  }
+
+  function demoJsx(i, title, prompt) {
+    var name = DEMO_NAMES[i % DEMO_NAMES.length];
+    var cards = [
+      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
+      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
+      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
+    ].map(function (c) {
+      return '        <div className="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
+    }).join("\n");
+    return "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default function Screen" + (i + 1) + "() {\n  return (\n" +
+      '    <div className="phone" style={{ width: 390, minHeight: 844 }}>\n' +
+      '      <header className="app-bar">' + title + "</header>\n      <main>\n        <h1>" + name + "</h1>\n" +
+      '        <p className="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
+      '\n      </main>\n      <nav className="tab-bar">{/* hotspots: see ui state */}</nav>\n    </div>\n  );\n}\n';
+  }
+
+  function demoVue(i, title, prompt) {
+    var name = DEMO_NAMES[i % DEMO_NAMES.length];
+    var cards = [
+      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
+      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
+      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
+    ].map(function (c) {
+      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
+    }).join("\n");
+    return "<template>\n  <div class=\"phone\">\n    <header class=\"app-bar\">" + title + "</header>\n    <main>\n      <h1>" + name + "</h1>\n" +
+      '      <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
+      "\n    </main>\n    <nav class=\"tab-bar\"><!-- hotspots: see ui state --></nav>\n  </div>\n</template>\n\n\x3cscript>\n" +
+      "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default {\n  name: \"Screen" + (i + 1) + "\"\n};\n\x3c/script>\n\n" +
+      "<style scoped>\n.phone { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; }\n</style>\n";
+  }
+
+  function localBackend() {
+    // 磁盘即真源的内存镜像(0.3.0):screens 清单 + 产物,无版本概念。
+    var screens = [];      // [{id,name,html,jsx,vue,hotspots,order}]
+    var canvasLayout = null;
+
+    function entryOf(s) {
+      return { id: s.id, name: s.name, files: { html: s.id + ".html" }, hotspots: s.hotspots || [], order: s.order || 0, updatedAt: "" };
+    }
+    function nextId() {
+      var n = screens.length + 1;
+      var used = {};
+      screens.forEach(function (s) { used[s.id] = true; });
+      while (used["s" + n]) n += 1;
+      return "s" + n;
+    }
+
+    return {
+      callTool: function (name, args, emitProgress) {
+        return new Promise(function (resolve, reject) {
+          setTimeout(function () {
+            try {
+              if (name === "uigen_generate") {
+                var prompt = String((args && args.prompt) || "").trim();
+                if (!prompt) return reject(new Error("prompt is required"));
+                var format = (args && args.format) || "html";
+                var count = Math.min(10, Math.max(1, parseInt(args && args.screenCount, 10) || 3));
+                if (emitProgress) emitProgress({ progress: 0, total: count + 2, message: "准备生成(本地演示)" });
+                screens = demoScreens(prompt, format, count).map(function (s, i) { s.order = i; return s; });
+                if (emitProgress) {
+                  for (var i = 0; i < count; i++) emitProgress({ progress: i + 1, total: count + 2, message: "生成屏幕 " + (i + 1) + "/" + count });
+                }
+                if (emitProgress) emitProgress({ progress: count + 2, total: count + 2, message: "完成" });
+                resolve({
+                  ok: true,
+                  engine: "demo(panel-local)",
+                  prompt: prompt,
+                  format: format,
+                  screenCount: screens.length,
+                  screens: screens.map(function (s) { return { id: s.id, name: s.name, html: s.html, jsx: s.jsx, vue: s.vue, hotspots: s.hotspots || [] }; })
+                });
+              } else if (name === "uigen_list_screens") {
+                var limit = Math.max(1, parseInt(args && args.limit, 10) || 100);
+                resolve({ ok: true, screens: screens.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).slice(0, limit).map(entryOf), updatedAt: "" });
+              } else if (name === "uigen_get_screen") {
+                var gid = String((args && args.id) || "");
+                var found = null;
+                screens.forEach(function (s) { if (s.id === gid) found = s; });
+                if (!found) return reject(new Error("screen not found: " + gid));
+                resolve({ ok: true, screen: { id: found.id, name: found.name, order: found.order || 0, hotspots: found.hotspots || [], files: { html: found.id + ".html" }, updatedAt: "", html: found.html, jsx: found.jsx || "", vue: found.vue || "" } });
+              } else if (name === "uigen_save_screen") {
+                var name2 = String((args && args.name) || "").trim();
+                if (!name2) return reject(new Error("name is required"));
+                var sid = String((args && args.id) || "").trim();
+                var target = null;
+                screens.forEach(function (s) { if (s.id === sid) target = s; });
+                if (sid && !target) {
+                  target = { id: sid, name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
+                  screens.push(target);
+                } else if (!sid) {
+                  target = { id: nextId(), name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
+                  screens.push(target);
+                }
+                target.name = name2;
+                if (args && typeof args.html === "string") target.html = args.html;
+                if (args && typeof args.jsx === "string") target.jsx = args.jsx;
+                if (args && typeof args.vue === "string") target.vue = args.vue;
+                if (args && Array.isArray(args.hotspots)) target.hotspots = args.hotspots;
+                if (args && typeof args.order === "number") target.order = args.order;
+                resolve({ ok: true, screen: entryOf(target) });
+              } else if (name === "uigen_delete_screen") {
+                var did = String((args && args.id) || "");
+                var at = -1;
+                screens.forEach(function (s, i) { if (s.id === did) at = i; });
+                if (at < 0) return reject(new Error("screen not found: " + did));
+                screens.splice(at, 1);
+                resolve({ ok: true, deleted: did });
+              } else if (name === "uigen_export") {
+                var files = [];
+                screens.forEach(function (s) {
+                  ["html", "jsx", "vue"].forEach(function (ext) {
+                    if (s[ext] && String(s[ext]).trim()) files.push({ name: s.id + "-" + s.name + "." + ext, bytes: String(s[ext]).length });
+                  });
+                });
+                resolve({ ok: true, targetDir: "(panel-local, 未写盘)", screens: screens.length, files: files });
+              } else if (name === "uigen_import_dir") {
+                reject(new Error("panel-local 模式不支持目录导入,请在 ZCode 宿主内使用"));
+              } else if (name === "uigen_canvas_save") {
+                var layout = args && args.layoutJson;
+                if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
+                  return reject(new Error("layoutJson must be an object"));
+                }
+                canvasLayout = layout;
+                resolve({ ok: true, updatedAt: new Date().toISOString(), bytes: 0, file: "(panel-local, 未写盘)" });
+              } else if (name === "uigen_canvas_get") {
+                resolve({ ok: true, layout: canvasLayout, updatedAt: "", workspace: null });
+              } else {
+                reject(new Error("unknown tool: " + name));
+              }
+            } catch (e) {
+              reject(e);
+            }
+          }, 30);
+        });
+      }
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // bridge
+  // -------------------------------------------------------------------------
+  function createUiGenBridge(options) {
+    options = options || {};
+    var mode = "unknown";
+    var pending = new Map();
+    var seq = 0;
+    var resourceCbs = [];
+    var progressCbs = [];
+    var themeCbs = [];
+    var backend = localBackend();
+    var connected = false;
+
+    function emitTheme(ctx) {
+      if (!ctx || !ctx.theme) return;
+      themeCbs.forEach(function (cb) { try { cb(ctx); } catch (e) { /* cb error */ } });
+    }
+
+    function post(msg) {
+      var target = global.parent && global.parent !== global ? global.parent : null;
+      if (!target) return false;
+      try {
+        target.postMessage(msg, "*");
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function sendRequest(method, params, timeoutMs) {
+      return new Promise(function (resolve, reject) {
+        seq += 1;
+        var id = seq;
+        var timer = setTimeout(function () {
+          pending.delete(id);
+          reject(new Error("bridge timeout: " + method));
+        }, timeoutMs || options.requestTimeoutMs || 15000);
+        pending.set(id, {
+          resolve: function (v) { clearTimeout(timer); resolve(v); },
+          reject: function (e) { clearTimeout(timer); reject(e); }
+        });
+        if (!post({ jsonrpc: "2.0", id: id, method: method, params: params || {} })) {
+          clearTimeout(timer);
+          pending.delete(id);
+          reject(new Error("no host window"));
+        }
+      });
+    }
+
+    function sendNotification(method, params) {
+      post({ jsonrpc: "2.0", method: method, params: params || {} });
+    }
+
+    function onMessage(ev) {
+      var msg = ev && ev.data;
+      if (!msg || msg.jsonrpc !== "2.0") return;
+      if (msg.id !== undefined && msg.id !== null && (msg.result !== undefined || msg.error !== undefined)) {
+        var entry = pending.get(msg.id);
+        if (!entry) return;
+        pending.delete(msg.id);
+        if (msg.error) entry.reject(new Error(msg.error.message || "bridge error"));
+        else entry.resolve(msg.result);
+        return;
+      }
+      if (typeof msg.method === "string") {
+        if (msg.method === "notifications/progress" && msg.params) {
+          progressCbs.forEach(function (cb) { try { cb(msg.params); } catch (e) { /* cb error */ } });
+        } else if (
+          msg.method === "notifications/resources/updated" ||
+          msg.method === "notifications/resources/list_changed"
+        ) {
+          resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
+        } else if (msg.method === "pluginUi.resourceUpdated" || (msg.params && msg.params.op === "pluginUi.resourceUpdated")) {
+          resourceCbs.forEach(function (cb) { try { cb(msg.params || {}); } catch (e) { /* cb error */ } });
+        } else if (msg.method === "ui/notifications/host-context-changed") {
+          // params 是部分上下文增量,主题切换时可能只含 { theme }
+          emitTheme(msg.params || {});
+        }
+      }
+    }
+
+    function extractResult(raw) {
+      if (raw && raw.structuredContent !== undefined) return raw.structuredContent;
+      if (raw && Array.isArray(raw.content)) {
+        for (var i = 0; i < raw.content.length; i++) {
+          if (raw.content[i].type === "text") {
+            try { return JSON.parse(raw.content[i].text); } catch (e) { /* keep raw */ }
+          }
+        }
+      }
+      return raw;
+    }
+
+    var bridge = {
+      get mode() { return mode; },
+      onResourceUpdate: function (cb) { if (typeof cb === "function") resourceCbs.push(cb); },
+      onProgress: function (cb) { if (typeof cb === "function") progressCbs.push(cb); },
+      onThemeChange: function (cb) { if (typeof cb === "function") themeCbs.push(cb); },
+
+      connect: function () {
+        return new Promise(function (resolve) {
+          if (global.parent && global.parent !== global) {
+            global.addEventListener("message", onMessage);
+            var timeoutMs = options.connectTimeoutMs || 10000;
+            // The view<->host channel does NOT speak MCP "initialize" (the host
+            // replies "Method not found"); the handshake is exactly: ui/initialize
+            // request (UI protocol 2026-01-26) -> ui/notifications/initialized.
+            sendRequest("ui/initialize", {
+              appInfo: APP_INFO,
+              appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline"] },
+              protocolVersion: UI_PROTOCOL_VERSION
+            }, timeoutMs).then(function (result) {
+              sendNotification("ui/notifications/initialized", {});
+              connected = true;
+              mode = "mcp";
+              // 初始主题在 ui/initialize 响应的 hostContext 里,先分发一次
+              emitTheme((result && result.hostContext) || {});
+              resolve(mode);
+            }).catch(function () {
+              mode = "standalone";
+              resolve(mode);
+            });
+          } else {
+            mode = "standalone";
+            resolve(mode);
+          }
+        });
+      },
+
+      callTool: function (name, args) {
+        if (mode === "mcp" && connected) {
+          var token = "uigen-" + (++seq);
+          return sendRequest("tools/call", {
+            name: name,
+            arguments: args || {},
+            _meta: { progressToken: token }
+          }).then(extractResult);
+        }
+        return backend.callTool(name, args || {}, function (p) {
+          progressCbs.forEach(function (cb) { try { cb(p); } catch (e) { /* cb error */ } });
+        });
+      },
+
+      // low-level escape hatch (integration bring-up / diagnostics)
+      request: sendRequest,
+      notify: sendNotification
+    };
+    return bridge;
+  }
+
+  var api = { create: createUiGenBridge, version: "0.3.0" };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  global.UiGenBridge = api;
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+<script>
+(function () {
+  "use strict";
+
+  // ==================================================================
+  // state
+  // ==================================================================
+  var VP = { 390: { w: 390, h: 844 }, 768: { w: 768, h: 1024 }, 1280: { w: 1280, h: 800 } };
+
+  var state = {
+    screens: [],          // [{id,name,html,jsx,vue,hotspots}] — 磁盘 screens/ 的内存镜像
+    selected: -1,
+    format: "html",       // 卡片内容形态:html=实时预览 / jsx|vue=代码
+    viewport: 390,
+    zoom: 1,
+    grid: true,
+    sidebarCollapsed: false,
+    cards: {},            // screenId -> {x,y,w}
+    playing: false,
+    playIndex: -1,
+    playTimer: null
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var bridge = window.UiGenBridge.create({ connectTimeoutMs: 10000 });
+
+  // ==================================================================
+  // theme — 启动按系统偏好落兜底;宿主经 onThemeChange 实时覆盖
+  // ==================================================================
+  function applyTheme(theme) {
+    try { document.documentElement.dataset.theme = theme === "light" ? "light" : "dark"; } catch (e) { /* noop */ }
+  }
+  function systemTheme() {
+    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+  }
+  applyTheme(systemTheme());
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: light)");
+    if (mq.addEventListener) {
+      mq.addEventListener("change", function () { if (bridge.mode !== "mcp") applyTheme(systemTheme()); });
+    }
+  }
+  bridge.onThemeChange(function (ctx) { if (ctx && ctx.theme) applyTheme(ctx.theme); });
+
+  // ==================================================================
+  // toast / util
+  // ==================================================================
+  var toastTimer = null;
+  function toast(text, isErr) {
+    var el = $("toast");
+    el.textContent = text;
+    el.className = "show" + (isErr ? " err" : "");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.className = ""; }, 2600);
+  }
+
+  // 沙箱铁律:写入 iframe 前剥离 <script>,预览里跳转由播放层接管
+  function stripScripts(html) {
+    return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, "");
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function currentScreen() { return state.screens[state.selected] || null; }
+
+  // ==================================================================
+  // canvas layout persistence — uigen_canvas_save / uigen_canvas_get
+  // 形状:{ version, zoom, grid, viewport, sidebarCollapsed, cards, ui }
+  // ui = 项目级共享的面板 UI 状态(选中屏/格式/需求草稿),同项目所有
+  // 会话/窗口的原型面板共用一份,打开面板即恢复(B 方案)。
+  // ==================================================================
+  var saveTimer = null;
+  var layoutLoaded = false;
+  var pendingUi = null;    // applyLayout 暂存 layout.ui,boot 末尾统一恢复
+
+  function layoutSnapshot() {
+    var sel = currentScreen();
+    return {
+      version: 1,
+      zoom: state.zoom,
+      grid: state.grid,
+      viewport: state.viewport,
+      sidebarCollapsed: state.sidebarCollapsed,
+      cards: state.cards,
+      ui: {
+        selectedScreenId: sel ? sel.id : "",
+        format: state.format,
+        prompt: $("gen-prompt").value
+      }
+    };
+  }
+
+  function scheduleSaveLayout() {
+    if (!layoutLoaded) return;           // 未读回远端布局前不覆盖
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveLayoutNow, 800);  // 防抖
+  }
+
+  function saveLayoutNow() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    bridge.callTool("uigen_canvas_save", { layoutJson: layoutSnapshot() })
+      .catch(function () { /* 持久化失败不打扰编辑 */ });
+  }
+
+  function applyLayout(layout) {
+    if (!layout || typeof layout !== "object") return;
+    if (typeof layout.zoom === "number") state.zoom = Math.min(2, Math.max(0.25, layout.zoom));
+    if (typeof layout.grid === "boolean") state.grid = layout.grid;
+    if (VP[layout.viewport]) state.viewport = layout.viewport;
+    if (typeof layout.sidebarCollapsed === "boolean") state.sidebarCollapsed = layout.sidebarCollapsed;
+    if (layout.cards && typeof layout.cards === "object") state.cards = layout.cards;
+    if (layout.ui && typeof layout.ui === "object") pendingUi = layout.ui;
+  }
+
+  // ------------------------------------------------------------------
+  // 磁盘即真源:面板数据源 = screens 清单(uigen_list_screens) + 逐屏
+  // 产物(uigen_get_screen)。生成/增删改后统一走 reloadScreens()。
+  // ------------------------------------------------------------------
+  function reloadScreens(preferredId) {
+    return bridge.callTool("uigen_list_screens", { limit: 200 }).then(function (res) {
+      var entries = (res && res.ok && Array.isArray(res.screens)) ? res.screens : [];
+      if (!entries.length) {
+        state.screens = [];
+        state.selected = -1;
+        renderTree();
+        renderCards();
+        return [];
+      }
+      return Promise.all(entries.map(function (e) {
+        return bridge.callTool("uigen_get_screen", { id: e.id }).then(function (r) {
+          if (r && r.ok && r.screen) return r.screen;
+          return { id: e.id, name: e.name, html: "", jsx: "", vue: "", hotspots: e.hotspots || [] };
+        }).catch(function () {
+          return { id: e.id, name: e.name, html: "", jsx: "", vue: "", hotspots: e.hotspots || [] };
+        });
+      })).then(function (screens) {
+        state.screens = screens;
+        var want = preferredId || "";
+        state.selected = 0;
+        if (want) {
+          for (var i = 0; i < screens.length; i++) {
+            if (screens[i].id === want) { state.selected = i; break; }
+          }
+        }
+        renderTree();
+        renderCards();
+        return screens;
+      });
+    });
+  }
+
+  /** 恢复共享面板状态的 ui 部分:格式/需求草稿直接应用,随后从磁盘读回
+   *  screens 并按 selectedScreenId 选中。不清 state.cards——恢复的就是这张画布。 */
+  function restorePendingUi() {
+    var ui = pendingUi;
+    pendingUi = null;
+    var sel = "";
+    if (ui && typeof ui === "object") {
+      if (ui.format && FORMAT_CYCLE.indexOf(ui.format) >= 0) state.format = ui.format;
+      if (typeof ui.prompt === "string" && ui.prompt) $("gen-prompt").value = ui.prompt;
+      if (typeof ui.selectedScreenId === "string") sel = ui.selectedScreenId;
+    }
+    reloadScreens(sel).catch(function () { /* 读盘失败维持空画布 */ });
+  }
+
+  // ==================================================================
+  // bridge wiring
+  // ==================================================================
+  bridge.onProgress(function (p) {
+    try {
+      var total = p.total || 1;
+      var done = typeof p.progress === "number" ? p.progress : 0;
+      $("gen-progress-fill").style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
+      if (p.message) $("gen-msg").textContent = p.message;
+    } catch (e) { /* progress render must never break the panel */ }
+  });
+
+  // 宿主推送 state.json 变更(生成/导入/落盘)→ 从磁盘重载清单
+  var reloadTimer = null;
+  bridge.onResourceUpdate(function () {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(function () {
+      var sel = currentScreen();
+      reloadScreens(sel ? sel.id : "").catch(function () { /* 重载失败保留现状 */ });
+    }, 200);
+  });
+
+  // ==================================================================
+  // 页面树(左 220px)— 移植 HBA screen-tree 的行模型:平铺顺序即层级,
+  // 拖拽 before/after 重排;⋯ 菜单=重命名/删除;＋ 新建页面。
+  // ==================================================================
+  var moreMenu = null;   // 当前打开的 ⋯ 菜单元素
+
+  function closeMoreMenu() {
+    if (moreMenu && moreMenu.parentNode) moreMenu.parentNode.removeChild(moreMenu);
+    moreMenu = null;
+  }
+
+  /** 排序落盘:把当前顺序逐屏写回 index.json(order 字段)。 */
+  function persistOrder() {
+    var ops = state.screens.map(function (s, idx) {
+      return bridge.callTool("uigen_save_screen", { id: s.id, name: s.name || s.id, order: idx })
+        .catch(function () { return null; });
+    });
+    Promise.all(ops).catch(function () { /* 单屏失败不打扰排序 */ });
+  }
+
+  function renderTree() {
+    var tree = $("screen-tree");
+    tree.textContent = "";
+    $("page-count").textContent = "(" + state.screens.length + ")";
+    if (!state.screens.length) {
+      var empty = document.createElement("div");
+      empty.className = "tree-empty";
+      empty.textContent = "暂无页面。点右上「生成应用」或 ＋ 新建。";
+      tree.appendChild(empty);
+      return;
+    }
+    state.screens.forEach(function (s, i) {
+      var row = document.createElement("div");
+      row.className = "tree-row" + (i === state.selected ? " on" : "");
+      row.draggable = true;
+      row.dataset.index = String(i);
+
+      var thumb = document.createElement("div");
+      thumb.className = "t-thumb";
+      thumb.innerHTML = '<div class="tt-bar"></div><div class="tt-line"></div><div class="tt-line" style="width:60%"></div>';
+
+      var info = document.createElement("div");
+      info.className = "t-info";
+      var nameEl = document.createElement("div");
+      nameEl.className = "t-name";
+      nameEl.textContent = s.name || s.id;
+      var badge = document.createElement("div");
+      badge.className = "t-badge";
+      badge.innerHTML = '<span class="badge-html">HTML/TW</span>';
+      info.appendChild(nameEl);
+      info.appendChild(badge);
+
+      var more = document.createElement("button");
+      more.className = "t-more";
+      more.textContent = "⋯";
+      more.title = "页面操作";
+      more.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        openMoreMenu(more, i);
+      });
+
+      row.appendChild(thumb);
+      row.appendChild(info);
+      row.appendChild(more);
+
+      row.addEventListener("click", function () { selectScreen(i); });
+
+      // 拖拽重排:落在行上=插到该行位置
+      row.addEventListener("dragstart", function (ev) {
+        ev.dataTransfer.setData("text/plain", String(i));
+        ev.dataTransfer.effectAllowed = "move";
+      });
+      row.addEventListener("dragover", function (ev) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = "move";
+        row.classList.add("drag-over");
+      });
+      row.addEventListener("dragleave", function () { row.classList.remove("drag-over"); });
+      row.addEventListener("drop", function (ev) {
+        ev.preventDefault();
+        row.classList.remove("drag-over");
+        var from = parseInt(ev.dataTransfer.getData("text/plain"), 10);
+        if (isNaN(from) || from === i) return;
+        var moved = state.screens.splice(from, 1)[0];
+        state.screens.splice(i, 0, moved);
+        if (state.selected === from) state.selected = i;
+        else if (from < state.selected && i >= state.selected) state.selected -= 1;
+        else if (from > state.selected && i <= state.selected) state.selected += 1;
+        renderTree();
+        renderCards();
+        persistOrder();
+        toast("已调整「" + (moved.name || moved.id) + "」顺序(已落盘)");
+      });
+
+      tree.appendChild(row);
+    });
+  }
+
+  function openMoreMenu(anchor, index) {
+    closeMoreMenu();
+    var menu = document.createElement("div");
+    menu.className = "dropdown-menu open";
+    menu.style.position = "fixed";
+    menu.style.minWidth = "140px";
+    var r = anchor.getBoundingClientRect();
+    menu.style.top = (r.bottom + 4) + "px";
+    menu.style.left = (r.left - 100) + "px";
+    menu.style.right = "auto";
+
+    function item(label, fn) {
+      var el = document.createElement("div");
+      el.className = "v-item";
+      el.textContent = label;
+      el.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        closeMoreMenu();
+        fn();
+      });
+      menu.appendChild(el);
+    }
+    item("重命名", function () {
+      var s = state.screens[index];
+      var name = window.prompt("页面名称:", s.name || s.id);
+      if (name == null) return;
+      name = name.trim();
+      if (!name || name === s.name) return;
+      // 磁盘即真源:重命名落盘(index.json 条目),成功后更新本地视图
+      bridge.callTool("uigen_save_screen", { id: s.id, name: name }).then(function (res) {
+        if (res && res.ok) {
+          s.name = name;
+          renderTree();
+          renderCards();
+          toast("已重命名为「" + name + "」(已落盘)");
+        } else {
+          toast("重命名失败:" + (res && res.error ? res.error : "未知错误"), true);
+        }
+      }).catch(function (e) { toast("重命名失败:" + e.message, true); });
+    });
+    item("删除页面", function () {
+      var s = state.screens[index];
+      if (!window.confirm("删除页面「" + (s.name || s.id) + "」?(将删除磁盘文件与清单条目)")) return;
+      bridge.callTool("uigen_delete_screen", { id: s.id }).then(function (res) {
+        if (res && res.ok) {
+          state.screens.splice(index, 1);
+          delete state.cards[s.id];
+          if (state.selected >= state.screens.length) state.selected = state.screens.length - 1;
+          renderTree();
+          renderCards();
+          scheduleSaveLayout();
+          toast("已删除「" + (s.name || s.id) + "」(已落盘)");
+        } else {
+          toast("删除失败:" + (res && res.error ? res.error : "未知错误"), true);
+        }
+      }).catch(function (e) { toast("删除失败:" + e.message, true); });
+    });
+    document.body.appendChild(menu);
+    moreMenu = menu;
+    setTimeout(function () {
+      document.addEventListener("click", closeMoreMenu, { once: true });
+    }, 0);
+  }
+
+  function addPage() {
+    var n = state.screens.length + 1;
+    var blank =
+      '<!doctype html>\n<html lang="zh-CN">\n<head>\n  <meta charset="utf-8">\n' +
+      '  <title>页面 ' + n + '</title>\n  <style>\n' +
+      '    body { width: 390px; min-height: 844px; margin: 0; font-family: system-ui, sans-serif;\n' +
+      '           background: #f5f6f8; color: #1f2329; display: flex; align-items: center;\n' +
+      '           justify-content: center; }\n    p { color: #9aa3af; }\n  </style>\n</head>\n' +
+      '<body>\n  <p>空白页面 ' + n + '</p>\n</body>\n</html>\n';
+    // 磁盘即真源:新建页直接写 screens/<id>.html + index.json
+    bridge.callTool("uigen_save_screen", { name: "页面 " + n, html: blank }).then(function (res) {
+      if (res && res.ok && res.screen) {
+        var scr = res.screen;
+        state.screens.push({ id: scr.id, name: scr.name, html: blank, jsx: "", vue: "", hotspots: scr.hotspots || [] });
+        selectScreen(state.screens.length - 1);
+        scheduleSaveLayout();
+        toast("已新建「" + scr.name + "」(" + scr.id + ",已落盘)");
+      } else {
+        toast("新建失败:" + (res && res.error ? res.error : "未知错误"), true);
+      }
+    }).catch(function (e) { toast("新建失败:" + e.message, true); });
+  }
+
+  // ==================================================================
+  // 画布卡片 — 绝对定位 + 标题栏拖拽移动 + 简单缩放
+  // ==================================================================
+  function defaultCardPos(i, w) {
+    var vp = VP[state.viewport];
+    var perRow = Math.max(1, Math.floor(1500 / (w + 60)));
+    var col = i % perRow;
+    var row = Math.floor(i / perRow);
+    return { x: 60 + col * (w + 60), y: 60 + row * (vp.h * (w / vp.w) + 90), w: w };
+  }
+
+  function cardFor(screen, i) {
+    var c = state.cards[screen.id];
+    if (!c || typeof c.x !== "number" || typeof c.w !== "number") {
+      c = defaultCardPos(i, VP[state.viewport].w);
+      state.cards[screen.id] = c;
+    }
+    return c;
+  }
+
+  function renderCards() {
+    var world = $("canvas-grid");
+    world.textContent = "";
+    if (!state.screens.length) {
+      var empty = document.createElement("div");
+      empty.className = "canvas-empty";
+      empty.innerHTML = '<div class="big">画布为空</div>点右上「生成应用」从需求生成多屏原型';
+      world.appendChild(empty);
+      return;
+    }
+    state.screens.forEach(function (s, i) {
+      var c = cardFor(s, i);
+      var vp = VP[state.viewport];
+      var scale = c.w / vp.w;
+      var bodyH = Math.round(vp.h * scale);
+
+      var card = document.createElement("div");
+      card.className = "screen-card" + (i === state.selected ? " selected" : "");
+      card.dataset.index = String(i);
+      card.style.left = c.x + "px";
+      card.style.top = c.y + "px";
+      card.style.width = c.w + "px";
+      card.style.height = (34 + bodyH) + "px";
+
+      var head = document.createElement("div");
+      head.className = "card-head";
+      var nameEl = document.createElement("span");
+      nameEl.className = "card-name";
+      nameEl.textContent = (s.name || s.id);
+      var edit = document.createElement("button");
+      edit.className = "card-edit";
+      edit.textContent = "✎";
+      edit.title = "重命名";
+      edit.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var name = window.prompt("页面名称:", s.name || s.id);
+        if (name == null || !name.trim() || name.trim() === s.name) return;
+        name = name.trim();
+        bridge.callTool("uigen_save_screen", { id: s.id, name: name }).then(function (res) {
+          if (res && res.ok) {
+            s.name = name;
+            renderTree();
+            renderCards();
+            toast("已重命名为「" + name + "」(已落盘)");
+          } else {
+            toast("重命名失败:" + (res && res.error ? res.error : "未知错误"), true);
+          }
+        }).catch(function (e) { toast("重命名失败:" + e.message, true); });
+      });
+      head.appendChild(nameEl);
+      head.appendChild(edit);
+
+      var body = document.createElement("div");
+      body.className = "card-body";
+      body.style.height = bodyH + "px";
+
+      if (state.format === "html") {
+        // HTML 产物:iframe 实时预览。未选中不写 srcdoc(沙箱崩溃教训),
+        // 写入前剥离 <script>。iframe 一律不带 sandbox 属性。
+        var frame = document.createElement("iframe");
+        frame.title = (s.name || s.id) + " 预览";
+        if (i === state.selected) {
+          try { frame.srcdoc = stripScripts(s.html); } catch (e) { /* 预览失败不拖垮面板 */ }
+        }
+        body.appendChild(frame);
+      } else {
+        // JSX/Vue:显示代码产物(实时渲染列二期)
+        var pre = document.createElement("pre");
+        pre.className = "card-code";
+        pre.textContent = s[state.format] || "(" + state.format.toUpperCase() + " 产物为空)";
+        body.appendChild(pre);
+      }
+
+      card.appendChild(head);
+      card.appendChild(body);
+      card.addEventListener("mousedown", function () { selectScreen(i); });
+
+      // 标题栏拖拽移动(按 zoom 折算位移);stopPropagation 防止拖拽起点触发
+      // 卡片重渲染销毁 DOM 节点;未移动时 mouseup 补一次选中。
+      head.addEventListener("mousedown", function (ev) {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        var startX = ev.clientX, startY = ev.clientY;
+        var origX = c.x, origY = c.y;
+        var moved = false;
+        function onMove(mev) {
+          moved = true;
+          c.x = Math.max(0, Math.round(origX + (mev.clientX - startX) / state.zoom));
+          c.y = Math.max(0, Math.round(origY + (mev.clientY - startY) / state.zoom));
+          card.style.left = c.x + "px";
+          card.style.top = c.y + "px";
+        }
+        function onUp() {
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+          if (moved) scheduleSaveLayout();
+          else selectScreen(i);
+        }
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+
+      world.appendChild(card);
+    });
+    applyZoom();
+  }
+
+  // ==================================================================
+  // 选中/预览 — 仅选中卡片写 srcdoc;未选中 iframe 保持空白
+  // ==================================================================
+  function selectScreen(i) {
+    if (i < 0 || i >= state.screens.length) {
+      if (state.selected !== -1) {
+        state.selected = -1;
+        renderTree();
+        renderCards();
+        scheduleSaveLayout();
+      }
+      return;
+    }
+    if (state.selected === i) return;   // 已选中:不重建 DOM(保 iframe/拖拽态)
+    state.selected = i;
+    renderTree();
+    renderCards();
+    if (state.playing) syncPlayTo(i);
+    scheduleSaveLayout();
+  }
+
+  // ==================================================================
+  // 缩放 / 网格 / 视口
+  // ==================================================================
+  function applyZoom() {
+    var world = $("canvas-grid");
+    world.style.transform = "scale(" + state.zoom + ")";
+    $("zoom-label").textContent = Math.round(state.zoom * 100) + "%";
+  }
+
+  function setZoom(z) {
+    state.zoom = Math.min(2, Math.max(0.25, z));
+    applyZoom();
+    scheduleSaveLayout();
+  }
+
+  function zoomFit() {
+    var vp = VP[state.viewport];
+    var canvas = $("screen-canvas");
+    var pad = 120;
+    var maxX = 0, maxY = 0;
+    state.screens.forEach(function (s, i) {
+      var c = cardFor(s, i);
+      var bodyH = vp.h * (c.w / vp.w);
+      maxX = Math.max(maxX, c.x + c.w + 40);
+      maxY = Math.max(maxY, c.y + bodyH + 80);
+    });
+    if (!state.screens.length) { setZoom(1); return; }
+    var zx = (canvas.clientWidth - pad) / maxX;
+    var zy = (canvas.clientHeight - pad) / maxY;
+    setZoom(Math.min(zx, zy, 1));
+    canvas.scrollTo({ left: 0, top: 0 });
+  }
+
+  function setViewport(vp) {
+    if (!VP[vp]) return;
+    state.viewport = vp;
+    // 切换预设宽:所有卡片 w 重置为新视口宽,坐标保留
+    state.screens.forEach(function (s) {
+      var c = state.cards[s.id];
+      if (c) c.w = VP[vp].w;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
+      b.classList.toggle("on", String(vp) === b.dataset.vp);
+    });
+    renderCards();
+    scheduleSaveLayout();
+  }
+
+  function toggleGrid() {
+    state.grid = !state.grid;
+    $("screen-canvas").classList.toggle("grid-on", state.grid);
+    $("btn-grid-toggle").classList.toggle("on", state.grid);
+    scheduleSaveLayout();
+  }
+
+  // ==================================================================
+  // 「生成应用」弹层 (FR-2-1)
+  // ==================================================================
+  function openGenDialog() {
+    $("gen-overlay").classList.add("open");
+    $("gen-msg").textContent = "就绪";
+    $("gen-msg").className = "";
+    $("gen-progress-fill").style.width = "0%";
+    setTimeout(function () { $("gen-prompt").focus(); }, 0);
+  }
+  function closeGenDialog() { $("gen-overlay").classList.remove("open"); }
+
+  async function doGenerate() {
+    var prompt = $("gen-prompt").value.trim();
+    if (!prompt) { $("gen-msg").textContent = "请先输入需求描述"; $("gen-msg").className = "err"; return; }
+    var format = $("gen-format").value;
+    var screenCount = parseInt($("gen-count").value, 10) || 3;
+    $("btn-gen-start").disabled = true;
+    $("gen-msg").className = "";
+    $("gen-msg").textContent = "生成中…";
+    $("gen-progress-fill").style.width = "0%";
+    try {
+      var res = await bridge.callTool("uigen_generate", {
+        prompt: prompt, format: format, screenCount: screenCount
+      });
+      if (res && res.ok && Array.isArray(res.screens) && res.screens.length) {
+        state.screens = res.screens;      // 服务端已直接写盘(screens/ + index.json)
+        state.cards = {};                 // 新一轮生成重新排布
+        state.selected = 0;
+        $("gen-progress-fill").style.width = "100%";
+        $("gen-msg").textContent = "完成 · 引擎 " + (res.engine || "?") + " · " + res.screens.length + " 屏已写盘";
+        renderTree();
+        renderCards();
+        closeGenDialog();
+        toast("已生成 " + res.screens.length + " 屏(已写盘)");
+        scheduleSaveLayout();
+      } else {
+        $("gen-msg").textContent = "生成失败:" + (res && res.error ? res.error : "未知错误");
+        $("gen-msg").className = "err";
+      }
+    } catch (e) {
+      $("gen-msg").textContent = "生成失败:" + e.message;
+      $("gen-msg").className = "err";
+    } finally {
+      $("btn-gen-start").disabled = false;
+    }
+  }
+
+  // ==================================================================
+  // 导入 / 导出 (FR-2-6 / FR-2-8)
+  // ==================================================================
+  async function doImport() {
+    var dir = window.prompt("要导入的本地目录(含 *.html):");
+    if (!dir) return;
+    try {
+      var res = await bridge.callTool("uigen_import_dir", { dir: dir });
+      if (res && res.ok) {
+        toast("已导入 " + res.imported + " 个原型到 screens/(已落盘)");
+        await reloadScreens();
+        scheduleSaveLayout();
+      } else {
+        toast("导入失败:" + (res && res.error ? res.error : "未知错误"), true);
+      }
+    } catch (e) {
+      toast("导入失败:" + e.message, true);
+    }
+  }
+
+  async function doExport() {
+    if (!state.screens.length) { toast("screens/ 为空,无产物可导出", true); return; }
+    try {
+      var res = await bridge.callTool("uigen_export", {});
+      if (res && res.ok) {
+        toast("已导出 " + (res.files || []).length + " 个文件 → " + res.targetDir);
+      } else {
+        toast("导出失败:" + (res && res.error ? res.error : "未知错误"), true);
+      }
+    } catch (e) {
+      toast("导出失败:" + e.message, true);
+    }
+  }
+
+  // ==================================================================
+  // 全屏顺序播放 (FR-2-5 改造) — 沿用步进逻辑,壳换成全屏 overlay
+  // ==================================================================
+  function playFrame() { return $("preview-frame"); }
+
+  function renderPlayScreen(i) {
+    var s = state.screens[i];
+    if (!s) return;
+    $("play-title").textContent = s.name || s.id;
+    $("play-pos").textContent = (i + 1) + "/" + state.screens.length;
+    var frame = playFrame();
+    try {
+      frame.srcdoc = stripScripts(s.html) || "<!doctype html><html><body>该屏幕没有 HTML 产物</body></html>";
+    } catch (e) { /* 播放预览失败不拖垮面板 */ }
+  }
+
+  function syncPlayTo(i) {
+    state.playIndex = i;
+    renderPlayScreen(i);
+  }
+
+  function playStep(delta) {
+    if (!state.screens.length) return;
+    var next = state.playIndex + delta;
+    if (next < 0) next = state.screens.length - 1;
+    if (next >= state.screens.length) next = 0;
+    syncPlayTo(next);
+  }
+
+  function setPlaying(on) {
+    state.playing = on;
+    $("btn-play-toggle").textContent = on ? "⏸ 暂停" : "▶ 继续";
+    if (state.playTimer) { clearInterval(state.playTimer); state.playTimer = null; }
+    if (on) state.playTimer = setInterval(function () { playStep(1); }, 2200);
+  }
+
+  function openPlay() {
+    if (!state.screens.length) { toast("没有可播放的屏幕", true); return; }
+    $("play-overlay").classList.add("open");
+    syncPlayTo(state.selected >= 0 ? state.selected : 0);
+    setPlaying(true);
+  }
+
+  function closePlay() {
+    setPlaying(false);
+    $("play-overlay").classList.remove("open");
+    try { playFrame().removeAttribute("srcdoc"); } catch (e) { /* noop */ }
+  }
+
+  // ==================================================================
+  // 侧栏折叠
+  // ==================================================================
+  function applySidebar() {
+    $("sidebar").classList.toggle("collapsed", state.sidebarCollapsed);
+    $("btn-sidebar-open").classList.toggle("show", state.sidebarCollapsed);
+  }
+  function toggleSidebar() {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    applySidebar();
+    scheduleSaveLayout();
+  }
+
+  // ==================================================================
+  // 格式切换 — html=iframe 实时预览;jsx/vue=代码(实时渲染列二期)
+  // ==================================================================
+  var FORMAT_CYCLE = ["html", "jsx", "vue"];
+  function cycleFormat() {
+    var idx = FORMAT_CYCLE.indexOf(state.format);
+    state.format = FORMAT_CYCLE[(idx + 1) % FORMAT_CYCLE.length];
+    renderCards();
+    toast("卡片内容:" + state.format.toUpperCase() + (state.format !== "html" ? "(实时渲染列二期)" : ""));
+    scheduleSaveLayout();
+  }
+
+  // ==================================================================
+  // 顶栏项目信息 — uigen_canvas_get 返回的 workspace;拿不到显示 —
+  // ==================================================================
+  function setWorkspace(ws) {
+    if (ws && ws.name) {
+      $("proj-name").textContent = ws.name;
+      $("proj-path").textContent = ws.root || "";
+      $("proj-path").title = ws.root || "";
+    } else {
+      $("proj-name").textContent = "—";
+      $("proj-path").textContent = "";
+    }
+  }
+
+  // ==================================================================
+  // 事件绑定
+  // ==================================================================
+  $("btn-gen-top").addEventListener("click", openGenDialog);
+  $("btn-gen-cancel").addEventListener("click", closeGenDialog);
+  $("btn-gen-start").addEventListener("click", doGenerate);
+  // 需求草稿随画布布局一起进共享面板状态(防抖保存)
+  $("gen-prompt").addEventListener("input", scheduleSaveLayout);
+  $("gen-overlay").addEventListener("click", function (ev) {
+    if (ev.target === $("gen-overlay")) closeGenDialog();
+  });
+
+  $("btn-reload").addEventListener("click", function () {
+    var sel = currentScreen();
+    reloadScreens(sel ? sel.id : "").then(function (screens) {
+      toast("已从磁盘读取 " + (screens ? screens.length : 0) + " 屏");
+    }).catch(function (e) { toast("读盘失败:" + e.message, true); });
+  });
+
+  $("btn-import").addEventListener("click", doImport);
+  $("btn-export").addEventListener("click", doExport);
+
+  $("btn-play-top").addEventListener("click", openPlay);
+  $("btn-play-close").addEventListener("click", closePlay);
+  $("btn-play-prev").addEventListener("click", function () { playStep(-1); });
+  $("btn-play-next").addEventListener("click", function () { playStep(1); });
+  $("btn-play-toggle").addEventListener("click", function () { setPlaying(!state.playing); });
+
+  $("btn-add-page").addEventListener("click", addPage);
+  $("btn-sidebar-collapse").addEventListener("click", toggleSidebar);
+  $("btn-sidebar-open").addEventListener("click", toggleSidebar);
+
+  $("btn-zoom-in").addEventListener("click", function () { setZoom(state.zoom + 0.1); });
+  $("btn-zoom-out").addEventListener("click", function () { setZoom(state.zoom - 0.1); });
+  $("btn-zoom-fit").addEventListener("click", zoomFit);
+  $("btn-grid-toggle").addEventListener("click", toggleGrid);
+
+  Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
+    b.addEventListener("click", function () { setViewport(parseInt(b.dataset.vp, 10)); });
+  });
+
+  // 双击卡片内容区循环切换 html → jsx → vue
+  $("canvas-grid").addEventListener("dblclick", function (ev) {
+    var card = ev.target.closest ? ev.target.closest(".screen-card") : null;
+    if (card) cycleFormat();
+  });
+
+  document.addEventListener("keydown", function (ev) {
+    if (ev.target && (ev.target.tagName === "TEXTAREA" || ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT")) return;
+    if (ev.key === "Escape") {
+      if ($("play-overlay").classList.contains("open")) closePlay();
+      else if ($("gen-overlay").classList.contains("open")) closeGenDialog();
+      return;
+    }
+    if ($("play-overlay").classList.contains("open")) {
+      if (ev.key === "ArrowRight") { ev.preventDefault(); playStep(1); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); playStep(-1); }
+      else if (ev.key === " ") { ev.preventDefault(); setPlaying(!state.playing); }
+    }
+  });
+
+  // ==================================================================
+  // boot — 先握手;渲染错误不得阻塞握手
+  // ==================================================================
+  applySidebar();
+  $("screen-canvas").classList.toggle("grid-on", state.grid);
+  try {
+    renderTree();
+    renderCards();
+  } catch (e) { /* 初始渲染失败不阻塞握手 */ }
+
+  bridge.connect().then(function (mode) {
+    try {
+      $("bridge-dot").className = mode === "mcp" ? "ok" : "";
+      $("bridge-dot").title = mode === "mcp" ? "MCP 桥已连接" : "本地演示模式(未检测到宿主桥)";
+      // 读回工作区画布布局 + 项目信息(顶栏项目名/路径)
+      bridge.callTool("uigen_canvas_get", {}).then(function (res) {
+        try {
+          if (res && res.ok) {
+            setWorkspace(res.workspace);
+            if (res.layout) {
+              applyLayout(res.layout);
+              applySidebar();
+              $("screen-canvas").classList.toggle("grid-on", state.grid);
+              Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
+                b.classList.toggle("on", String(state.viewport) === b.dataset.vp);
+              });
+              renderCards();
+            }
+          }
+          layoutLoaded = true;   // 读回后才允许防抖保存,避免启动即覆盖
+          restorePendingUi();    // 再恢复选中屏/格式/需求草稿 + 从磁盘读 screens
+        } catch (e) { /* 布局恢复失败忽略 */ }
+      }).catch(function () { layoutLoaded = true; restorePendingUi(); });
+    } catch (e) { /* 连接后初始化失败不拖垮面板 */ }
+  });
+})();
+</script>
+</body>
+</html>
