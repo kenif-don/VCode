@@ -57,3 +57,40 @@ generate-icons→fr14-01→fr15-01;若 fr10 locale hunk 冲突可 `git apply -3`
   右上角面板与 git 快捷簇的分支弹层),GitActionMenu 对话框内嵌的分支切换器(showFooterActions=false)不受影响。
 - 验证:typecheck 0;gitBranchSwitcher/gitActionMenu/状态面板 6 文件 82/82(测试 mock 补
   ArrowDownToLineIcon、GitActionMenu、useGitPull 桩);`git apply --reverse --check` 通过。
+
+
+## 追加:fr15-03 修复模型配置白标选中项无限重渲染(2026-10-30)
+
+用户实测(打包安装后):点开「设置 → 模型配置」立即崩溃,控制台报 Minified React error
+#185(Maximum update depth exceeded)。
+
+- **根因**:选中项被两个 effect 互抢。fr15-01「设置去智谱套餐」在 `ModelProviderSection`
+  加的可见性校正 effect(选中项落在隐藏入口 → 改回 `visibleNavigationGroups[0].items[0].key`,
+  无可见项时写 null)与 `useModelProviderNavigation` 的选中回退 effect(选中 key 不在导航项
+  映射里 → 写 `fallbackNodeKey`)目标不一致:回退基于**全量**节点推导,落在
+  `preset:zaiStartPlan` 等被白标隐藏的预置 key 上;校正再改回 null,回退再写回预置 key……
+  两个 effect 都以 `selectedNodeKey` 为依赖、互相触发,渲染永不收敛。无自定义供应商
+  (或首屏 `modelProviders` 加载完成前 custom 列表为空)时必然命中——即一点开就崩。
+- **修复**:可见性统一收敛到 hook(新增可选 `isNavItemVisible`):回退 key 只从可见节点推导;
+  校正只认可见节点为有效选中(隐藏节点即使仍在导航数据里也会被回退)。展示层的校正
+  effect 删除;`isWhiteLabelNavItemVisible`(item.type === "custom")作为唯一可见性判定,
+  同时传给 hook 与营销导航定位(隐藏目标按 unavailable 结束请求,避免营销 effect 写隐藏
+  key 被回退弹回、再写再弹的同类循环)。
+- **触碰文件**:
+  - `packages/ui/src/settings/model-provider-section/useModelProviderNavigation.ts`
+    (新增可选 `isNavItemVisible`;fallback 与选中校正只认可见节点)
+  - `packages/ui/src/settings/ModelProviderSection.tsx`(删可见性校正 effect 与
+    `visibleNodeKeys`;可见性判定统一为 `isWhiteLabelNavItemVisible` 并传 hook;营销定位过滤隐藏项)
+  - 新增 `packages/ui/test/modelProviderWhiteLabelSelection.test.ts`(5 例:无自定义供应商时
+    选中稳定为空不震荡、默认落首个自定义、隐藏预置选中被校正、校正只写可见 key)
+- **验证**:modelProvider 全系 332/332(含 fr15 既有 188 例);`tsc -b packages/ui` 0 错;
+  补丁 `git apply --check` 在「基线+fr15-01」前态零冲突、`git apply --reverse --check`
+  在开发树通过。全量 packages/ui 套件仍有 fr18 已记录的 18 文件 107 例存量失败
+  (失败集与 pre-fr18 对照一致),与本补丁无关。
+- **产物**:r20 已含修复——desktop 直接打包 `packages/ui` 源码(vite 配置明确),
+  `app.asar` 探针命中 `isNavItemVisible`(属性名不参与压缩);r20 同时包含 fr18 批次与
+  hba-run 面板「回到底部」等在树工作。
+
+## 复现(fr15-02 之后叠加;上下文依赖 fr15-01 的白标块,须在 fr15-01 后应用)
+
+`git apply fork/patches/fr15-03-fix-model-config-render-loop.patch`

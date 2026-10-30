@@ -249,3 +249,18 @@ pnpm run bundle:desktop -- --os win --arch x64   # 可选:完整打包
 - 插件测试:`node --test tests/run/test-server.mjs` 12/12(server.mjs 本批未改);独立模式浏览器实测截图:日志区四边贴边、下拉框+按钮状态切换正确。
 - 生效:直插输入框需随下一次打包(宿主桥方法,热部署不了);当前 r14 安装包上自动降级为「插件上下文」附入(仍不弹框)。插件已按热部署配方替换 `~/.zcode/cli/plugins/cache/zcode-plugins-official/hba-run/0.1.0/ui/panel.html`,并同步打包种子 `apps/zcode-cli/packages/hba-run-plugin/{ui/panel.html,server.mjs,README.md}`(server.mjs 种子原缺 GBK 解码/漏杀修复,一并拉齐,防下次打包重新播种回滚)与本机 `resources/glm/packages/hba-run-plugin/`。
 - 复现:`git apply fork/patches/fr4-01-plugin-ui-insert-input-text.patch`(纯净基线可直接叠,无顺序依赖);重开运行面板,日志区选中文字右键「插入到输入框」。
+
+
+## 附:fr15-03 修复模型配置白标选中项无限重渲染(React #185)(2026-10-30)
+
+- 补丁:`fork/patches/fr15-03-fix-model-config-render-loop.patch`(3 文件,+185/-25,git diff 格式;含新增回归测试 `modelProviderWhiteLabelSelection.test.ts` 5 例)
+- 现象:打包安装后实测,点开「设置 → 模型配置」立即崩溃,控制台 Minified React error #185(Maximum update depth exceeded)。
+- 根因:选中项被两个 effect 互抢。fr15-01「设置去智谱套餐」在 ModelProviderSection 加的可见性校正 effect(选中落在隐藏入口→改回 `visibleNavigationGroups[0].items[0].key`,无可见项写 null)与 `useModelProviderNavigation` 的选中回退 effect(选中 key 不在导航项映射→写 `fallbackNodeKey`)目标不一致:回退按**全量**节点推导,落点是 `preset:zaiStartPlan` 等被白标隐藏的预置 key;校正改回 null,回退再写预置 key……两 effect 均以 `selectedNodeKey` 为依赖互相触发,渲染永不收敛。无自定义供应商(或首屏 `modelProviders` 未加载完、custom 列表为空)时必然命中——即一点开就崩。
+- 修复:可见性统一收敛到 hook——`useModelProviderNavigation` 新增可选 `isNavItemVisible`,fallback key 只从可见节点推导、选中校正只认可见节点为有效(隐藏节点即使仍在导航数据里也会被回退);删除展示层校正 effect 与 `visibleNodeKeys`,`isWhiteLabelNavItemVisible`(item.type === "custom")作为唯一可见性判定并传 hook;营销导航定位同步过滤隐藏目标(隐藏目标按 unavailable 结束请求,避免营销 effect 写隐藏 key 被回退弹回、再写再弹的同类循环)。
+- 触碰文件:
+  - `packages/ui/src/settings/model-provider-section/useModelProviderNavigation.ts`(新增 `isNavItemVisible` 选项;fallback 与选中校正只认可见节点)
+  - `packages/ui/src/settings/ModelProviderSection.tsx`(删校正 effect/visibleNodeKeys;可见性判定统一 `isWhiteLabelNavItemVisible`;hook 传 `isNavItemVisible`;营销定位过滤隐藏项)
+  - `packages/ui/test/modelProviderWhiteLabelSelection.test.ts`(新增 5 例:无自定义供应商选中稳定为空不震荡、默认落首个自定义、隐藏预置选中被校正、校正只写可见 key)
+- 验证:modelProvider 全系 332/332(含 fr15 既有 188 例);`tsc -b packages/ui` 0 错;补丁 `git apply --check` 在「基线+fr15-01」前态零冲突、`git apply --reverse --check` 在开发树通过;fr15-02~fr18-03 均不触碰本补丁源文件,fr15-01 之后任意位置可叠(上下文依赖 fr15-01 白标块)。全量 `packages/ui` 仍有 fr18 已记录的 18 文件 107 例存量失败(失败集与 pre-fr18 对照一致),与本补丁无关。
+- 产物:**打包(2026-10-30,r20)**:`pnpm run bundle:desktop -- --os win --arch x64` 全链路 exit 0(生产构建→asar→NSIS→闭包校验→体积审计 156.4 MiB<500 MiB)。产物 `dist/VCode-3.16.2-hba-panels-r20-win-x64.exe`(163,983,084 字节,sha256 d63e74b4fbc3a2d612c6082f1c073a1531a3f0f940c6b6fe7612a0d7d794d410)。产物探针:`app.asar` 命中 `isNavItemVisible`(属性名不参与压缩,证明修复代码入包;desktop 直接打包 `packages/ui` 源码)。r20 同时含 r19 之后在树工作:fr18 批次(删手机连接/设置引导入口)与 hba-run 面板「回到底部」按钮;hba-uigen 插件种子(server.mjs/bridge.js/panel.html)按 r13 配方同步为 hba-on-zcode/plugins 当前源码,防安装后重新播种回滚用户热部署。
+- 复现:修复前打包件点「设置→模型配置」即崩;r20 同路径正常打开,无自定义供应商时选中稳定为空。

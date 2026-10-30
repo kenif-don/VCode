@@ -1,0 +1,306 @@
+diff --git a/packages/ui/src/settings/ModelProviderSection.tsx b/packages/ui/src/settings/ModelProviderSection.tsx
+index 14155e6..e573215 100644
+--- a/packages/ui/src/settings/ModelProviderSection.tsx
++++ b/packages/ui/src/settings/ModelProviderSection.tsx
+@@ -36,6 +36,7 @@ import {
+   PRESET_SUBSCRIPTION_TIMEOUT_MS,
+   BIGMODEL_REGISTRATION_URL,
+   type CodingPlanStatus,
++  type ModelProviderNavItem,
+   type ModelProviderNavGroup,
+ } from "./model-provider-section/constants.js";
+ import { ModelProviderSectionDetail } from "./model-provider-section/Detail.js";
+@@ -216,6 +217,16 @@ function resolveConnectionSelectionForNavItem(
+   return isStartPlanModelProviderId(item.presetId) ? null : { kind: "individual-coding-plan" };
+ }
+ 
++/**
++ * 白标：供应商导航只展示用户自定义供应商，预置/套餐入口不露出。
++ * 可见性必须同时传给 useModelProviderNavigation 的 isNavItemVisible，
++ * 让选中校正与回退收敛到同一目标；展示层不得再写第二个校正 effect，
++ * 否则两者会互抢 selectedNodeKey 形成无限重渲染（React #185）。
++ */
++function isWhiteLabelNavItemVisible(item: ModelProviderNavItem): boolean {
++  return item.type === "custom";
++}
++
+ export function resolveModelProviderSideSelectionKey(
+   item: ModelProviderNavGroup["items"][number],
+ ): string {
+@@ -700,6 +711,7 @@ export function ModelProviderSection({
+       selectedNodeKey,
+       setSelectedNodeKey,
+       intl,
++      isNavItemVisible: isWhiteLabelNavItemVisible,
+     });
+   const selectedPlanAccessKey =
+     selectedNavItem?.type === "codingPlan" || selectedNavItem?.type === "teamPlan"
+@@ -1026,13 +1038,18 @@ export function ModelProviderSection({
+     )
+       return;
+     const providerId = marketingRequest.target.provider_id;
+-    const item = navigationItems.find((item) =>
+-      item.type === "custom"
+-        ? // 当前表单契约使用 providerId；旧 id 会让所有自定义提供商被误判为不存在。
+-          item.provider.providerId === providerId
+-        : "presetId" in item &&
+-          item.presetId === providerId &&
+-          (!isStartPlanModelProviderId(providerId) || item.type === "codingPlan"),
++    // 只能落在可见入口上：隐藏入口（白标过滤掉的预置/套餐）按不可用结束请求，
++    // 否则写入隐藏 key 后会被选中校正改回可见项，effect 依赖 selectedNodeKey
++    // 反复触发，与校正互抢形成无限重渲染（React #185）。
++    const item = navigationItems.find(
++      (item) =>
++        isWhiteLabelNavItemVisible(item) &&
++        (item.type === "custom"
++          ? // 当前表单契约使用 providerId；旧 id 会让所有自定义提供商被误判为不存在。
++            item.provider.providerId === providerId
++          : "presetId" in item &&
++            item.presetId === providerId &&
++            (!isStartPlanModelProviderId(providerId) || item.type === "codingPlan")),
+     );
+     if (!item) {
+       finishMarketingNavigation(marketingRequest.id, new Error("marketing_provider_unavailable"));
+@@ -1092,32 +1109,22 @@ export function ModelProviderSection({
+   const customLoading = loading || modelProvidersRefreshing;
+ 
+   // 白标：供应商导航只展示用户自定义供应商——智谱预置与套餐连接入口不再露出，
+-  // 「自定义供应商」分组标签也一并去掉（扁平列表）。hook 层语义保持不变。
++  // 「自定义供应商」分组标签也一并去掉（扁平列表）。
++  // 可见性通过 isNavItemVisible 传入 useModelProviderNavigation：选中项的校正与回退
++  // 由 hook 统一收敛到可见节点。展示层不得再写第二个校正 effect——两个 effect 互抢
++  // selectedNodeKey，在可见集合为空（如首屏加载、无自定义供应商）或回退 key 被隐藏时
++  // 形成 null↔预置 key 的无限重渲染（React #185）。
+   const visibleNavigationGroups = useMemo(
+     () =>
+       navigationGroups
+         .map((group) => ({
+           ...group,
+           title: group.id === "custom" ? "" : group.title,
+-          items: group.items.filter((item) => item.type === "custom"),
++          items: group.items.filter(isWhiteLabelNavItemVisible),
+         }))
+         .filter((group) => group.items.length > 0),
+     [navigationGroups],
+   );
+-  const visibleNodeKeys = useMemo(
+-    () =>
+-      new Set(visibleNavigationGroups.flatMap((group) => group.items.map((item) => item.key))),
+-    [visibleNavigationGroups],
+-  );
+-  // 选中项落在已隐藏入口（预置/套餐）上时回退；默认落在自定义供应商配置上。
+-  useEffect(() => {
+-    const firstVisibleKey = visibleNavigationGroups[0]?.items[0]?.key ?? null;
+-    if (selectedNodeKey && !visibleNodeKeys.has(selectedNodeKey)) {
+-      setSelectedNodeKey(firstVisibleKey);
+-    } else if (!selectedNodeKey && firstVisibleKey) {
+-      setSelectedNodeKey(firstVisibleKey);
+-    }
+-  }, [selectedNodeKey, visibleNodeKeys, visibleNavigationGroups]);
+ 
+   if (loadError) {
+     return (
+diff --git a/packages/ui/src/settings/model-provider-section/useModelProviderNavigation.ts b/packages/ui/src/settings/model-provider-section/useModelProviderNavigation.ts
+index 714bef9..1220cdf 100644
+--- a/packages/ui/src/settings/model-provider-section/useModelProviderNavigation.ts
++++ b/packages/ui/src/settings/model-provider-section/useModelProviderNavigation.ts
+@@ -18,6 +18,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import {
+   CODING_PLAN_PROVIDER_SPECS,
+   type CodingPlanEntitlementState,
++  type ModelProviderNavItem,
+   type ModelProviderNavGroup,
+   type PresetProviderSpec,
+ } from "@/settings/model-provider-section/constants.js";
+@@ -61,6 +62,14 @@ interface UseModelProviderNavigationOptions {
+   selectedNodeKey: string | null;
+   setSelectedNodeKey: (key: string | null) => void;
+   intl: ReturnType<typeof useZCodeIntl>["intl"];
++  /**
++   * 白标等场景只展示部分入口。传入后：
++   * - 选中校正只认可见节点——隐藏节点即使仍在导航数据里也不算有效选中；
++   * - 初始化/回退 key 也只从可见节点推导。
++   * 可见性必须在这里统一收敛：若展示层另写一个可见性校正 effect，本 hook 的回退
++   * 会把选中写回隐藏 key，两者互相改写 selectedNodeKey 形成无限重渲染（React #185）。
++   */
++  isNavItemVisible?: (item: ModelProviderNavItem) => boolean;
+ }
+ 
+ export function useModelProviderNavigation({
+@@ -80,6 +89,7 @@ export function useModelProviderNavigation({
+   selectedNodeKey,
+   setSelectedNodeKey,
+   intl,
++  isNavItemVisible,
+ }: UseModelProviderNavigationOptions) {
+   const customProviders = useMemo(() => {
+     const allCustomProviders = modelProviders.filter(
+@@ -301,10 +311,19 @@ export function useModelProviderNavigation({
+ 
+   const fallbackNodeKey = resolveFallbackModelProviderNodeKey({
+     selectedNodeKey,
+-    selectableNavigationItems,
++    selectableNavigationItems: selectableNavigationItems.filter(
++      (item) => isNavItemVisible?.(item) !== false,
++    ),
+   });
+   useEffect(() => {
+-    const hasSelectedNode = selectedNodeKey ? sideNavigationItemByKey.has(selectedNodeKey) : false;
++    const selectedSideItem = selectedNodeKey
++      ? sideNavigationItemByKey.get(selectedNodeKey)
++      : undefined;
++    // 隐藏节点（白标过滤掉的预置/套餐入口）不算有效选中：必须回落到可见节点。
++    // 否则展示层的可见性校正会与本回退互抢 selectedNodeKey，形成无限重渲染（React #185）。
++    const hasSelectedNode = selectedSideItem
++      ? isNavItemVisible?.(selectedSideItem) !== false
++      : false;
+     if (hasSelectedNode) {
+       return;
+     }
+@@ -314,6 +333,7 @@ export function useModelProviderNavigation({
+     }
+   }, [
+     fallbackNodeKey,
++    isNavItemVisible,
+     selectedNavItem,
+     selectedNodeKey,
+     setSelectedNodeKey,
+diff --git a/packages/ui/test/modelProviderWhiteLabelSelection.test.ts b/packages/ui/test/modelProviderWhiteLabelSelection.test.ts
+new file mode 100644
+index 0000000..06d24bf
+--- /dev/null
++++ b/packages/ui/test/modelProviderWhiteLabelSelection.test.ts
+@@ -0,0 +1,133 @@
++// @vitest-environment jsdom
++import { useState } from "react";
++import { renderHook } from "@testing-library/react";
++import { describe, expect, it, vi } from "vitest";
++import { BUILTIN_MODEL_PROVIDER_IDS } from "@zcode/shared";
++import { useModelProviderNavigation } from "@/settings/model-provider-section/useModelProviderNavigation.js";
++import {
++  createCustomProviderNodeKey,
++  createPresetProviderNodeKey,
++} from "@/settings/model-provider-section/utils.js";
++import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
++import type { PresetProviderSpec } from "@/settings/model-provider-section/constants.js";
++
++// 白标：侧栏只展示自定义供应商。选中校正必须与该可见性收敛到同一目标，
++// 否则回退 effect 会把选中写回隐藏的预置 key，与可见性校正互抢
++// selectedNodeKey 形成无限重渲染（React #185，打包后点开模型配置即崩）。
++const isWhiteLabelNavItemVisible = (item: { type: string }) => item.type === "custom";
++
++function createCustomProvider(providerId: string): ProviderSettingsFormProvider {
++  return {
++    providerId,
++    providerName: providerId,
++    templateId: undefined,
++    enabled: true,
++    executable: true,
++    hasPersonalConfig: true,
++    config: {
++      group: "standard-personal",
++      access: { type: "api-key", apiKey: "key" },
++      api: { type: "anthropic-messages", baseUrl: "https://example.com" },
++      builtinModelIds: [],
++    },
++    personalConfig: {},
++  } as unknown as ProviderSettingsFormProvider;
++}
++
++const presetProviders: Array<PresetProviderSpec & { provider: ProviderSettingsFormProvider | null }> =
++  [
++    {
++      id: BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan,
++      displayName: "Z.ai",
++      provider: null,
++    },
++  ];
++
++function renderSelectionHarness({
++  initialSelectedNodeKey = null,
++  modelProviders = [],
++}: {
++  initialSelectedNodeKey?: string | null;
++  modelProviders?: ProviderSettingsFormProvider[];
++} = {}) {
++  const setSelectedNodeKey = vi.fn();
++  const harness = renderHook(
++    ({ selectedNodeKey }: { selectedNodeKey: string | null }) => {
++      const [innerSelectedNodeKey, innerSetSelectedNodeKey] = useState(selectedNodeKey);
++      useModelProviderNavigation({
++        presetProviders,
++        modelProviders,
++        selectedNodeKey: innerSelectedNodeKey,
++        setSelectedNodeKey: (key) => {
++          setSelectedNodeKey(key);
++          innerSetSelectedNodeKey(key);
++        },
++        intl: { formatMessage: ({ id }: { id: string }) => id } as never,
++        isNavItemVisible: isWhiteLabelNavItemVisible,
++      });
++      return innerSelectedNodeKey;
++    },
++    { initialProps: { selectedNodeKey: initialSelectedNodeKey } },
++  );
++  return { ...harness, setSelectedNodeKey };
++}
++
++describe("白标模型配置选中项收敛", () => {
++  it("无自定义供应商时选中稳定为空，不回落到隐藏的预置 key", () => {
++    const { result, setSelectedNodeKey, rerender } = renderSelectionHarness();
++
++    expect(result.current).toBeNull();
++    for (const [key] of setSelectedNodeKey.mock.calls) {
++      expect(key).not.toBe(createPresetProviderNodeKey(BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan));
++    }
++    // 反复渲染不改写选中项：互抢效应下这里会持续震荡直至 #185。
++    const settledCalls = setSelectedNodeKey.mock.calls.length;
++    rerender({ selectedNodeKey: null });
++    rerender({ selectedNodeKey: null });
++    expect(result.current).toBeNull();
++    expect(setSelectedNodeKey.mock.calls.length).toBe(settledCalls);
++  });
++
++  it("未选中时默认落在第一个自定义供应商上", () => {
++    const { result, rerender } = renderSelectionHarness({
++      modelProviders: [createCustomProvider("official-api"), createCustomProvider("another-api")],
++    });
++
++    expect(result.current).toBe(createCustomProviderNodeKey("official-api"));
++    rerender({ selectedNodeKey: result.current });
++    expect(result.current).toBe(createCustomProviderNodeKey("official-api"));
++  });
++
++  it("落在隐藏预置入口上的选中被校正到自定义供应商", () => {
++    const { result, rerender } = renderSelectionHarness({
++      initialSelectedNodeKey: createPresetProviderNodeKey(BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan),
++      modelProviders: [createCustomProvider("official-api")],
++    });
++
++    expect(result.current).toBe(createCustomProviderNodeKey("official-api"));
++    rerender({ selectedNodeKey: result.current });
++    expect(result.current).toBe(createCustomProviderNodeKey("official-api"));
++  });
++
++  it("落在隐藏预置入口上的选中在无自定义供应商时校正为空", () => {
++    const { result, rerender } = renderSelectionHarness({
++      initialSelectedNodeKey: createPresetProviderNodeKey(BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan),
++    });
++
++    expect(result.current).toBeNull();
++    rerender({ selectedNodeKey: result.current });
++    expect(result.current).toBeNull();
++  });
++
++  it("校正只写可见 key：回退永不携带隐藏节点", () => {
++    const { setSelectedNodeKey } = renderSelectionHarness({
++      initialSelectedNodeKey: createPresetProviderNodeKey(BUILTIN_MODEL_PROVIDER_IDS.zaiStartPlan),
++      modelProviders: [createCustomProvider("official-api")],
++    });
++
++    expect(setSelectedNodeKey).toHaveBeenCalled();
++    for (const [key] of setSelectedNodeKey.mock.calls) {
++      expect(key === null || key.startsWith("custom:")).toBe(true);
++    }
++  });
++});

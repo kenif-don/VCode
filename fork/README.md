@@ -98,6 +98,7 @@ pnpm run test:unit                # vitest 单元测试(排除 desktop e2e)
 | `patches/fr14-01-footer-entry-row-icons.patch` | fr14 自动化/插件市场入口迁底部图标行(仅图标,顺序 自动化\|统计\|插件市场\|手机连接\|设置) | `../docs/fr14-footer-entry-row.md` |
 | `patches/fr15-01-whitelabel-ui-batch.patch` | fr15 六项 UI 修正(自动化点击修复/去左上角图标/新会话徽标改小/创建弹框只选文件夹/右上角 git 快捷簇常驻/设置去智谱套餐) | `../docs/fr15-whitelabel-ui-batch.md` |
 | `patches/fr15-02-branch-switcher-git-actions.patch` | fr15-02 分支弹层补齐拉取/提交或推送(与右上角 git 面板一致) | `../docs/fr15-whitelabel-ui-batch.md` |
+| `patches/fr15-03-fix-model-config-render-loop.patch` | fr15-03 修复模型配置白标选中项无限重渲染(React #185):选中校正/回退统一收敛到 hook 可见性(`isNavItemVisible`),删展示层校正 effect | `../docs/fr15-whitelabel-ui-batch.md` |
 | `branding/apply-whitelabel.mjs`(**脚本**,非补丁) | fr13 白标改名:独立词 ZCode→VCode(约 740 文件)+ 产品身份/进程名定点转换;版权/署名行依法豁免 | 同上 |
 | `branding/generate-icons.py` + `branding/icons/`(**脚本**,非补丁) | fr13 图标资产:由 `icons/hba-icon-1024.png` 生成全套 ico/icns/png 并铺到既有位置(含 favicon data URI) | 同上 |
 
@@ -122,6 +123,7 @@ python fork/branding/generate-icons.py .
 git apply fork/patches/fr14-01-footer-entry-row-icons.patch
 git apply fork/patches/fr15-01-whitelabel-ui-batch.patch
 git apply fork/patches/fr15-02-branch-switcher-git-actions.patch
+git apply fork/patches/fr15-03-fix-model-config-render-loop.patch
 # 一次性校验:git apply --check 各补丁;叠加已验证无冲突(fr13 四步管线经干净 worktree 逐字节重现)。
 ```
 
