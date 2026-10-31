@@ -17,7 +17,7 @@ const IAB_INFO: BrowserInfo = {
   id: "iab-runtime-1",
   generation: 1,
   type: "iab",
-  name: "ZCode In-app Browser",
+  name: "VCode In-app Browser",
   capabilities: { browser: [], tab: [] },
 };
 
@@ -264,7 +264,7 @@ describe("browser-client facade", () => {
       {
         id: "iab-runtime-1",
         type: "iab",
-        name: "ZCode In-app Browser",
+        name: "VCode In-app Browser",
         capabilities: { browser: [], tab: [] },
       },
     ]);
@@ -1080,7 +1080,7 @@ describe("browser-client facade", () => {
     const doc = await (await browsers.getDefault()).documentation();
     for (const kw of [
       "# Selected Browser",
-      "- Name: ZCode In-app Browser",
+      "- Name: VCode In-app Browser",
       "- Type: iab",
       "- ID: iab-runtime-1",
       "API manifest",

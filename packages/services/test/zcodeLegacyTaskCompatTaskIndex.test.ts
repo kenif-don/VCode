@@ -105,7 +105,7 @@ function makeSnapshot(params: {
   };
   const model = params.model ?? { providerId: "glm", modelId: "glm-4.6" };
   return {
-    protocol: { name: "ZCode Protocol", version: 1 },
+    protocol: { name: "VCode Protocol", version: 1 },
     session: {
       sessionId: params.sessionId,
       workspace,
@@ -262,7 +262,7 @@ function createAgentMock() {
     initialize: vi.fn(async (params) => ({
       available: true,
       workspaceKey: params.workspaceIdentity ?? params.workspacePath,
-      protocolName: "ZCode Protocol",
+      protocolName: "VCode Protocol",
       protocolVersion: 1,
       transportKind: "stdio",
     })),
@@ -655,7 +655,7 @@ async function seedLegacyAcpSessionId(
   await repo.ensureReady();
 }
 
-describe("ZCode legacy task compat task index", () => {
+describe("VCode legacy task compat task index", () => {
   it("各夹具的迟到写入保持在自己的数据库中", async () => {
     const first = createService();
     await first.taskIndexRepo.ensureReady();
@@ -3108,7 +3108,7 @@ describe("ZCode legacy task compat task index", () => {
     ).resolves.toBe(true);
   });
 
-  it("merges live subagent tool projection into terminal ZCode snapshots", async () => {
+  it("merges live subagent tool projection into terminal VCode snapshots", async () => {
     const { agent, eventEmitter, service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
     const terminalSnapshot = makeSnapshot({
@@ -3750,7 +3750,7 @@ describe("ZCode legacy task compat task index", () => {
     ]);
   });
 
-  it("does not include zero ZCode Protocol context usage in task snapshots", async () => {
+  it("does not include zero VCode Protocol context usage in task snapshots", async () => {
     const { service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
 
@@ -4566,7 +4566,7 @@ describe("ZCode legacy task compat task index", () => {
     });
   });
 
-  it("maps ZCode Protocol context projection events to legacy usage_update", async () => {
+  it("maps VCode Protocol context projection events to legacy usage_update", async () => {
     const { eventEmitter, service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
     const received: ZCodeStreamEvent[] = [];
@@ -5096,7 +5096,7 @@ describe("ZCode legacy task compat task index", () => {
     });
   });
 
-  it("maps ZCode model retry status to apiRetry stream events and runtime snapshots", async () => {
+  it("maps VCode model retry status to apiRetry stream events and runtime snapshots", async () => {
     const { eventEmitter, service } = createService();
     const task = await service.createTask({ workspacePath: "/repo", provider: "glm" });
     const received: ZCodeStreamEvent[] = [];

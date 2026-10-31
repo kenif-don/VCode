@@ -19,7 +19,7 @@ describe("MCP telemetry source provenance", () => {
     }
   });
 
-  it("marks installed MCP servers from the ZCode official marketplace as builtin", async () => {
+  it("marks installed MCP servers from the VCode official marketplace as builtin", async () => {
     const fixture = await discoverPluginMcp("official-cdn");
     try {
       expect(fixture.outcome.plugins[0]).toMatchObject({

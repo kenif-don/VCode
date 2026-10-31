@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Run panel plugin (FR-4): run configurations, one-click run/stop with live output, task history and preview linking, persisted to .hba/run.json.",
   "description_i18n": {
-    "en": "Run panel for HBA on ZCode: manage run configurations (command, working directory, env vars, preview URL), start/stop processes with live output streaming, review task history, and open the preview of a successful run.",
+    "en": "Run panel for HBA on VCode: manage run configurations (command, working directory, env vars, preview URL), start/stop processes with live output streaming, review task history, and open the preview of a successful run.",
     "zh-CN": "HBA 运行面板：管理运行配置（启动命令、工作目录、环境变量、预览地址），一键运行/停止并实时查看输出，浏览任务历史，并在运行成功后打开预览。"
   },
   "author": {

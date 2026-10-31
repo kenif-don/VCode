@@ -230,7 +230,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
     expect(fixture.notified).not.toHaveBeenCalled();
   });
 
-  it("保留原 ZCode JWT 401 判断", async () => {
+  it("保留原 VCode JWT 401 判断", async () => {
     const fixture = createFixture();
     await fixture.client.request("https://zcode.z.ai/api/v1/zcode-plan/billing/balance", {
       headers: { Authorization: "Bearer current-zcode-jwt" },
@@ -388,7 +388,7 @@ describe("当前 App 登录凭据的 HTTP 401 识别", () => {
     },
   );
 
-  it("userinfo 分类不受无关的 ZCode base 配置异常影响", async () => {
+  it("userinfo 分类不受无关的 VCode base 配置异常影响", async () => {
     const fixture = createFixture("zai", { ZCODE_ENV: "production", ZCODE_BASE_URL: "invalid" });
     await expect(
       fixture.observe(

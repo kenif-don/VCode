@@ -77,7 +77,7 @@ describe("node repl tool display", () => {
         },
         output: {
           type: "text",
-          value: "# Selected Browser\n- Name: ZCode In-app Browser",
+          value: "# Selected Browser\n- Name: VCode In-app Browser",
         },
         status: "completed",
       }),
@@ -85,7 +85,7 @@ describe("node repl tool display", () => {
       operation: "run",
       userTitle: "选择浏览器并读取操作说明",
       code: "globalThis.browser = await agent.browsers.getDefault();",
-      resultText: "# Selected Browser\n- Name: ZCode In-app Browser",
+      resultText: "# Selected Browser\n- Name: VCode In-app Browser",
     });
   });
 

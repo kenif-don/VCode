@@ -6,6 +6,7 @@ import {
   parseGitAutoRefreshWatchPaths,
   shouldEnableGitAutoRefreshForWorkspace,
   stringifyGitAutoRefreshWatchPaths,
+  unionGitAutoRefreshWatchPaths,
 } from "@/lib/gitAutoRefresh.js";
 import { logger } from "@/logger.js";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
@@ -23,7 +24,7 @@ export function useGitAutoRefresh({
   workspacePath,
   workspaceIdentity,
   remoteSessionId,
-  gitSummary,
+  gitSummaries,
   gitSummaryWorkspaceKey,
   enabled,
   onRefreshGit,
@@ -31,7 +32,8 @@ export function useGitAutoRefresh({
   workspacePath: string;
   workspaceIdentity?: string | null;
   remoteSessionId?: string | null;
-  gitSummary: GitRepositorySummary;
+  /** 全部发现仓的摘要（含选中仓）；watch 路径取各仓元数据路径的并集。 */
+  gitSummaries: readonly (GitRepositorySummary | null | undefined)[];
   gitSummaryWorkspaceKey: string;
   enabled: boolean;
   onRefreshGit: () => void;
@@ -46,6 +48,9 @@ export function useGitAutoRefresh({
     currentWorkspaceKey,
     summaryWorkspaceKey: gitSummaryWorkspaceKey,
   });
+  const hasWatchableRepository = gitSummaries.some(
+    (summary) => Boolean(summary?.isGitAvailable) && Boolean(summary?.isRepository),
+  );
   const [workspacePlatformState, setWorkspacePlatformState] = useState<{
     service: typeof systemService;
     platform: string;
@@ -56,7 +61,7 @@ export function useGitAutoRefresh({
   const workspacePlatform =
     workspacePlatformState?.service === systemService ? workspacePlatformState.platform : null;
   useEffect(() => {
-    if (!canWatchCurrentWorkspace || !gitSummary.isGitAvailable || !gitSummary.isRepository) {
+    if (!canWatchCurrentWorkspace || !hasWatchableRepository) {
       return;
     }
 
@@ -75,26 +80,24 @@ export function useGitAutoRefresh({
     return () => {
       cancelled = true;
     };
-  }, [canWatchCurrentWorkspace, gitSummary.isGitAvailable, gitSummary.isRepository, systemService]);
+  }, [canWatchCurrentWorkspace, hasWatchableRepository, systemService]);
   const watchPathSignature = useMemo(
     () =>
       stringifyGitAutoRefreshWatchPaths(
         canWatchCurrentWorkspace
-          ? buildGitAutoRefreshWatchPaths(
-              gitSummary,
-              workspacePlatform ? { platform: workspacePlatform } : null,
+          ? unionGitAutoRefreshWatchPaths(
+              gitSummaries.map((summary) =>
+                summary
+                  ? buildGitAutoRefreshWatchPaths(
+                      summary,
+                      workspacePlatform ? { platform: workspacePlatform } : null,
+                    )
+                  : [],
+              ),
             )
           : [],
       ),
-    [
-      canWatchCurrentWorkspace,
-      gitSummary.isGitAvailable,
-      gitSummary.isRepository,
-      gitSummary.repoRoot,
-      gitSummary.workspacePath,
-      gitSummary.autoRefreshWatchPaths,
-      workspacePlatform,
-    ],
+    [canWatchCurrentWorkspace, gitSummaries, workspacePlatform],
   );
   const watchPaths = useMemo(
     () => parseGitAutoRefreshWatchPaths(watchPathSignature),

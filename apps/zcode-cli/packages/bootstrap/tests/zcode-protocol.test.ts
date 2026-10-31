@@ -291,7 +291,7 @@ describe("ZCodeProtocolAgentServer", () => {
     });
   });
 
-  it("maps core tool events into typed ZCode session event payloads", () => {
+  it("maps core tool events into typed VCode session event payloads", () => {
     const mapped = zcodeSessionEventSchema.parse(
       mapSessionEvent({
         id: "evt_tool_1" as SessionEvent["id"],
@@ -1820,7 +1820,7 @@ describe("ZCodeProtocolAgentServer", () => {
               headers: [],
               oauth: {
                 type: "authorization_code",
-                clientName: "ZCode",
+                clientName: "VCode",
               },
             },
           ],
@@ -1907,7 +1907,7 @@ describe("ZCodeProtocolAgentServer", () => {
               headers: [],
               oauth: {
                 type: "authorization_code",
-                clientName: "ZCode",
+                clientName: "VCode",
               },
             },
           ],
@@ -1975,7 +1975,7 @@ describe("ZCodeProtocolAgentServer", () => {
               headers: [],
               oauth: {
                 type: "authorization_code",
-                clientName: "ZCode",
+                clientName: "VCode",
               },
             },
           ],
@@ -3226,7 +3226,7 @@ describe("ZCodeProtocolAgentServer", () => {
         params: { workspace },
       }),
     );
-    expect(created.protocol).toEqual({ name: "ZCode Protocol", version: 1 });
+    expect(created.protocol).toEqual({ name: "VCode Protocol", version: 1 });
     expect(created.session.workspace.workspaceKey).toBe(workspace.workspaceKey);
 
     const read = zcodeSessionStateSnapshotSchema.parse(
@@ -4068,7 +4068,7 @@ describe("ZCodeProtocolAgentServer", () => {
       expect(logs).toContainEqual(
         expect.objectContaining({
           level: "warn",
-          message: "ZCode Protocol runtime preferences request timed out",
+          message: "VCode Protocol runtime preferences request timed out",
           context: expect.objectContaining({
             errorCode: -32022,
             scope: "runtime-materialization",
@@ -4205,7 +4205,7 @@ describe("ZCodeProtocolAgentServer", () => {
 
     expect(stopActiveForegroundExecution).toHaveBeenCalledOnce();
     expect(stopActiveForegroundExecution).toHaveBeenCalledWith({
-      reason: "ZCode Protocol owner disconnected",
+      reason: "VCode Protocol owner disconnected",
     });
     expect(activeAbortController.signal.aborted).toBe(true);
     expect(activeAbortController.signal.reason).toBe(disconnectError);
@@ -6426,7 +6426,7 @@ describe("ZCodeProtocolAgentServer", () => {
     );
 
     await vi.waitFor(() => {
-      expect(abortReasons).toContain("ZCode Protocol goal paused");
+      expect(abortReasons).toContain("VCode Protocol goal paused");
     });
     expect(target?.status).toBe("paused");
     expect(pauseResult).toMatchObject({
@@ -6546,7 +6546,7 @@ describe("ZCodeProtocolAgentServer", () => {
     });
 
     await vi.waitFor(() => {
-      expect(abortReasons).toContain("ZCode Protocol session stopped");
+      expect(abortReasons).toContain("VCode Protocol session stopped");
     });
     expect(goalResult.startedTurn).toBe(true);
     expect(target?.status).toBe("paused");

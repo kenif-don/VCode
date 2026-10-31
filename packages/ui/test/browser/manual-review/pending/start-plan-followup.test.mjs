@@ -91,19 +91,9 @@ for (const [width, locale, theme] of [
               locale === "zh-CN" ? "GLM-5.3(团队套餐)" : "GLM-5.3(Team Plan)",
             ),
           );
-          if (["disconnected", "unavailable", "expired"].includes(state)) {
-            const name =
-              state === "unavailable"
-                ? locale === "zh-CN"
-                  ? "重试"
-                  : "Retry"
-                : state === "expired"
-                  ? locale === "zh-CN"
-                    ? "重新登录"
-                    : "Sign in again"
-                  : locale === "zh-CN"
-                    ? "登录"
-                    : "Log in";
+          // VCode 无登录入口：unavailable/expired 只剩手动重试，disconnected 不再有动作按钮。
+          if (["unavailable", "expired"].includes(state)) {
+            const name = locale === "zh-CN" ? "重试" : "Retry";
             await page.getByRole("button", { name, exact: true }).click();
             assert.equal(await page.getByTestId("actions").innerText(), "1");
           }

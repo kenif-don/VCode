@@ -165,7 +165,7 @@ export interface AgentRuntimeConfig {
   runtimeFeatures?: {
     /**
      * 是否注册 node_repl 工具（js）。
-     * 由 bootstrap 根据 ZCode 官方插件启停推导，不由普通插件 manifest 自声明。
+     * 由 bootstrap 根据 VCode 官方插件启停推导，不由普通插件 manifest 自声明。
      */
     nodeRepl?: boolean;
     /**
@@ -213,7 +213,7 @@ export interface AgentRuntimeConfig {
   taskType?: SessionTaskType;
   /**
    * 动态工作流灰度门（docs/dynamic-workflow/launch.md「Gray release」）：Host 判定后经
-   * ZCode Protocol 下发，runtime 只消费。**缺席即开启**（进程内嵌入方靠这个极性）；
+   * VCode Protocol 下发，runtime 只消费。**缺席即开启**（进程内嵌入方靠这个极性）；
    * 独立 CLI 的 TUI 与 headless 按 --workflow-mode 显式传 true/false（缺省 disabled，DWG-04），
    * workflow_child 继承父配置。
    * false 会关闭十个工作流工具，不改变其他工具的注册策略。

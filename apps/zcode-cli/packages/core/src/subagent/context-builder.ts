@@ -118,7 +118,7 @@ function buildSubagentContextSections(config: SubagentContextBuilderConfig): Con
         source: "subagent_agent_prompt",
         cacheHint: "stable",
         // 空 prompt 不是语义段，不能让左边界单独成为 system block。
-        // ZCode by design：Subagent agent prompt 自带相对 CLI prefix 的单换行左边界。
+        // VCode by design：Subagent agent prompt 自带相对 CLI prefix 的单换行左边界。
         content: `\n${agentPrompt}`,
       }),
     );
@@ -129,7 +129,7 @@ function buildSubagentContextSections(config: SubagentContextBuilderConfig): Con
       name: "Subagent Notes",
       source: "subagent_notes",
       cacheHint: "stable",
-      // ZCode by design：后续 Subagent system block 统一自带双换行左边界。
+      // VCode by design：后续 Subagent system block 统一自带双换行左边界。
       content: `\n\n${buildSubagentCommonNotes()}`,
     }),
     createSubagentSection({

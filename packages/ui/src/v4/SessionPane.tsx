@@ -233,7 +233,10 @@ import {
   buildConversationStatusPanelModel,
   resolveSoleRunningWorkflowRunTarget,
 } from "@/v4/conversationStatusPanelModel.js";
-import type { ConversationStatusPanelWorkflowRunTarget } from "@/v4/conversationStatusPanelModel.js";
+import type {
+  ConversationStatusPanelGitRepository,
+  ConversationStatusPanelWorkflowRunTarget,
+} from "@/v4/conversationStatusPanelModel.js";
 import {
   buildWorkflowRunByRunId,
   buildWorkflowSaveCandidatesByRunId,
@@ -406,6 +409,10 @@ export interface SessionPaneProps {
   gitDirtyFileCount?: number;
   gitWorktreeReviewSourceId?: GitChangeSourceId | null;
   gitWorktreeChangeSummary?: { added: number; removed: number } | null;
+  /** 子目录仓库发现结果（多仓选择器）；缺省退化为单仓。 */
+  gitRepositories?: readonly ConversationStatusPanelGitRepository[] | null;
+  activeGitRepositoryKey?: string | null;
+  onSelectGitRepository?: (repoKey: string) => void;
   activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;
   summaryPanelVariantOverride?: ChatViewSummaryPanelVariant | null;
   onSummaryPanelVariantOverrideChange?: (variant: ChatViewSummaryPanelVariant | null) => void;
@@ -630,6 +637,9 @@ export function SessionPane({
   gitDirtyFileCount,
   gitWorktreeReviewSourceId,
   gitWorktreeChangeSummary,
+  gitRepositories,
+  activeGitRepositoryKey,
+  onSelectGitRepository,
   activeTaskChangeSummary,
   summaryPanelVariantOverride,
   onSummaryPanelVariantOverrideChange,
@@ -2959,7 +2969,7 @@ export function SessionPane({
   );
 
   /**
-   * 「让 ZCode 帮我提炼保存」那条用户消息的发送口（docs/dynamic-workflow/transcript-and-notifications.md
+   * 「让 VCode 帮我提炼保存」那条用户消息的发送口（docs/dynamic-workflow/transcript-and-notifications.md
    * 「The message the lead sends」）：与中枢的「提升为全局」同一条先例——GUI 写、自动发、用户不再确认。
    *
    * 经 ref 转一手而不是直接引 `handleSendText`：后者定义在本文件更下面，而 rowContext 的 memo
@@ -2970,7 +2980,7 @@ export function SessionPane({
     const send = sendTextRef.current;
     if (send === null) throw new Error("send path not mounted");
     const result = await send(text);
-    // 被挡下（会话忙着确认别的、队列暂停待确认）就不是「已交给 ZCode」：抛回弹层，让它留在原处。
+    // 被挡下（会话忙着确认别的、队列暂停待确认）就不是「已交给 VCode」：抛回弹层，让它留在原处。
     if (result !== "sent") throw new Error(`workflow save request not sent: ${result}`);
   }, []);
 
@@ -4854,6 +4864,8 @@ export function SessionPane({
         gitSummary,
         gitDirtyFileCount,
         gitWorktreeChangeSummary,
+        gitRepositories,
+        activeGitRepositoryKey,
         goal: selectionSideChat ? null : (snapshot?.goal ?? null),
         sessionPlans: state.sessionPlans,
         plan: snapshot?.plan ?? null,
@@ -4866,6 +4878,8 @@ export function SessionPane({
       gitDirtyFileCount,
       gitSummary,
       gitWorktreeChangeSummary,
+      gitRepositories,
+      activeGitRepositoryKey,
       snapshot?.backgroundWorks,
       snapshot?.goal,
       snapshot?.plan,
@@ -5765,6 +5779,9 @@ export function SessionPane({
               gitDirtyFileCount={gitDirtyFileCount}
               gitWorktreeReviewSourceId={gitWorktreeReviewSourceId}
               gitWorktreeChangeSummary={gitWorktreeChangeSummary}
+              gitRepositories={gitRepositories}
+              activeGitRepositoryKey={activeGitRepositoryKey}
+              onSelectGitRepository={onSelectGitRepository}
               activeTaskChangeSummary={activeTaskChangeSummary}
               goal={selectionSideChat ? null : (snapshot?.goal ?? null)}
               sessionPlans={state.sessionPlans}
@@ -5892,7 +5909,7 @@ export function SessionPane({
                   backgroundScrollLocked={false}
                   headerSlot={
                     // unsupportedRowCount 也要开这个门：整份副本的行都被本 build 跳过时
-                    // rows 为空，但只读块必须留下来显示「需要更新 ZCode」，不能整块消失。
+                    // rows 为空，但只读块必须留下来显示「需要更新 VCode」，不能整块消失。
                     importedShare &&
                     (importedShare.rows.length > 0 || importedShare.unsupportedRowCount > 0) ? (
                       <ConversationShareImportNotice

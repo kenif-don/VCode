@@ -17,8 +17,9 @@ import {
 } from "@zcode/shared";
 import {
   ProtocolRequestError,
+  isSessionRecordLive,
   parseParams,
-  requireSession,
+  requireSessionForMcpUi,
   type ZCodeProtocolAgentServerContext,
 } from "../server-types.js";
 import { getMcpUiAppToolRegistry } from "./appToolsProtocol.js";
@@ -39,7 +40,7 @@ export async function readMcpUiResource(
   signal?: AbortSignal,
 ): Promise<ZCodeMcpReadResourceResult> {
   const params = parseParams(zcodeMcpReadResourceParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/readResource" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/readResource" });
   const active = mcpUiInstances.validate(
     params.instance,
     params,
@@ -63,7 +64,7 @@ export async function callMcpUiTool(
   signal?: AbortSignal,
 ): Promise<ZCodeMcpUiCallToolResult> {
   const params = parseParams(zcodeMcpUiCallToolParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiCallTool" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiCallTool" });
   return translateScopeError(() =>
     createMcpUiHandlers({ logger: context.logger }).callTool(
       createMcpUiSessionAccess(record, params),
@@ -79,7 +80,7 @@ export async function cancelMcpUiToolCall(
   rawParams: unknown,
 ): Promise<ZCodeMcpUiCancelCallResult> {
   const params = parseParams(zcodeMcpUiCancelCallParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiCancelCall" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiCancelCall" });
   return translateScopeError(async () =>
     createMcpUiHandlers({ logger: context.logger }).cancelToolCall(
       createMcpUiSessionAccess(record, params),
@@ -95,7 +96,7 @@ export async function listMcpUiResources(
   signal?: AbortSignal,
 ): Promise<ZCodeMcpUiListResourcesResult> {
   const params = parseParams(zcodeMcpUiListResourcesParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiListResources" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiListResources" });
   return translateScopeError(() =>
     createMcpUiHandlers({ logger: context.logger }).listResources(
       createMcpUiSessionAccess(record, params),
@@ -111,7 +112,7 @@ export async function listMcpUiResourceTemplates(
   signal?: AbortSignal,
 ): Promise<ZCodeMcpUiListResourceTemplatesResult> {
   const params = parseParams(zcodeMcpUiListResourcesParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, {
+  const record = requireSessionForMcpUi(context, params.sessionId, {
     operation: "mcp/uiListResourceTemplates",
   });
   return translateScopeError(() =>
@@ -130,7 +131,7 @@ export async function subscribeMcpUiResource(
   signal?: AbortSignal,
 ): Promise<Record<string, never>> {
   const params = parseParams(zcodeMcpUiResourceSubscriptionParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, {
+  const record = requireSessionForMcpUi(context, params.sessionId, {
     operation: "mcp/uiSubscribeResource",
   });
   await translateScopeError(() =>
@@ -149,7 +150,7 @@ export async function unsubscribeMcpUiResource(
   signal?: AbortSignal,
 ): Promise<Record<string, never>> {
   const params = parseParams(zcodeMcpUiResourceSubscriptionParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, {
+  const record = requireSessionForMcpUi(context, params.sessionId, {
     operation: "mcp/uiUnsubscribeResource",
   });
   await translateScopeError(() =>
@@ -169,7 +170,7 @@ export async function readMcpUiResourceForUi(
   signal?: AbortSignal,
 ): Promise<ZCodeMcpUiReadResourceResult> {
   const params = parseParams(zcodeMcpUiReadResourceParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiReadResource" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiReadResource" });
   return translateScopeError(() =>
     createMcpUiHandlers({ logger: context.logger }).readResourceForUi(
       createMcpUiSessionAccess(record, params),
@@ -218,12 +219,12 @@ export async function openMcpUiInstance(
   rawParams: unknown,
 ) {
   const params = parseParams(zcodeMcpUiOpenInstanceParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiOpenInstance" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiOpenInstance" });
   // session ready 不代表目标 MCP ready；首次签发等待连接，已有凭证校验仍保持同步拒绝失效来源。
   const source = await record.app.waitForMcpAppConnection(params.serverName);
   const current = record.app.getMcpAppConnectionSnapshot(params.serverName);
   if (
-    context.sessions.get(params.sessionId) !== record ||
+    !isSessionRecordLive(context, params.sessionId, record) ||
     !source ||
     current?.identity !== source.identity ||
     current.generation !== source.generation
@@ -322,7 +323,7 @@ export async function validateMcpUiInstance(
   rawParams: unknown,
 ) {
   const params = parseParams(zcodeMcpUiCloseInstanceParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiValidateInstance" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiValidateInstance" });
   mcpUiInstances.validate(
     params.instance,
     params,

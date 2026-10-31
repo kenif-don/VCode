@@ -27,6 +27,12 @@ export {
   type PluginUiModelContext,
 } from "./domain/pluginUiModelContext.js";
 export {
+  PLUGIN_UI_INSERT_INPUT_TEXT_EVENT,
+  dispatchPluginUiInsertInputText,
+  isPluginUiInsertInputTextEvent,
+  type PluginUiInsertInputTextDetail,
+} from "./domain/pluginUiInsertInputText.js";
+export {
   PluginUiWorkspaceProvider,
   PluginUiSessionProvider,
   useOpenPluginUi,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   isProviderStartupSyncPending,
-  shouldEnableProviderAvailabilityLoginEntryGuard,
   shouldResolveProviderStartupState,
   shouldBlockRootRender,
   shouldShowRootStartupLoading,
@@ -80,45 +79,34 @@ describe("Root startup gate", () => {
     ).toBe(true);
   });
 
-  it("Web 远控 Root 不运行 provider 登录入口守卫", () => {
-    expect(
-      shouldEnableProviderAvailabilityLoginEntryGuard({
-        isWebRemoteControlRoot: true,
-      }),
-    ).toBe(false);
-  });
-
   it("Web 远控 Root 不把 provider 启动态作为 workspace 注入门禁", () => {
     expect(
       shouldResolveProviderStartupState({
         isWebRemoteControlRoot: true,
         providerStartupSyncPending: true,
-        providerAvailabilityStartupCheckCompleted: false,
       }),
     ).toBe(false);
   });
 
-  it("桌面 Root 继续等待 provider 启动检查落定", () => {
+  it("provider 启动同步落定后桌面 Root 不再阻塞", () => {
     expect(
       shouldResolveProviderStartupState({
         isWebRemoteControlRoot: false,
         providerStartupSyncPending: false,
-        providerAvailabilityStartupCheckCompleted: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("登录入口已经打开时不应继续显示启动 loading", () => {
+  it("provider 启动同步未落定时桌面 Root 显示启动 loading", () => {
     expect(
       shouldShowRootStartupLoading({
         isDesktop: true,
-        welcomeScreenOpen: true,
         isResolvingStartupAuthState: false,
         isResolvingProviderStartupState: true,
         isRestoring: false,
         isBootstrappingInitialWorkspace: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("兜底默认 workspace 返回时如果已经恢复出 active workspace，就不再抢占当前 tab", () => {

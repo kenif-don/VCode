@@ -35,7 +35,7 @@ describe("windows install resource locks", () => {
       "AppData",
       "Local",
       "Programs",
-      "ZCode",
+      "VCode",
       "resources",
     );
 
@@ -46,14 +46,14 @@ describe("windows install resource locks", () => {
   });
 
   it("matches resource paths regardless of slash direction or case", () => {
-    const markers = ["C:\\Users\\demo\\AppData\\Local\\Programs\\ZCode\\resources\\glm"];
+    const markers = ["C:\\Users\\demo\\AppData\\Local\\Programs\\VCode\\resources\\glm"];
 
     expect(
       isWindowsProcessReferencingResourceMarkers(
         {
           pid: 42,
           commandLine:
-            '"C:/Users/demo/AppData/Local/Programs/ZCode/ZCode.exe" "C:/Users/demo/AppData/Local/Programs/ZCode/resources/GLM/zcode-agent.exe"',
+            '"C:/Users/demo/AppData/Local/Programs/VCode/VCode.exe" "C:/Users/demo/AppData/Local/Programs/VCode/resources/GLM/zcode-agent.exe"',
         },
         markers,
       ),
@@ -61,7 +61,7 @@ describe("windows install resource locks", () => {
   });
 
   it("does not match unrelated processes", () => {
-    const markers = ["C:\\Users\\demo\\AppData\\Local\\Programs\\ZCode\\resources\\glm"];
+    const markers = ["C:\\Users\\demo\\AppData\\Local\\Programs\\VCode\\resources\\glm"];
 
     expect(
       isWindowsProcessReferencingResourceMarkers(
@@ -121,7 +121,7 @@ describe("windows install resource locks", () => {
   });
 
   it("terminates only processes still verified against packaged resources", async () => {
-    const marker = "C:\\ZCode\\resources\\glm";
+    const marker = "C:\\VCode\\resources\\glm";
     const scan = vi
       .fn()
       .mockResolvedValueOnce([
@@ -159,7 +159,7 @@ describe("windows install resource locks", () => {
   });
 
   it("keeps update cleanup fail-open when scan or taskkill fails", async () => {
-    const marker = "C:\\ZCode\\resources\\glm";
+    const marker = "C:\\VCode\\resources\\glm";
     const scan = vi
       .fn()
       .mockResolvedValueOnce([
@@ -190,7 +190,7 @@ describe("windows install resource locks", () => {
     const terminate = vi.fn(async () => []);
 
     const result = await runWindowsUpdateProcessCleanup({
-      resourceLockMarkers: ["C:\\ZCode\\resources\\glm"],
+      resourceLockMarkers: ["C:\\VCode\\resources\\glm"],
       lockReleaseGraceMs: 300,
       scan: async () => {
         throw new Error("powershell timeout");

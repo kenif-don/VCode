@@ -1,7 +1,7 @@
 import type { UserInputQuestionPayload } from "@zcode/shared/zcode-protocol-v4";
 
 /**
- * MCP elicitation（server → client `elicitation/create`）与 ZCode 用户提问通道的映射
+ * MCP elicitation（server → client `elicitation/create`）与 VCode 用户提问通道的映射
  * 。纯函数：requestedSchema → 问题列表，
  * 用户答案 → ElicitResult.content。broker 与 product-projection 共用，保证 live/v4 两条路径一致。
  */

@@ -7,7 +7,6 @@ interface RootStartupGateState {
 
 interface RootStartupLoadingVisibilityState extends RootStartupGateState {
   isDesktop: boolean | undefined;
-  welcomeScreenOpen: boolean;
 }
 
 interface FallbackWorkspaceCreateState {
@@ -20,14 +19,9 @@ interface ProviderStartupSyncState {
   modelSelectionViewHydrated: boolean;
 }
 
-interface ProviderAvailabilityLoginEntryGuardState {
-  isWebRemoteControlRoot: boolean;
-}
-
 interface ProviderStartupResolutionState {
   isWebRemoteControlRoot: boolean;
   providerStartupSyncPending: boolean;
-  providerAvailabilityStartupCheckCompleted: boolean;
 }
 
 export function shouldBlockRootRender(state: RootStartupGateState): boolean {
@@ -42,17 +36,7 @@ export function shouldBlockRootRender(state: RootStartupGateState): boolean {
 export function shouldShowRootStartupLoading(
   state: RootStartupLoadingVisibilityState,
 ): boolean {
-  // 修复原因：登录入口是启动门禁的结果，不是可继续被门禁遮挡的后台状态。
-  // 如果 WelcomeScreen 已经打开，继续返回启动 loading 会把未登录用户卡在黑屏 logo。
-  return Boolean(state.isDesktop) && !state.welcomeScreenOpen && shouldBlockRootRender(state);
-}
-
-export function shouldEnableProviderAvailabilityLoginEntryGuard(
-  state: ProviderAvailabilityLoginEntryGuardState,
-): boolean {
-  // 修复原因：手机 Web 远控只 attachment 到桌面已有 host，不能用本地空 provider
-  // 快照触发登录页，否则断连/home-only 首页会被 WelcomeScreen 覆盖。
-  return !state.isWebRemoteControlRoot;
+  return Boolean(state.isDesktop) && shouldBlockRootRender(state);
 }
 
 export function shouldResolveProviderStartupState(
@@ -64,10 +48,7 @@ export function shouldResolveProviderStartupState(
     return false;
   }
 
-  return (
-    state.providerStartupSyncPending ||
-    !state.providerAvailabilityStartupCheckCompleted
-  );
+  return state.providerStartupSyncPending;
 }
 
 export function shouldOpenFallbackWorkspaceAfterCreate(

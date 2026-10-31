@@ -35,7 +35,12 @@ export interface UsePluginUiHostInput {
   /** false 时不创建沙箱（如侧栏已接管同一作用域）；默认 true。 */
   enabled?: boolean;
   /** 会话交互回调：缺省时对应请求回 -32601，能力声明也不带该项。 */
-  interactions?: Pick<PluginUiHostControllerDeps, "onSendFollowUpMessage" | "onUpdateModelContext">;
+  interactions?: Pick<
+    PluginUiHostControllerDeps,
+    "onSendFollowUpMessage" | "onUpdateModelContext" | "onInsertInputText"
+  >;
+  /** 锚点会话消亡（删除/归档）时通知调用方换锚重绑（HBA fr19）；仅面板（surface）传。 */
+  onSessionLost?: () => void;
 }
 
 export interface UsePluginUiHostResult {

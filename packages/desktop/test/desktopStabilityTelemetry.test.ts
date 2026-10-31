@@ -648,7 +648,7 @@ describe("desktopStabilityTelemetry", () => {
           "----- Native stack trace -----",
           "1: 0x00007ff6deadbeef",
           "(node:1234) ExperimentalWarning: SQLite is an experimental feature and might change at any time",
-          "(Use `ZCode --trace-warnings ...` to show where the warning was created)",
+          "(Use `VCode --trace-warnings ...` to show where the warning was created)",
           "},",
         ],
         expected: {

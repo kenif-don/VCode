@@ -1,7 +1,7 @@
 {
   "name": "restore-legacy-sessions",
   "version": "0.1.0",
-  "description": "Select and restore legacy ACP-era ZCode sessions into the new ZCode task and session store.",
+  "description": "Select and restore legacy ACP-era VCode sessions into the new VCode task and session store.",
   "author": { "name": "Z.ai" },
   "license": "MIT",
   "skills": "skills",

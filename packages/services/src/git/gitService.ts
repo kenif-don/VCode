@@ -1,9 +1,16 @@
 import { resolve } from "node:path";
-import type { GitBranchComparison, GitFileChange, GitChangeSectionId } from "@zcode/shared";
+import type {
+  GitBranchComparison,
+  GitFileChange,
+  GitChangeSectionId,
+  GitDiscoveredRepository,
+  GitDiscoverRepositoriesResult,
+} from "@zcode/shared";
 import { isPathInWorkspaceScope, normalizeGitPath, toWorkspaceRelativeGitPath } from "./config.js";
 import { filterCommitMessageFilesByCurrentSession } from "./commitMessageFileScope.js";
 import type { IGitService } from "./git.js";
 import type { GitCommitMessageGenerator } from "./gitCommitMessageGenerator.js";
+import { scanNestedGitRepositories } from "./repo/gitRepoDiscovery.js";
 import {
   createGitCliRepo,
   type GitBranchComparisonChange,
@@ -172,6 +179,8 @@ export function createGitService(options?: {
   commitMessageGenerator?: GitCommitMessageGenerator;
 }): IGitService {
   const repo = options?.repo ?? createGitCliRepo();
+  // 发现是纯目录扫描 + 一次 rev-parse，但挂载/刷新切换会并发触发；复用进行中的请求。
+  const discoverRequests = new Map<string, Promise<GitDiscoverRepositoriesResult>>();
 
   return {
     async getRepositorySummary(params) {
@@ -181,6 +190,48 @@ export function createGitService(options?: {
 
     async getWorkspaceRepositoryInfo(params) {
       return await repo.getWorkspaceRepositoryInfo(params.workspacePath);
+    },
+
+    async discoverRepositories(params): Promise<GitDiscoverRepositoriesResult> {
+      const inFlight = discoverRequests.get(params.workspacePath);
+      if (inFlight) {
+        return await inFlight;
+      }
+
+      const request = (async (): Promise<GitDiscoverRepositoriesResult> => {
+        const repositories: GitDiscoveredRepository[] = [];
+        // 根仓库走 rev-parse：workspace 根可能只是 monorepo 子目录，甚至整棵位于
+        // 上级仓库内——这些语义只有 git 自己能裁决，fs 扫描替代不了。
+        const resolution = await repo.resolveRepository(params.workspacePath);
+        if (resolution.isGitAvailable && resolution.isRepository) {
+          repositories.push({
+            repoRoot: resolution.repoRoot,
+            workspaceRelativePath: ".",
+            kind: "workspace-root",
+            requestPath: params.workspacePath,
+          });
+        }
+
+        const nested = await scanNestedGitRepositories(params.workspacePath, {
+          ...(params.maxDepth !== undefined ? { maxDepth: params.maxDepth } : {}),
+          ...(params.maxRepositories !== undefined
+            ? { maxRepositories: params.maxRepositories }
+            : {}),
+        });
+        // 嵌套仓严格位于 workspace 之下，根仓库 repoRoot 在 workspace 处或其上，
+        // 两者不可能同路径；这里只兜底防御，不让重复仓进入选择器。
+        const rootRepoRoots = new Set(repositories.map((entry) => entry.repoRoot));
+        for (const entry of nested.repositories) {
+          if (!rootRepoRoots.has(entry.repoRoot)) {
+            repositories.push(entry);
+          }
+        }
+        return { repositories, truncated: nested.truncated };
+      })().finally(() => {
+        discoverRequests.delete(params.workspacePath);
+      });
+      discoverRequests.set(params.workspacePath, request);
+      return await request;
     },
 
     async getLocalBranches(params) {
@@ -320,6 +371,11 @@ export function createGitService(options?: {
 
     async push(params) {
       const result = await repo.push(params.workspacePath);
+      return result;
+    },
+
+    async pull(params) {
+      const result = await repo.pull(params.workspacePath);
       return result;
     },
 

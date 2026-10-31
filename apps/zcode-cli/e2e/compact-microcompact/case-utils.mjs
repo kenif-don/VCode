@@ -41,7 +41,7 @@ export async function loadZCodeModules(repoRoot) {
       provider: { ...providerConfig, ...providerRegistry },
     };
   } catch (error) {
-    throw new Error("Unable to load built ZCode packages. Run `pnpm build` before this E2E.", {
+    throw new Error("Unable to load built VCode packages. Run `pnpm build` before this E2E.", {
       cause: error,
     });
   }

@@ -346,7 +346,7 @@ export function createBotsService(
     "zcodeSessionService" | "zcodeTaskService" | "projectService"
   > & {
     zcodeTaskService?: IZCodeTaskService;
-    /** 旧测试名保留为别名；真实注入的是 ZCode task service。 */
+    /** 旧测试名保留为别名；真实注入的是 VCode task service。 */
     legacyTaskService?: IZCodeTaskService;
     zcodeSessionService?: IZCodeSessionService;
     projectService?: Parameters<typeof createBotsServiceImpl>[0]["projectService"];

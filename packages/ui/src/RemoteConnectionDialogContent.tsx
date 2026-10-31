@@ -17,7 +17,7 @@ import type {
   ISkillSyncService,
   IZCodeAgentService,
 } from "@zcode/services";
-import { TID_SSH_CONFIG_IMPORT } from "@zcode/shared/test-ids";
+import { TID_REMOTE_CUSTOM_NAME_INPUT, TID_SSH_CONFIG_IMPORT } from "@zcode/shared/test-ids";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -169,8 +169,10 @@ export function RemoteConnectionSettingsStep({
   fieldErrors = [],
   validationAttempt = 0,
   connectLabel,
+  customName = "",
   loading,
   onBack,
+  onCustomNameChange,
   onHostChange,
   onPortChange,
   onUsernameChange,
@@ -227,6 +229,9 @@ export function RemoteConnectionSettingsStep({
   /** 每次提交校验失败递增，用于把焦点移到第一个出错字段。 */
   validationAttempt?: number;
   connectLabel?: string;
+  /** 自定义名称（可选）：连接成功后用作设备名与本次连接的线路名；未提供 setter 时不渲染该字段。 */
+  customName?: string;
+  onCustomNameChange?: (value: string) => void;
   loading: boolean;
   onBack: () => void;
   onHostChange: (value: string) => void;
@@ -342,6 +347,38 @@ export function RemoteConnectionSettingsStep({
           <div className="flex items-start gap-3 rounded-md bg-warning-surface px-3 py-3 text-ui-base text-warning-surface-foreground">
             <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
             <span>{intl.formatMessage({ id: "remote.optionsLoadFailed" })}</span>
+          </div>
+        ) : null}
+
+        {/* 自定义名称：添加时一次命名设备与本次连接（默认名称连接后才产生，事后还得去设置改）。
+            Server 类型的表单自带「显示名称」，不重复出字段。 */}
+        {onCustomNameChange && kind !== "server" ? (
+          <div>
+            <label
+              htmlFor="remote-connection-custom-name"
+              className="mb-1.5 block text-ui-sm text-remote-foreground-muted"
+            >
+              {intl.formatMessage({ id: "remote.customName" })}
+            </label>
+            <Input
+              id="remote-connection-custom-name"
+              size="lg"
+              className="h-9 text-ui-base"
+              value={customName}
+              onChange={(event) => onCustomNameChange(event.currentTarget.value)}
+              placeholder={intl.formatMessage({ id: "remote.customNamePlaceholder" })}
+              aria-describedby="remote-connection-custom-name-hint"
+              data-testid={TID_REMOTE_CUSTOM_NAME_INPUT}
+              disabled={loading}
+              maxLength={100}
+              autoComplete="off"
+            />
+            <p
+              id="remote-connection-custom-name-hint"
+              className="mt-1 text-pretty text-ui-sm text-remote-foreground-muted"
+            >
+              {intl.formatMessage({ id: "remote.customNameHint" })}
+            </p>
           </div>
         ) : null}
 

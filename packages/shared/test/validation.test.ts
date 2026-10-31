@@ -330,7 +330,7 @@ describe("hostResponseMessageSchema", () => {
     }
   });
 
-  it("rejects local host init without an ZCode Built-in Provider Config", () => {
+  it("rejects local host init without an VCode Built-in Provider Config", () => {
     expect(
       hostIncomingMessageSchema.safeParse({
         type: "init-local",
@@ -360,7 +360,7 @@ describe("hostResponseMessageSchema", () => {
     expect(parsed.success).toBe(false);
   });
 
-  it("accepts window Host connect payload with remote ZCode Agent asset dirs", () => {
+  it("accepts window Host connect payload with remote VCode Agent asset dirs", () => {
     const parsed = hostIncomingMessageSchema.safeParse({
       type: "connect-remote-workspace",
       requestId: "connect-docker-1",
@@ -679,7 +679,7 @@ describe("hostResponseMessageSchema", () => {
     expect(patch.computerUseComposerEntryHidden).toBe(false);
   });
 
-  it("defaults ZCode interaction behavior to queue and accepts guide patches", () => {
+  it("defaults VCode interaction behavior to queue and accepts guide patches", () => {
     const parsed = appSettingsSchema.parse({});
     const patch = appSettingsPatchSchema.parse({
       zcodeInteractionBehavior: "guide",
@@ -713,7 +713,7 @@ describe("hostResponseMessageSchema", () => {
     expect(patch.providerFamilyDomainUpdatedAt).toBe(456);
   });
 
-  it("normalizes legacy enabled agent CLI providers to ZCode Agent", () => {
+  it("normalizes legacy enabled agent CLI providers to VCode Agent", () => {
     const parsed = appSettingsSchema.parse({
       enabledBuiltinAgentCliProviders: ["claude", "codex", "gemini", "opencode"],
     });

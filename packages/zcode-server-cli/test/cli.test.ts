@@ -857,7 +857,7 @@ describe("Server CLI routing", () => {
     }
   });
 
-  it("refuses to uninstall a directory without ZCode Server ownership", async () => {
+  it("refuses to uninstall a directory without VCode Server ownership", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-r2-cli-uninstall-unowned-"));
     const serverRoot = join(root, "Documents");
     await mkdir(serverRoot, { recursive: true });

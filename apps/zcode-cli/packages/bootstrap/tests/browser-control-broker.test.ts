@@ -7,7 +7,7 @@ const IAB_DESCRIPTOR = {
   id: "iab-runtime-1",
   generation: 1,
   type: "iab" as const,
-  name: "ZCode In-app Browser",
+  name: "VCode In-app Browser",
   capabilities: {
     browser: [{ id: "visibility", description: "Browser visibility control" }],
     tab: [{ id: "cdp", description: "Controlled CDP commands" }],

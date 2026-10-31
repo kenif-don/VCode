@@ -15,7 +15,13 @@ import {
 import { extractPlanToolCallContent, getPlanDirectoryTitle } from "@/lib/planToolCall.js";
 import { workflowRunParallelPhaseLabel } from "@/lib/workflowRunLine.js";
 
-export interface ConversationStatusPanelGitModel {
+export interface ConversationStatusPanelGitRepository {
+  /** 仓库身份键 = repoRoot。 */
+  key: string;
+  /** 发给 Git 服务的作用路径：嵌套仓为 repoRoot，根仓为 workspacePath。 */
+  requestPath: string;
+  /** 选择器展示名：根仓为 workspace 目录名，嵌套仓为相对路径。 */
+  label: string;
   branchName: string | null;
   headRefType: GitRepositorySummary["headRefType"];
   dirtyFileCount: number;
@@ -24,6 +30,26 @@ export interface ConversationStatusPanelGitModel {
   ahead: number;
   behind: number;
   isClean: boolean;
+  /** 该仓轻量摘要仍在拉取。 */
+  loading: boolean;
+}
+
+export interface ConversationStatusPanelGitModel {
+  /** 选中仓的分支/变更（分支切换器、Pull、操作菜单的作用对象）。 */
+  branchName: string | null;
+  headRefType: GitRepositorySummary["headRefType"];
+  dirtyFileCount: number;
+  added: number;
+  removed: number;
+  ahead: number;
+  behind: number;
+  isClean: boolean;
+  /** 全仓聚合（折叠头部 +/-）。 */
+  totalAdded: number;
+  totalRemoved: number;
+  /** 发现到的全部仓库；多于一个时 Git 区展示仓库选择器。 */
+  repositories: ConversationStatusPanelGitRepository[];
+  activeRepositoryKey: string | null;
 }
 
 export interface ConversationStatusPanelPlanModel {
@@ -133,6 +159,9 @@ export interface BuildConversationStatusPanelModelInput {
   gitSummary?: GitRepositorySummary | null;
   gitDirtyFileCount?: number;
   gitWorktreeChangeSummary?: { added: number; removed: number } | null;
+  /** 多仓选择器数据（子目录仓库发现结果）；缺省时退化为单仓模型。 */
+  gitRepositories?: readonly ConversationStatusPanelGitRepository[] | null;
+  activeGitRepositoryKey?: string | null;
   goal?: GoalState | null;
   sessionPlans?: readonly ToolCallRow[];
   workspacePath?: string;
@@ -144,38 +173,84 @@ export interface BuildConversationStatusPanelModelInput {
 
 function buildGitModel({
   gitSummary,
-  gitDirtyFileCount = 0,
+  gitDirtyFileCount,
   gitWorktreeChangeSummary,
+  gitRepositories,
+  activeGitRepositoryKey,
 }: Pick<
   BuildConversationStatusPanelModelInput,
-  "gitSummary" | "gitDirtyFileCount" | "gitWorktreeChangeSummary"
+  | "gitSummary"
+  | "gitDirtyFileCount"
+  | "gitWorktreeChangeSummary"
+  | "gitRepositories"
+  | "activeGitRepositoryKey"
 >): ConversationStatusPanelGitModel | null {
-  if (!gitSummary?.isGitAvailable || !gitSummary.isRepository) {
+  const isMultiRepository = Boolean(gitRepositories?.length);
+  // 多仓优先（子目录仓库发现）；发现列表为空但根摘要仍是仓库时退化为单仓模型，
+  // 兼容未接入发现链路的调用方与「扫描未归但根仓已就绪」的加载窗口。
+  const repositories: ConversationStatusPanelGitRepository[] = isMultiRepository
+    ? [...gitRepositories!]
+    : gitSummary?.isGitAvailable && gitSummary.isRepository
+      ? [
+          {
+            key: gitSummary.repoRoot,
+            requestPath: gitSummary.workspacePath || gitSummary.repoRoot,
+            label: gitSummary.workspacePath || gitSummary.repoRoot,
+            branchName: gitSummary.branchName,
+            headRefType: gitSummary.headRefType,
+            dirtyFileCount: gitDirtyFileCount ?? 0,
+            added: gitWorktreeChangeSummary?.added ?? 0,
+            removed: gitWorktreeChangeSummary?.removed ?? 0,
+            ahead: gitSummary.ahead,
+            behind: gitSummary.behind,
+            isClean: false,
+            loading: false,
+          },
+        ]
+      : [];
+  if (repositories.length === 0) {
     return null;
   }
-  const added = gitWorktreeChangeSummary?.added ?? 0;
-  const removed = gitWorktreeChangeSummary?.removed ?? 0;
-  // v4 之前只要是 Git repository 就创建 Git model，导致 clean repo
-  // 也挂出右上角状态卡；旧 ChatView 只在 worktree 有行级变化时展示 Git Tools。
-  if (added + removed <= 0) {
+
+  const active =
+    repositories.find((repository) => repository.key === activeGitRepositoryKey) ??
+    repositories[0];
+  if (!active) {
     return null;
   }
-  const isClean =
-    !gitSummary.isDirty &&
-    gitDirtyFileCount === 0 &&
-    added === 0 &&
-    removed === 0 &&
-    gitSummary.ahead === 0;
+  // gitSummary 由 App 对着选中仓拉取，与 active 同源；只在 repoRoot 对得上时采信，
+  // 否则（切换选中仓的过渡帧 / 缺失）退到行内值，避免分支名串仓。
+  const activeSummary =
+    gitSummary?.isRepository && gitSummary.repoRoot === active.key ? gitSummary : null;
+  const added = gitWorktreeChangeSummary?.added ?? active.added;
+  const removed = gitWorktreeChangeSummary?.removed ?? active.removed;
+  const dirtyFileCount = gitDirtyFileCount ?? active.dirtyFileCount;
+  const ahead = activeSummary?.ahead ?? active.ahead;
+  // 用户定夺（2026-10-29）：Git 操作区只要是 git 项目就常驻显示，不再「有变更才显示」。
+  // clean repo 同样给出分支切换/拉取/提交或推送入口——原「只在 worktree 有行级变化时
+  // 展示 Git Tools」的门控废止（曾把 Git model 的产生与否绑在变更上，clean repo 连
+  // hasContent 都进不了，整个面板一起消失）。
+  const isClean = isMultiRepository
+    ? active.isClean
+    : !gitSummary!.isDirty &&
+      dirtyFileCount === 0 &&
+      added === 0 &&
+      removed === 0 &&
+      ahead === 0;
 
   return {
-    branchName: gitSummary.branchName,
-    headRefType: gitSummary.headRefType,
-    dirtyFileCount: gitDirtyFileCount,
+    branchName: activeSummary?.branchName ?? active.branchName,
+    headRefType: activeSummary?.headRefType ?? active.headRefType,
+    dirtyFileCount,
     added,
     removed,
-    ahead: gitSummary.ahead,
-    behind: gitSummary.behind,
+    ahead,
+    behind: activeSummary?.behind ?? active.behind,
     isClean,
+    totalAdded: repositories.reduce((total, repository) => total + repository.added, 0),
+    totalRemoved: repositories.reduce((total, repository) => total + repository.removed, 0),
+    repositories,
+    activeRepositoryKey: active.key,
   };
 }
 

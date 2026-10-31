@@ -85,14 +85,14 @@ describe("paths", () => {
     expect(existsSync(join(newV2Dir, "setting.json.123.tmp"))).toBe(false);
   });
 
-  it("Windows 数据目录不能选择 ZCode 安装目录或其子目录", async () => {
+  it("Windows 数据目录不能选择 VCode 安装目录或其子目录", async () => {
     vi.resetModules();
 
     const { validateDataBaseDirTarget } = await import("../src/paths.js");
     const env = {
       ProgramFiles: "C:\\Program Files",
       LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
-      ZCODE_WINDOWS_APP_INSTALL_DIR: "C:\\Users\\tester\\AppData\\Local\\Programs\\ZCode",
+      ZCODE_WINDOWS_APP_INSTALL_DIR: "C:\\Users\\tester\\AppData\\Local\\Programs\\VCode",
     };
 
     expect(
@@ -102,7 +102,7 @@ describe("paths", () => {
       }),
     ).toMatchObject({ ok: false });
     expect(
-      validateDataBaseDirTarget("C:\\Users\\tester\\AppData\\Local\\Programs\\ZCode\\data", {
+      validateDataBaseDirTarget("C:\\Users\\tester\\AppData\\Local\\Programs\\VCode\\data", {
         platform: "win32",
         env,
       }),
@@ -115,7 +115,7 @@ describe("paths", () => {
     const { validateDataBaseDirTarget } = await import("../src/paths.js");
     const env = {
       LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
-      ZCODE_WINDOWS_APP_INSTALL_DIR: "C:\\Users\\tester\\AppData\\Local\\Programs\\ZCode",
+      ZCODE_WINDOWS_APP_INSTALL_DIR: "C:\\Users\\tester\\AppData\\Local\\Programs\\VCode",
     };
 
     expect(
@@ -125,7 +125,7 @@ describe("paths", () => {
       }),
     ).toEqual({ ok: true });
     expect(
-      validateDataBaseDirTarget("C:\\Users\\tester\\Documents\\ZCode", {
+      validateDataBaseDirTarget("C:\\Users\\tester\\Documents\\VCode", {
         platform: "win32",
         env,
       }),

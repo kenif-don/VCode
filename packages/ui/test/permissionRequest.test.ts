@@ -64,7 +64,7 @@ describe("permissionRequest helpers", () => {
     ]);
   });
 
-  it("maps ZCode Agent option kinds to stable display kinds", () => {
+  it("maps VCode Agent option kinds to stable display kinds", () => {
     expect(getPermissionOptionDisplayKind("allow_once")).toBe("allowOnce");
     expect(getPermissionOptionDisplayKind("allow_always")).toBe("allowAlways");
     expect(getPermissionOptionDisplayKind("reject_once")).toBe("rejectOnce");
@@ -72,7 +72,7 @@ describe("permissionRequest helpers", () => {
     expect(getPermissionOptionDisplayKind("ask_user")).toBe("custom");
   });
 
-  it("extracts commands and affected files from the raw ZCode Agent payload", () => {
+  it("extracts commands and affected files from the raw VCode Agent payload", () => {
     const preview = getPermissionRequestPreview(createPermissionRequest());
 
     expect(preview.title).toBe("Run a shell command");
@@ -108,7 +108,7 @@ describe("permissionRequest helpers", () => {
     expect(preview.scope).toBe("file");
   });
 
-  it("extracts file scope from ZCode protocol input payloads", () => {
+  it("extracts file scope from VCode protocol input payloads", () => {
     const preview = getPermissionRequestPreview(
       createPermissionRequest({
         title: "Write",

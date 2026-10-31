@@ -137,40 +137,22 @@ vi.mock("@/SettingsPage.js", () => ({
   SettingsPage: () => createElement("div", { "data-testid": "settings-page" }),
 }));
 
-vi.mock("@/WelcomeScreen.js", () => ({
-  WelcomeScreen: () => createElement("div", { "data-testid": "welcome-screen" }),
-}));
-
 vi.mock("@/lib/fileDisplay.js", () => ({
   setDefaultFileDisplayBasePath: vi.fn(),
 }));
 
 vi.mock("@/lib/rootStartupGate.js", () => ({
   isProviderStartupSyncPending: () => false,
-  shouldEnableProviderAvailabilityLoginEntryGuard: ({
-    isWebRemoteControlRoot,
-  }: {
-    isWebRemoteControlRoot: boolean;
-  }) => !isWebRemoteControlRoot,
   shouldResolveProviderStartupState: ({
     isWebRemoteControlRoot,
     providerStartupSyncPending,
-    providerAvailabilityStartupCheckCompleted,
   }: {
     isWebRemoteControlRoot: boolean;
     providerStartupSyncPending: boolean;
-    providerAvailabilityStartupCheckCompleted: boolean;
-  }) =>
-    !isWebRemoteControlRoot &&
-    (providerStartupSyncPending || !providerAvailabilityStartupCheckCompleted),
+  }) => !isWebRemoteControlRoot && providerStartupSyncPending,
   shouldBlockRootRender: () => mockShouldBlockRootRender(),
-  shouldShowRootStartupLoading: ({
-    isDesktop,
-    welcomeScreenOpen,
-  }: {
-    isDesktop?: boolean;
-    welcomeScreenOpen: boolean;
-  }) => Boolean(isDesktop) && !welcomeScreenOpen && mockShouldBlockRootRender(),
+  shouldShowRootStartupLoading: ({ isDesktop }: { isDesktop?: boolean }) =>
+    Boolean(isDesktop) && mockShouldBlockRootRender(),
 }));
 
 vi.mock("@/store/StoreProvider.js", () => ({

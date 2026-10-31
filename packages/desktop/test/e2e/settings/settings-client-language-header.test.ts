@@ -42,7 +42,7 @@ function expectLanguage(requests: Request[], locale: Locale) {
   );
 }
 
-describe("ZCode endpoint X-Client-Language 跟随界面语言", () => {
+describe("VCode endpoint X-Client-Language 跟随界面语言", () => {
   let external: Awaited<ReturnType<typeof browser.electron.mock>>;
   const servers: HelpServer[] = [];
 

@@ -19,7 +19,7 @@ const IAB_DESCRIPTOR = {
   id: "iab-runtime-1",
   generation: 1,
   type: "iab" as const,
-  name: "ZCode In-app Browser",
+  name: "VCode In-app Browser",
   capabilities: {
     browser: [{ id: "visibility", description: "Browser visibility control" }],
     tab: [{ id: "cdp", description: "Controlled CDP commands" }],
@@ -132,7 +132,7 @@ describe("browser command schema", () => {
           actions: [
             { type: "wait", durationMs: 500 },
             { type: "click", selector: "#start" },
-            { type: "type", selector: "#name", text: "ZCode" },
+            { type: "type", selector: "#name", text: "VCode" },
             { type: "hover", x: 120, y: 80, durationMs: 200 },
             { type: "scroll", deltaX: 0, deltaY: 600, durationMs: 800 },
             { type: "waitFor", selector: ".done", timeoutMs: 3_000 },

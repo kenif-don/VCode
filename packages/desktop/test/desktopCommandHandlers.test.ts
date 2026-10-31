@@ -4,7 +4,7 @@ import { DesktopCommandIds } from "@zcode/shared";
 
 const appMock = {
   isPackaged: false,
-  getAppPath: vi.fn(() => "/Applications/ZCode.app/Contents/Resources/app.asar"),
+  getAppPath: vi.fn(() => "/Applications/VCode.app/Contents/Resources/app.asar"),
   getVersion: vi.fn(() => "3.5.0"),
 };
 const browserWindowInstances: Array<{
@@ -261,10 +261,10 @@ describe("desktopCommandHandlers resolveFeedbackUrl", () => {
     expect(
       resolveLocalAppConfigPath({
         isPackaged: true,
-        resourcesPath: "/Applications/ZCode.app/Contents/Resources",
-        appPath: "/Applications/ZCode.app/Contents/Resources/app.asar",
+        resourcesPath: "/Applications/VCode.app/Contents/Resources",
+        appPath: "/Applications/VCode.app/Contents/Resources/app.asar",
       }),
-    ).toBe(join("/Applications/ZCode.app/Contents/Resources", "config/default.json"));
+    ).toBe(join("/Applications/VCode.app/Contents/Resources", "config/default.json"));
     expect(
       resolveLocalAppConfigPath({
         isPackaged: false,

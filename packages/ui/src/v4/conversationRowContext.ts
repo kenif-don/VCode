@@ -127,7 +127,7 @@ export interface ConversationRowRenderContext {
   ) => Promise<CommandAck>;
   /**
    * 完成卡的「保存」/「再次运行」（docs/dynamic-workflow/transcript-and-notifications.md
-   * 「Saving the run, and running it again」）：把 GUI 写好的那条用户消息发进本会话，交给 ZCode
+   * 「Saving the run, and running it again」）：把 GUI 写好的那条用户消息发进本会话，交给 VCode
    * 去提炼保存。与 Resume 同两道门（只读、灰度）且**同一个供给点**——写文件与起引擎都属于
    * 「Resume 被收走的地方一并收走」。缺席即卡上只剩「已保存」芯片那条事实。
    */

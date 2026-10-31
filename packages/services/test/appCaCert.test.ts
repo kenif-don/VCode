@@ -17,7 +17,7 @@ describe("ensureAppCaCert", () => {
     const { keyPath } = getAppCaCertPaths();
 
     const cert = new X509Certificate(readFileSync(certPath));
-    expect(cert.subject).toContain("ZCode Network CA");
+    expect(cert.subject).toContain("VCode Network CA");
     // 自签：issuer == subject
     expect(cert.issuer).toBe(cert.subject);
     expect(cert.ca).toBe(true);

@@ -126,7 +126,7 @@ function createRepoTemplate(): string {
 
   runGit(repoPath, ["init"]);
   runGit(repoPath, ["branch", "-M", "main"]);
-  runGit(repoPath, ["config", "user.name", "ZCode Tester"]);
+  runGit(repoPath, ["config", "user.name", "VCode Tester"]);
   runGit(repoPath, ["config", "user.email", "tester@example.com"]);
   runGit(repoPath, ["config", "commit.gpgsign", "false"]);
   runGit(repoPath, ["config", "core.autocrlf", "false"]);
@@ -572,7 +572,7 @@ describeIfGit("gitService", () => {
     expect(summary.isRepository).toBe(true);
 
     const identity = await service.getIdentity({ workspacePath });
-    expect(identity.userName).toBe("ZCode Tester");
+    expect(identity.userName).toBe("VCode Tester");
     expect(identity.userEmail).toBe("tester@example.com");
     expect(identity.nameSource).toContain(".git/config");
     expect(identity.scopeLabel).toBe("local");
@@ -604,7 +604,7 @@ describeIfGit("gitService", () => {
       includeIdentity: true,
     });
     expect(refresh.summary.isDirty).toBe(true);
-    expect(refresh.identity?.userName).toBe("ZCode Tester");
+    expect(refresh.identity?.userName).toBe("VCode Tester");
     expect(
       refresh.unstagedChanges
         .map((change) => `${change.section}:${change.workspaceRelativePath}`)
@@ -917,5 +917,68 @@ describeIfGit("gitService", () => {
     expect(branchDiff.availability).toBe("patch");
     expect(branchDiff.beforeContent).toBe("line 1\nline 2\n");
     expect(branchDiff.afterContent).toBe("line 1\nline 2\nbranch change\n");
+  });
+});
+
+describe("discoverRepositories", () => {
+  function createDiscoveryWorkspace(): string {
+    const root = mkdtempSync(join(tmpdir(), "zcode-git-discover-service-"));
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
+    return root;
+  }
+
+  it("返回 workspace 根仓库与扫描出的嵌套仓库，根仓库作用路径保持 workspacePath", async () => {
+    const workspacePath = createDiscoveryWorkspace();
+    mkdirSync(join(workspacePath, "sub-repo", ".git"), { recursive: true });
+    mkdirSync(join(workspacePath, "group", "deep-repo", ".git"), { recursive: true });
+
+    const resolveRepository = vi.fn(async () => ({
+      workspacePath,
+      repoRoot: workspacePath,
+      workspaceInRepoPath: ".",
+      autoRefreshWatchPaths: [],
+      isGitAvailable: true,
+      isRepository: true,
+    }));
+    const service = createGitService({ repo: createMockRepo({ resolveRepository }) });
+
+    const result = await service.discoverRepositories({ workspacePath });
+
+    expect(result.truncated).toBe(false);
+    expect(result.repositories.map((entry) => entry.kind)).toEqual([
+      "workspace-root",
+      "nested",
+      "nested",
+    ]);
+    expect(result.repositories[0]).toMatchObject({
+      repoRoot: workspacePath,
+      workspaceRelativePath: ".",
+      requestPath: workspacePath,
+    });
+    expect(result.repositories.map((entry) => entry.workspaceRelativePath)).toEqual([
+      ".",
+      "group/deep-repo",
+      "sub-repo",
+    ]);
+  });
+
+  it("根目录不是仓库时只返回嵌套仓库", async () => {
+    const workspacePath = createDiscoveryWorkspace();
+    mkdirSync(join(workspacePath, "sub-repo", ".git"), { recursive: true });
+
+    const resolveRepository = vi.fn(async () => ({
+      workspacePath,
+      repoRoot: workspacePath,
+      workspaceInRepoPath: ".",
+      autoRefreshWatchPaths: [],
+      isGitAvailable: true,
+      isRepository: false,
+    }));
+    const service = createGitService({ repo: createMockRepo({ resolveRepository }) });
+
+    const result = await service.discoverRepositories({ workspacePath });
+
+    expect(result.repositories.map((entry) => entry.kind)).toEqual(["nested"]);
+    expect(result.repositories[0]?.requestPath).toBe(join(workspacePath, "sub-repo"));
   });
 });

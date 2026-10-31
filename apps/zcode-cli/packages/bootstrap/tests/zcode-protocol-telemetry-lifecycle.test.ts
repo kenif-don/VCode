@@ -131,7 +131,7 @@ vi.mock("@zcode/telemetry", async (importOriginal) => ({
 
 import { runZCodeProtocolAgent } from "../src/zcode-protocol-entrypoint.js";
 
-describe("ZCode Protocol telemetry lifecycle", () => {
+describe("VCode Protocol telemetry lifecycle", () => {
   afterEach(() => {
     vi.clearAllMocks();
     telemetryMocks.emitMcpOnStart = false;

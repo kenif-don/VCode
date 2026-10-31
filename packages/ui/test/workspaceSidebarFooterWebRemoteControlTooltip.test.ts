@@ -23,13 +23,6 @@ vi.mock("@/ControlHintTooltip.js", async (importOriginal) => ({
     createElement("span", { "data-tooltip-title": title }, children),
 }));
 
-vi.mock("@/WorkspaceWebRemoteControlTrigger.js", () => ({
-  WorkspaceWebRemoteControlTrigger: () =>
-    createElement("button", {
-      "data-testid": "web-remote-control-trigger",
-    }),
-}));
-
 vi.mock("@/hooks/usePlatform.js", () => ({
   usePlatform: () => ({
     executeDesktopCommand: vi.fn(),
@@ -379,22 +372,5 @@ describe("WorkspaceSidebarFooter web remote control tooltip", () => {
         ],
       }),
     ).toBeNull();
-  });
-
-  it("does not wrap the remote control trigger in a second tooltip", () => {
-    const html = renderToStaticMarkup(
-      createElement(WorkspaceSidebarFooter, {
-        theme: "dark",
-        localeMenuValue: "zh-CN",
-        onLocaleChange: () => {},
-        onThemeChange: () => {},
-        onSettingsButtonClick: () => {},
-        workspacePath: "/tmp/project",
-        isDesktop: true,
-      }),
-    );
-
-    expect(html).toContain('data-testid="web-remote-control-trigger"');
-    expect(html).not.toContain('data-tooltip-title="webRemoteControl.trigger"');
   });
 });

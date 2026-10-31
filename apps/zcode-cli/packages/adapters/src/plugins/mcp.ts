@@ -186,6 +186,20 @@ function resolveMcpServerConfig(
   const baseConfig: McpServerConfigBase = {
     alwaysLoad: typeof server.alwaysLoad === "boolean" ? server.alwaysLoad : undefined,
     enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
+    // fr11-02: isolation/protocolVersion 必须透传。isolation 是连接池的语义开关:
+    // workspace 级 = 跨会话共享同一 server 且不随空闲回收(fr11-01),此前解析器把
+    // 两字段都丢弃,插件声明的 workspace 全部退化为 session 级——面板/会话关闭即
+    // 回收 server 进程,hba-run 这类管着常驻进程树的插件因此丢运行状态。
+    isolation:
+      server.isolation === "workspace" || server.isolation === "session"
+        ? server.isolation
+        : undefined,
+    protocolVersion:
+      server.protocolVersion === "legacy" ||
+      server.protocolVersion === "auto" ||
+      server.protocolVersion === "2026-07-28"
+        ? server.protocolVersion
+        : undefined,
     timeoutMs: typeof server.timeoutMs === "number" ? server.timeoutMs : undefined,
     source: {
       kind: context.loaded.marketplace === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE ? "builtin" : "plugin",

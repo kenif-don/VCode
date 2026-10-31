@@ -13,14 +13,14 @@ describe("resolveZCodeBuiltinProviderConfigFilePath", () => {
       toPosixPath(
         resolveZCodeBuiltinProviderConfigFilePath({
           isPackaged: true,
-          resourcesPath: "/Applications/ZCode.app/Contents/Resources",
-          appPath: "/Applications/ZCode.app/Contents/Resources/app.asar",
-          // 隔离宿主环境变量：ZCode 开发运行时会注入 ZCODE_BUILTIN_PROVIDER_CONFIG_FILE，
+          resourcesPath: "/Applications/VCode.app/Contents/Resources",
+          appPath: "/Applications/VCode.app/Contents/Resources/app.asar",
+          // 隔离宿主环境变量：VCode 开发运行时会注入 ZCODE_BUILTIN_PROVIDER_CONFIG_FILE，
           // 不显式清空会让本机跑单测时短路进 explicitPath 分支（CI 无此变量所以一直是绿的）。
           env: {},
         }),
       ),
-    ).toBe("/Applications/ZCode.app/Contents/Resources/config/provider/zcode-builtin.json");
+    ).toBe("/Applications/VCode.app/Contents/Resources/config/provider/zcode-builtin.json");
 
     expect(
       toPosixPath(
@@ -33,12 +33,12 @@ describe("resolveZCodeBuiltinProviderConfigFilePath", () => {
     ).toBe("/repo/config/provider/zcode-builtin.test.json");
   });
 
-  it("显式 ZCode Built-in Config Source 优先于安装布局", () => {
+  it("显式 VCode Built-in Config Source 优先于安装布局", () => {
     expect(
       resolveZCodeBuiltinProviderConfigFilePath({
         env: { ZCODE_BUILTIN_PROVIDER_CONFIG_FILE: "/fixtures/zcode-builtin.json" },
         isPackaged: true,
-        resourcesPath: "/Applications/ZCode.app/Contents/Resources",
+        resourcesPath: "/Applications/VCode.app/Contents/Resources",
       }),
     ).toBe("/fixtures/zcode-builtin.json");
   });

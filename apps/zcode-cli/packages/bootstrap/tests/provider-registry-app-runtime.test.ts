@@ -26,7 +26,7 @@ vi.mock("../src/model-factory.js", async (importOriginal) => ({
   createModelAdapter: createModelAdapterMock,
 }));
 
-describe("ZCode App Provider Registry runtime", () => {
+describe("VCode App Provider Registry runtime", () => {
   it("拒绝在没有进程 Provider Registry 时构造 App", async () => {
     await expect(
       // @ts-expect-error 回归保护：运行时仍需拒绝未迁移的 JavaScript/嵌入调用方。

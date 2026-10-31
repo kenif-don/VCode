@@ -35,13 +35,12 @@ import {
   PRESET_PROVIDER_SPECS,
   PRESET_SUBSCRIPTION_TIMEOUT_MS,
   BIGMODEL_REGISTRATION_URL,
-  type CodingPlanStatus,
+  type ModelProviderNavItem,
   type ModelProviderNavGroup,
 } from "./model-provider-section/constants.js";
 import { ModelProviderSectionDetail } from "./model-provider-section/Detail.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
 import { ProviderTemplatePicker } from "./model-provider-section/ProviderTemplatePicker.js";
-import type { CodingPlanLoginOptions } from "./model-provider-section/codingPlanPricingCards.js";
 import { useModelProviderNavigation } from "./model-provider-section/useModelProviderNavigation.js";
 import { reportPresetSubscriptionSuccess } from "./model-provider-section/oauthActions.js";
 import {
@@ -216,6 +215,16 @@ function resolveConnectionSelectionForNavItem(
   return isStartPlanModelProviderId(item.presetId) ? null : { kind: "individual-coding-plan" };
 }
 
+/**
+ * 白标：供应商导航只展示用户自定义供应商，预置/套餐入口不露出。
+ * 可见性必须同时传给 useModelProviderNavigation 的 isNavItemVisible，
+ * 让选中校正与回退收敛到同一目标；展示层不得再写第二个校正 effect，
+ * 否则两者会互抢 selectedNodeKey 形成无限重渲染（React #185）。
+ */
+function isWhiteLabelNavItemVisible(item: ModelProviderNavItem): boolean {
+  return item.type === "custom";
+}
+
 export function resolveModelProviderSideSelectionKey(
   item: ModelProviderNavGroup["items"][number],
 ): string {
@@ -386,7 +395,6 @@ export function ModelProviderSection({
   const codingPlanStatusSyncAttemptsRef = useRef(
     new Map<string, "inFlight" | "succeeded" | "failed">(),
   );
-  const requestLoginEntry = useZCodeStore((state) => state.requestLoginEntry);
   const setUser = useZCodeStore((state) => state.setUser);
   const oauthError = useZCodeStore((state) => state.oauthError);
   const setOAuthError = useZCodeStore((state) => state.setOAuthError);
@@ -700,6 +708,7 @@ export function ModelProviderSection({
       selectedNodeKey,
       setSelectedNodeKey,
       intl,
+      isNavItemVisible: isWhiteLabelNavItemVisible,
     });
   const selectedPlanAccessKey =
     selectedNavItem?.type === "codingPlan" || selectedNavItem?.type === "teamPlan"
@@ -785,36 +794,6 @@ export function ModelProviderSection({
       platform.openExternal(normalizedUrl);
     },
     [platform],
-  );
-
-  const handleCodingPlanLogin = useCallback(
-    (
-      presetId: BuiltinModelProviderId,
-      providerId: OAuthProviderId,
-      providerName: string,
-      status: CodingPlanStatus,
-      options?: CodingPlanLoginOptions,
-    ) => {
-      setPresetSubscriptionProviderId(presetId);
-      setCodingPlanStatusSyncProviderId(presetId);
-      logger.info("[ModelProviderSection] 请求通过统一登录入口登录并连接 Coding Plan", {
-        presetId,
-        providerId,
-        providerName,
-        status,
-        forceOAuth: options?.forceOAuth === true,
-      });
-      if (activeOAuthProvider === providerId && options?.forceOAuth !== true) {
-        void refreshProviderPanelAfterAuthChange({}).finally(() => {
-          setPresetSubscriptionProviderId((current) => (current === presetId ? null : current));
-          setCodingPlanStatusSyncProviderId((current) => (current === presetId ? null : current));
-        });
-        return;
-      }
-      // ZAI/BigModel provider 不再有独立 connection，Connect 必须切换 App active provider。
-      return requestLoginEntry(providerId);
-    },
-    [activeOAuthProvider, refreshProviderPanelAfterAuthChange, requestLoginEntry],
   );
 
   const handleCodingPlanDisconnect = useCallback(
@@ -1026,13 +1005,18 @@ export function ModelProviderSection({
     )
       return;
     const providerId = marketingRequest.target.provider_id;
-    const item = navigationItems.find((item) =>
-      item.type === "custom"
-        ? // 当前表单契约使用 providerId；旧 id 会让所有自定义提供商被误判为不存在。
-          item.provider.providerId === providerId
-        : "presetId" in item &&
-          item.presetId === providerId &&
-          (!isStartPlanModelProviderId(providerId) || item.type === "codingPlan"),
+    // 只能落在可见入口上：隐藏入口（白标过滤掉的预置/套餐）按不可用结束请求，
+    // 否则写入隐藏 key 后会被选中校正改回可见项，effect 依赖 selectedNodeKey
+    // 反复触发，与校正互抢形成无限重渲染（React #185）。
+    const item = navigationItems.find(
+      (item) =>
+        isWhiteLabelNavItemVisible(item) &&
+        (item.type === "custom"
+          ? // 当前表单契约使用 providerId；旧 id 会让所有自定义提供商被误判为不存在。
+            item.provider.providerId === providerId
+          : "presetId" in item &&
+            item.presetId === providerId &&
+            (!isStartPlanModelProviderId(providerId) || item.type === "codingPlan")),
     );
     if (!item) {
       finishMarketingNavigation(marketingRequest.id, new Error("marketing_provider_unavailable"));
@@ -1091,6 +1075,24 @@ export function ModelProviderSection({
   const presetLoading = loading || modelProvidersRefreshing;
   const customLoading = loading || modelProvidersRefreshing;
 
+  // 白标：供应商导航只展示用户自定义供应商——智谱预置与套餐连接入口不再露出，
+  // 「自定义供应商」分组标签也一并去掉（扁平列表）。
+  // 可见性通过 isNavItemVisible 传入 useModelProviderNavigation：选中项的校正与回退
+  // 由 hook 统一收敛到可见节点。展示层不得再写第二个校正 effect——两个 effect 互抢
+  // selectedNodeKey，在可见集合为空（如首屏加载、无自定义供应商）或回退 key 被隐藏时
+  // 形成 null↔预置 key 的无限重渲染（React #185）。
+  const visibleNavigationGroups = useMemo(
+    () =>
+      navigationGroups
+        .map((group) => ({
+          ...group,
+          title: group.id === "custom" ? "" : group.title,
+          items: group.items.filter(isWhiteLabelNavItemVisible),
+        }))
+        .filter((group) => group.items.length > 0),
+    [navigationGroups],
+  );
+
   if (loadError) {
     return (
       <div className="flex min-h-64 flex-col items-center justify-center gap-3 text-ui-base">
@@ -1120,7 +1122,7 @@ export function ModelProviderSection({
       }}
       addProviderLabel={intl.formatMessage({ id: "settings.modelProvider.addProviderAction" })}
       onAddProvider={() => setTemplatePickerOpen(true)}
-      navigationGroups={navigationGroups}
+      navigationGroups={visibleNavigationGroups}
       selectedNodeKey={selectedNodeKey}
       onSelectNavItem={handleSelectNavItem}
       onReorderProviderIds={handleReorderProviderIds}
@@ -1184,7 +1186,6 @@ export function ModelProviderSection({
           // Provider 的 Effective 模型无法写入 Personal modelOrder。模型调序独立于成员来源。
           onReorderProviderModels={reorderProviderModels}
           onTestModel={handleTestModel}
-          onCodingPlanLogin={handleCodingPlanLogin}
           onRetryCodingPlan={() => {
             // 取 Key 失败不等于登录失效；沿用 Host 手动刷新，不清除 OAuth 或重新登录。
             logger.info("[ModelProviderSection] 重试获取套餐状态");

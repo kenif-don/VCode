@@ -10,6 +10,12 @@ vi.mock("@/hooks/useServices.js", () => ({
   useServices: () => ({ zcodeSessionService: { closeSession: vi.fn(async () => {}) } }),
 }));
 vi.mock("@/logger.js", () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
+vi.mock("@/i18n/IntlProvider.js", () => ({
+  useZCodeIntl: () => ({
+    intl: { formatMessage: ({ id }: { id: string }) => id },
+    locale: "zh-CN",
+  }),
+}));
 
 const a = { workspaceIdentity: "ssh://one/repo", ownerTaskId: "a" as string | null };
 const b = { ...a, ownerTaskId: "b" };

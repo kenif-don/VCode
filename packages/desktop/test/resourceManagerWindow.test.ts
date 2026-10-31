@@ -95,7 +95,7 @@ describe("resourceManagerWindow", () => {
       {
         id: 1,
         isDestroyed: () => false,
-        getTitle: () => "ZCode",
+        getTitle: () => "VCode",
         webContents: { getOSProcessId: () => rendererPid },
       },
     ]);
@@ -131,7 +131,7 @@ describe("resourceManagerWindow", () => {
         groupKey: "gpu",
       });
       expect(byPid.get(rendererPid)).toMatchObject({
-        name: formatZCodeRendererProcessName("ZCode"),
+        name: formatZCodeRendererProcessName("VCode"),
         groupKey: "renderer",
       });
       expect(byPid.get(hostPid)).toMatchObject({

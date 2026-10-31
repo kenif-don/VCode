@@ -611,7 +611,7 @@ export function readProviderBusinessFailureFromBody(body: unknown):
     toProviderCode(errorRecord?.providerCode) ??
     toProviderCode(record.error_code) ??
     toProviderCode(errorRecord?.error_code) ??
-    // 二次包装后的外层 code 是 ZCode 自己的 PROVIDER_BUSINESS_ERROR，
+    // 二次包装后的外层 code 是 VCode 自己的 PROVIDER_BUSINESS_ERROR，
     // 真实上游码在 providerCode；只有没有 providerCode 时才退回读取 code。
     toProviderCode(record.code) ??
     toProviderCode(errorRecord?.code);

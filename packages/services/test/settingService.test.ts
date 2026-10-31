@@ -1016,7 +1016,7 @@ describe("settingService", () => {
     });
   });
 
-  it("支持清空非生产 ZCode endpoint override", async () => {
+  it("支持清空非生产 VCode endpoint override", async () => {
     const home = makeTempHome();
     const settingsFile = join(home, ".zcode", "v2", "setting.json");
     const service = await createSettingServiceInHome(home);
@@ -1034,7 +1034,7 @@ describe("settingService", () => {
     );
   });
 
-  it("忽略损坏的 ZCode endpoint override，保留其它 settings", async () => {
+  it("忽略损坏的 VCode endpoint override，保留其它 settings", async () => {
     const home = makeTempHome();
     const settingsDir = join(home, ".zcode", "v2");
     const settingsFile = join(settingsDir, "setting.json");
@@ -1266,7 +1266,7 @@ describe("settingService", () => {
     });
   });
 
-  it("会持久化 ZCode 交互行为配置", async () => {
+  it("会持久化 VCode 交互行为配置", async () => {
     const home = makeTempHome();
     const service = await createSettingServiceInHome(home);
 

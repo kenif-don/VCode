@@ -3,7 +3,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NodePersonalProviderConfigRepository } from "@zcode/provider-node";
 import {
-  TID_LOGIN_USE_API_KEY_BUTTON,
   TID_TASK_SETTINGS_BUTTON,
   TID_CHAT_MODEL_SELECT_TRIGGER,
 } from "@zcode/shared/test-ids";
@@ -16,7 +15,6 @@ import {
 } from "../helpers/desktop-app.js";
 import {
   prepareV4ConversationE2E,
-  loginWithApiKey,
   switchV4Model,
   getV4ModelConfig,
 } from "../helpers/v4-conversation.js";
@@ -42,22 +40,20 @@ async function settledSnapshot() {
 
 describe("Composer provider 身份回归", () => {
   before(async () => {
+    // VCode 无登录入口：只等设置入口或引导页出现，不再处理欢迎页登录。
     await browser.waitUntil(
       async () =>
         browser.execute(
-          (login, settings) =>
+          (settings) =>
             Boolean(
               document.querySelector(
-                `[data-testid="${login}"], [data-testid="${settings}"], [data-testid="onboarding-page"]`,
+                `[data-testid="${settings}"], [data-testid="onboarding-page"]`,
               ),
             ),
-          TID_LOGIN_USE_API_KEY_BUTTON,
           TID_TASK_SETTINGS_BUTTON,
         ),
       { timeout: 30000 },
     );
-    if (await $(`[data-testid="${TID_LOGIN_USE_API_KEY_BUTTON}"]`).isExisting())
-      await loginWithApiKey();
     await skipOccupationOnboardingIfPresent();
   });
   after(async () => {

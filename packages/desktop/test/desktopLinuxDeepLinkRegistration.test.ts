@@ -28,13 +28,13 @@ describe("desktop Linux deep link registration helpers", () => {
       await import("../src/main/desktopLinuxDeepLinkRegistration.js");
 
     const command = resolveLinuxDeepLinkCommand({
-      env: { APPIMAGE: "/home/alice/Downloads/ZCode-2.8.0-linux-x64.AppImage" },
+      env: { APPIMAGE: "/home/alice/Downloads/VCode-2.8.0-linux-x64.AppImage" },
       executablePath: "/tmp/.mount_ZCode/zcode",
     });
     const entry = createLinuxDeepLinkDesktopEntry(command);
 
-    expect(command.executablePath).toBe("/home/alice/Downloads/ZCode-2.8.0-linux-x64.AppImage");
-    expect(entry).toContain('Exec="/home/alice/Downloads/ZCode-2.8.0-linux-x64.AppImage" %U');
+    expect(command.executablePath).toBe("/home/alice/Downloads/VCode-2.8.0-linux-x64.AppImage");
+    expect(entry).toContain('Exec="/home/alice/Downloads/VCode-2.8.0-linux-x64.AppImage" %U');
     expect(entry).toContain("MimeType=x-scheme-handler/zcode;");
   });
 
@@ -43,7 +43,7 @@ describe("desktop Linux deep link registration helpers", () => {
       await import("../src/main/desktopLinuxDeepLinkRegistration.js");
 
     const command = resolveLinuxDeepLinkCommand({
-      env: { APPIMAGE: "/home/alice/Applications/ZCode.AppImage" },
+      env: { APPIMAGE: "/home/alice/Applications/VCode.AppImage" },
       executablePath: "/tmp/.mount_ZCode/zcode",
       argv: [
         "/tmp/.mount_ZCode/zcode",
@@ -65,7 +65,7 @@ describe("desktop Linux deep link registration helpers", () => {
       "--use-gl=swiftshader",
     ]);
     expect(entry).toContain(
-      'Exec="/home/alice/Applications/ZCode.AppImage" "--no-sandbox" "--disable-gpu" "--disable-software-rasterizer" "--use-gl=swiftshader" %U',
+      'Exec="/home/alice/Applications/VCode.AppImage" "--no-sandbox" "--disable-gpu" "--disable-software-rasterizer" "--use-gl=swiftshader" %U',
     );
     expect(entry).not.toContain("remote-debugging-port");
     expect(entry).not.toContain("oauth/callback");
@@ -78,13 +78,13 @@ describe("desktop Linux deep link registration helpers", () => {
 
     const command = resolveLinuxDeepLinkCommand({
       env: {},
-      executablePath: "/opt/ZCode/zcode",
-      argv: ["/opt/ZCode/zcode", "--no-sandbox", "--disable-gpu"],
+      executablePath: "/opt/VCode/zcode",
+      argv: ["/opt/VCode/zcode", "--no-sandbox", "--disable-gpu"],
     });
     const entry = createLinuxDeepLinkDesktopEntry(command);
 
-    expect(command).toEqual({ executablePath: "/opt/ZCode/zcode", args: [] });
-    expect(entry).toContain('Exec="/opt/ZCode/zcode" %U');
+    expect(command).toEqual({ executablePath: "/opt/VCode/zcode", args: [] });
+    expect(entry).toContain('Exec="/opt/VCode/zcode" %U');
   });
 
   it("escapes desktop Exec paths before writing user-level handlers", async () => {
@@ -92,10 +92,10 @@ describe("desktop Linux deep link registration helpers", () => {
       await import("../src/main/desktopLinuxDeepLinkRegistration.js");
 
     const entry = createLinuxDeepLinkDesktopEntry({
-      executablePath: '/home/alice/Downloads/ZCode "Nightly".AppImage',
+      executablePath: '/home/alice/Downloads/VCode "Nightly".AppImage',
     });
 
-    expect(entry).toContain('Exec="/home/alice/Downloads/ZCode \\"Nightly\\".AppImage" %U');
+    expect(entry).toContain('Exec="/home/alice/Downloads/VCode \\"Nightly\\".AppImage" %U');
   });
 
   it("writes the Preview product name into the shared Linux protocol handler", async () => {
@@ -103,13 +103,13 @@ describe("desktop Linux deep link registration helpers", () => {
       await import("../src/main/desktopLinuxDeepLinkRegistration.js");
 
     const entry = createLinuxDeepLinkDesktopEntry({
-      executablePath: "/opt/ZCode Preview/zcode-preview",
-      productName: "ZCode Preview",
+      executablePath: "/opt/VCode Preview/zcode-preview",
+      productName: "VCode Preview",
     });
 
-    expect(entry).toContain("Name=ZCode Preview");
-    expect(entry).toContain("StartupWMClass=ZCode Preview");
-    expect(entry).toContain('Exec="/opt/ZCode Preview/zcode-preview" %U');
+    expect(entry).toContain("Name=VCode Preview");
+    expect(entry).toContain("StartupWMClass=VCode Preview");
+    expect(entry).toContain('Exec="/opt/VCode Preview/zcode-preview" %U');
     expect(entry).toContain("MimeType=x-scheme-handler/zcode;");
   });
 
@@ -118,12 +118,12 @@ describe("desktop Linux deep link registration helpers", () => {
       await import("../src/main/desktopLinuxDeepLinkRegistration.js");
 
     const entry = createLinuxDeepLinkDesktopEntry({
-      executablePath: "/home/alice/Downloads/ZCode.AppImage",
+      executablePath: "/home/alice/Downloads/VCode.AppImage",
       args: ['--disable-features=UseOzonePlatform,"Quoted"'],
     });
 
     expect(entry).toContain(
-      'Exec="/home/alice/Downloads/ZCode.AppImage" "--disable-features=UseOzonePlatform,\\"Quoted\\"" %U',
+      'Exec="/home/alice/Downloads/VCode.AppImage" "--disable-features=UseOzonePlatform,\\"Quoted\\"" %U',
     );
   });
 
@@ -143,7 +143,7 @@ describe("desktop Linux deep link registration helpers", () => {
 
       expect(
         shouldInstallAppImageDesktopIcon({
-          env: { APPIMAGE: "/home/alice/Applications/ZCode.AppImage" },
+          env: { APPIMAGE: "/home/alice/Applications/VCode.AppImage" },
           iconSourcePath,
         }),
       ).toBe(true);
@@ -207,8 +207,8 @@ describe("desktop Linux deep link registration helpers", () => {
         executablePath: "/tmp/.mount_ZCode/zcode",
         homeDir,
         iconSourcePath: badIconSourcePath,
-        env: { APPIMAGE: "/home/alice/Applications/ZCode.AppImage" },
-        // 固定系统级目录为空，避免测试机恰好装了 ZCode 系统包时走清理分支。
+        env: { APPIMAGE: "/home/alice/Applications/VCode.AppImage" },
+        // 固定系统级目录为空，避免测试机恰好装了 VCode 系统包时走清理分支。
         systemApplicationDirs: [join(tempRoot, "empty-system-applications")],
         logger: {
           info: () => undefined,
@@ -223,7 +223,7 @@ describe("desktop Linux deep link registration helpers", () => {
       const desktopFilePath = join(homeDir, ".local", "share", "applications", "zcode.desktop");
       expect(existsSync(desktopFilePath)).toBe(true);
       expect(readFileSync(desktopFilePath, "utf8")).toContain(
-        'Exec="/home/alice/Applications/ZCode.AppImage" %U',
+        'Exec="/home/alice/Applications/VCode.AppImage" %U',
       );
       expect(
         warnings.some(([message]) => message === "[deep-link] Linux AppImage 图标安装失败，已降级"),
@@ -277,7 +277,7 @@ describe("desktop Linux deep link registration helpers", () => {
       mkdirSync(systemApplicationsDir, { recursive: true });
       writeFileSync(
         join(systemApplicationsDir, "zcode.desktop"),
-        "[Desktop Entry]\nName=ZCode\nExec=/opt/ZCode/zcode %U\n",
+        "[Desktop Entry]\nName=VCode\nExec=/opt/VCode/zcode %U\n",
         "utf8",
       );
       // 模拟旧 AppImage 时代遗留的用户级条目（含归属标记 Comment 行）。
@@ -286,9 +286,9 @@ describe("desktop Linux deep link registration helpers", () => {
         desktopFilePath,
         [
           "[Desktop Entry]",
-          "Name=ZCode",
-          "Comment=ZCode Desktop App",
-          'Exec="/home/alice/Downloads/ZCode-2.8.0-linux-x64.AppImage" %U',
+          "Name=VCode",
+          "Comment=VCode Desktop App",
+          'Exec="/home/alice/Downloads/VCode-2.8.0-linux-x64.AppImage" %U',
           "MimeType=x-scheme-handler/zcode;",
           "",
         ].join("\n"),
@@ -296,7 +296,7 @@ describe("desktop Linux deep link registration helpers", () => {
       );
 
       registerLinuxDeepLinkProtocol({
-        executablePath: "/opt/ZCode/zcode",
+        executablePath: "/opt/VCode/zcode",
         homeDir,
         env: {},
         systemApplicationDirs: [systemApplicationsDir],
@@ -343,17 +343,17 @@ describe("desktop Linux deep link registration helpers", () => {
       mkdirSync(systemApplicationsDir, { recursive: true });
       writeFileSync(
         join(systemApplicationsDir, "zcode.desktop"),
-        "[Desktop Entry]\nName=ZCode\nExec=/opt/ZCode/zcode %U\n",
+        "[Desktop Entry]\nName=VCode\nExec=/opt/VCode/zcode %U\n",
         "utf8",
       );
       // 用户手写的自定义条目：没有我们的归属标记，不应被静默删除。
       mkdirSync(dirname(desktopFilePath), { recursive: true });
       const customEntry =
-        "[Desktop Entry]\nName=ZCode\nComment=Custom wrapper\nExec=/home/alice/wrap.sh %U\n";
+        "[Desktop Entry]\nName=VCode\nComment=Custom wrapper\nExec=/home/alice/wrap.sh %U\n";
       writeFileSync(desktopFilePath, customEntry, "utf8");
 
       registerLinuxDeepLinkProtocol({
-        executablePath: "/opt/ZCode/zcode",
+        executablePath: "/opt/VCode/zcode",
         homeDir,
         env: {},
         systemApplicationDirs: [systemApplicationsDir],
@@ -391,7 +391,7 @@ describe("desktop Linux deep link registration helpers", () => {
       mkdirSync(systemApplicationsDir, { recursive: true });
       writeFileSync(
         join(systemApplicationsDir, "zcode.desktop"),
-        "[Desktop Entry]\nName=ZCode\nExec=/opt/ZCode/zcode %U\n",
+        "[Desktop Entry]\nName=VCode\nExec=/opt/VCode/zcode %U\n",
         "utf8",
       );
 
@@ -399,7 +399,7 @@ describe("desktop Linux deep link registration helpers", () => {
         executablePath: "/tmp/.mount_ZCode/zcode",
         homeDir,
         iconSourcePath,
-        env: { APPIMAGE: "/home/alice/Applications/ZCode.AppImage" },
+        env: { APPIMAGE: "/home/alice/Applications/VCode.AppImage" },
         systemApplicationDirs: [systemApplicationsDir],
         logger: { info: () => undefined, warn: () => undefined },
         runCommand: (command, args) => {
@@ -439,7 +439,7 @@ describe("desktop Linux deep link registration helpers", () => {
 
     try {
       registerLinuxDeepLinkProtocol({
-        executablePath: "/opt/ZCode/zcode",
+        executablePath: "/opt/VCode/zcode",
         homeDir,
         env: {},
         systemApplicationDirs: [join(tempRoot, "empty-system-applications")],
@@ -448,7 +448,7 @@ describe("desktop Linux deep link registration helpers", () => {
       });
 
       expect(existsSync(desktopFilePath)).toBe(true);
-      expect(readFileSync(desktopFilePath, "utf8")).toContain('Exec="/opt/ZCode/zcode" %U');
+      expect(readFileSync(desktopFilePath, "utf8")).toContain('Exec="/opt/VCode/zcode" %U');
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
     }
@@ -466,7 +466,7 @@ describe("desktop Linux deep link registration helpers", () => {
     try {
       mkdirSync(join(systemApplicationsDir, "zcode.desktop"), { recursive: true });
       registerLinuxDeepLinkProtocol({
-        executablePath: "/opt/ZCode/zcode",
+        executablePath: "/opt/VCode/zcode",
         homeDir,
         env: {},
         systemApplicationDirs: [systemApplicationsDir],
@@ -495,7 +495,7 @@ describe("desktop Linux deep link registration helpers", () => {
       mkdirSync(systemApplicationsDir, { recursive: true });
       writeFileSync(
         join(systemApplicationsDir, "zcode.desktop"),
-        "[Desktop Entry]\nName=ZCode\nExec=/opt/ZCode/zcode %U\n",
+        "[Desktop Entry]\nName=VCode\nExec=/opt/VCode/zcode %U\n",
         "utf8",
       );
       mkdirSync(dirname(desktopFilePath), { recursive: true });
@@ -504,7 +504,7 @@ describe("desktop Linux deep link registration helpers", () => {
       chmodSync(desktopFilePath, 0o000);
 
       registerLinuxDeepLinkProtocol({
-        executablePath: "/opt/ZCode/zcode",
+        executablePath: "/opt/VCode/zcode",
         homeDir,
         env: {},
         systemApplicationDirs: [systemApplicationsDir],
@@ -555,7 +555,7 @@ describe("desktop Linux deep link registration helpers", () => {
       mkdirSync(systemApplicationsDir, { recursive: true });
       writeFileSync(
         join(systemApplicationsDir, "zcode.desktop"),
-        "[Desktop Entry]\nName=ZCode\nExec=/opt/ZCode/zcode %U\n",
+        "[Desktop Entry]\nName=VCode\nExec=/opt/VCode/zcode %U\n",
         "utf8",
       );
       // 旧版本写出的 LF 条目被 Windows 风格工具改写为 CRLF 后仍应识别为可清理。
@@ -564,9 +564,9 @@ describe("desktop Linux deep link registration helpers", () => {
         desktopFilePath,
         [
           "[Desktop Entry]",
-          "Name=ZCode",
-          "Comment=ZCode Desktop App",
-          'Exec="/home/alice/Downloads/ZCode.AppImage" %U',
+          "Name=VCode",
+          "Comment=VCode Desktop App",
+          'Exec="/home/alice/Downloads/VCode.AppImage" %U',
           "MimeType=x-scheme-handler/zcode;",
           "",
         ].join("\r\n"),
@@ -574,7 +574,7 @@ describe("desktop Linux deep link registration helpers", () => {
       );
 
       registerLinuxDeepLinkProtocol({
-        executablePath: "/opt/ZCode/zcode",
+        executablePath: "/opt/VCode/zcode",
         homeDir,
         env: {},
         systemApplicationDirs: [systemApplicationsDir],
@@ -616,20 +616,20 @@ describe("desktop Linux deep link registration helpers", () => {
         mkdirSync(systemApplicationsDir, { recursive: true });
         writeFileSync(
           join(systemApplicationsDir, "zcode.desktop"),
-          "[Desktop Entry]\nName=ZCode\nExec=/opt/ZCode/zcode %U\n",
+          "[Desktop Entry]\nName=VCode\nExec=/opt/VCode/zcode %U\n",
           "utf8",
         );
         mkdirSync(applicationsDir, { recursive: true });
         writeFileSync(
           desktopFilePath,
-          '[Desktop Entry]\nComment=ZCode Desktop App\nExec="/old/ZCode.AppImage" %U\n',
+          '[Desktop Entry]\nComment=VCode Desktop App\nExec="/old/VCode.AppImage" %U\n',
           "utf8",
         );
         // 目录去掉写权限后 rmSync 失败（EPERM）：删除失败必须只降级，不得抛出或阻断注册。
         chmodSync(applicationsDir, 0o500);
 
         registerLinuxDeepLinkProtocol({
-          executablePath: "/opt/ZCode/zcode",
+          executablePath: "/opt/VCode/zcode",
           homeDir,
           env: {},
           systemApplicationDirs: [systemApplicationsDir],

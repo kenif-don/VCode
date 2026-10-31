@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
 import type { Dirent } from "node:fs";
-import { mkdir, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, realpath, rename, rm, rmdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { extname, join, relative, sep } from "node:path";
+import { dirname, extname, join, relative, sep } from "node:path";
 import type {
   FileBinaryPreview,
   FileEntry,
@@ -646,23 +646,40 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
       }
       const targetStat = await stat(params.path);
       if (targetStat.isDirectory() && params.recursive !== true) {
-        // 非空目录必须显式 recursive 才删，避免误传路径把整棵子树静默清掉。
-        throw new Error(`Directory delete requires recursive: ${params.path}`);
+        // 非空目录必须显式 recursive 才删，避免误传路径把整棵子树静默清掉；
+        // 空目录走 rmdir 正常删除（rm 对任何目录不带 recursive 都报 EISDIR）。
+        const entries = await readdir(params.path);
+        if (entries.length > 0) {
+          throw new Error(`Directory delete requires recursive: ${params.path}`);
+        }
+        await rmdir(params.path);
+        return;
       }
       await rm(params.path, { recursive: params.recursive === true });
     },
-    async renamePath(params: { path: string; newPath: string }): Promise<void> {
-      if (!params.path.trim() || !params.newPath.trim()) {
-        throw new Error("Rename source and target paths are required.");
+    async renamePath(params: { path: string; newName: string }): Promise<{ newPath: string }> {
+      const newName = params.newName.trim();
+      if (!params.path.trim() || !newName) {
+        throw new Error("Rename source and new name are required.");
       }
+      // 文件树重命名是同目录改名；名称里出现任一路径分隔符都视为误输入。
+      if (newName === "." || newName === ".." || /[\\/]/.test(newName)) {
+        throw new Error(`Invalid rename target name: ${params.newName}`);
+      }
+      const newPath = join(dirname(params.path), newName);
       // POSIX rename 会静默覆盖同名目标；文件树重命名是原地改名，覆盖属于事故而非预期。
-      const targetExists = await stat(params.newPath)
-        .then(() => true)
-        .catch(() => false);
-      if (targetExists) {
-        throw new Error(`Rename target already exists: ${params.newPath}`);
+      // 大小写不敏感文件系统（Windows/macOS）上改大小写会 stat 命中自身，按同文件放行。
+      const targetStat = await stat(newPath).catch(() => null);
+      if (targetStat) {
+        const sourceStat = await stat(params.path);
+        const isSameFile =
+          targetStat.ino !== 0 && targetStat.ino === sourceStat.ino && targetStat.dev === sourceStat.dev;
+        if (!isSameFile) {
+          throw new Error(`Rename target already exists: ${newPath}`);
+        }
       }
-      await rename(params.path, params.newPath);
+      await rename(params.path, newPath);
+      return { newPath };
     },
   };
 }

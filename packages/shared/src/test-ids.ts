@@ -4,34 +4,6 @@
  * 并且每个都需要中文注释
  */
 
-// Login entry
-/** 右上角登录触发按钮 */
-export const TID_LOGIN_TRIGGER = "login-trigger";
-/** 用户菜单中的登录操作 */
-export const TID_LOGIN_MENU_ITEM = "login-menu-item";
-/** 登录页切换到 API Key 登录方式按钮 */
-export const TID_LOGIN_USE_API_KEY_BUTTON = "login-use-api-key-button";
-/** API Key 登录 provider 选择触发器 */
-export const TID_LOGIN_API_KEY_PROVIDER_TRIGGER = "login-api-key-provider-trigger";
-/** API Key 登录 provider 选择项（动态后缀为 provider choice） */
-export const TID_LOGIN_API_KEY_PROVIDER_ITEM = "login-api-key-provider-item";
-/** API Key 登录密钥输入框 */
-export const TID_LOGIN_API_KEY_INPUT = "login-api-key-input";
-/** API Key 登录继续按钮 */
-export const TID_LOGIN_API_KEY_CONTINUE_BUTTON = "login-api-key-continue-button";
-/** API Key 登录取消按钮 */
-export const TID_LOGIN_API_KEY_CANCEL_BUTTON = "login-api-key-cancel-button";
-/** API Key 登录暂时跳过按钮 */
-export const TID_LOGIN_API_KEY_SKIP_BUTTON = "login-api-key-skip-button";
-/** API Key 登录错误提示 */
-export const TID_LOGIN_API_KEY_ERROR = "login-api-key-error";
-/** OAuth 弹窗内的登录按钮 */
-export const TID_OAUTH_LOGIN_BUTTON = "oauth-login-button";
-/** OAuth 弹窗取消按钮 */
-export const TID_OAUTH_CANCEL = "oauth-cancel";
-/** OAuth 错误提示文本 */
-export const TID_OAUTH_ERROR = "oauth-error";
-
 // App
 /** 顶部导航栏 */
 export const TID_APP_HEADER = "app-header";
@@ -199,6 +171,8 @@ export const TID_SSH_CONFIG_IMPORT = "remote-ssh-config-import";
 export const TID_SSH_CONFIG_ALIAS_CHIP = "remote-ssh-config-alias-chip";
 /** 新建连接表单头部的实时目标预览。 */
 export const TID_REMOTE_NEW_CONNECTION_PREVIEW = "remote-new-connection-preview";
+/** 新建连接表单的自定义名称输入框（连接成功后作设备名与线路名）。 */
+export const TID_REMOTE_CUSTOM_NAME_INPUT = "remote-custom-name-input";
 /** SSH 密码输入框 */
 export const TID_SSH_PASSWORD_INPUT = "ssh-password-input";
 /** SSH 私钥路径输入框 */

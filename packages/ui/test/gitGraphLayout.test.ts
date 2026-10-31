@@ -12,7 +12,7 @@ function commit(hash: string, parents: string[] = []): GitGraphCommit {
     parents,
     refs: [],
     subject: `Commit ${hash}`,
-    authorName: "ZCode",
+    authorName: "VCode",
     authoredAtMs: 1_766_955_000_000,
   };
 }

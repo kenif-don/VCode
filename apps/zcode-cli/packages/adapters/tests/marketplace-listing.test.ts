@@ -32,7 +32,7 @@ describe("marketplace store listing", () => {
       join(marketplaceDir, "marketplace.json"),
       JSON.stringify({
         name: "zcode-plugins-official",
-        description: "Official ZCode plugins marketplace",
+        description: "Official VCode plugins marketplace",
         featured: ["example-plugin", " ", 42, "another"],
         plugins: [
           {

@@ -19,7 +19,7 @@ const h = vi.hoisted(() => {
     tabs,
     tabApi: { getState: () => tabs },
     platform: { openExternal: vi.fn() },
-    store: { user: { id: "fixture" }, isRestoringOAuthSession: false, requestLoginEntry: vi.fn() },
+    store: { user: { id: "fixture" }, isRestoringOAuthSession: false },
     intl: { formatMessage: ({ id }: { id: string }) => id },
     upgrade: vi.fn(),
     rewards: vi.fn().mockResolvedValue(undefined),

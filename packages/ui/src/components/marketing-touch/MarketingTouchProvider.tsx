@@ -75,7 +75,6 @@ export function MarketingTouchProvider({
   upgradeTargetRef.current = upgradeTargetProviderId;
   const user = useZCodeStore((state) => state.user);
   const restoring = useZCodeStore((state) => state.isRestoringOAuthSession);
-  const requestLogin = useZCodeStore((state) => state.requestLoginEntry);
   const openRewards = useOpenRewards();
   const openRewardsRef = useRef(openRewards);
   openRewardsRef.current = openRewards;
@@ -242,7 +241,7 @@ export function MarketingTouchProvider({
           }
         }
         if (!user) {
-          requestLogin();
+          // VCode 无登录入口：匿名用户领取套餐直接取消，不再拉起登录。
           return { status: "cancelled" };
         }
         let submitted = false;
@@ -311,7 +310,6 @@ export function MarketingTouchProvider({
     restoring,
     locale,
     intl,
-    requestLogin,
     desktop,
     openSettingsTab,
     tabStore,

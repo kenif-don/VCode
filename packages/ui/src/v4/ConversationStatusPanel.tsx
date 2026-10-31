@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
   ActivityIcon,
+  ArrowDownToLineIcon,
   ArrowRightIcon,
   BotIcon,
   CheckCircle2Icon,
@@ -23,8 +24,10 @@ import {
   CircleIcon,
   EllipsisIcon,
   FileDiffIcon,
+  GitGraph,
   GoalIcon,
   ListChecksIcon,
+  LoaderIcon,
   Maximize2Icon,
   Minimize2Icon,
   PauseIcon,
@@ -75,6 +78,8 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { formatBackgroundTaskElapsedLabel } from "@/BackgroundTaskElapsedLabel.js";
 import { GitActionMenu } from "@/GitActionMenu.js";
 import { GitBranchSwitcher } from "@/GitBranchSwitcher.js";
+import { GitGraphDialog } from "@/git-graph/GitGraphDialog.js";
+import { useGitPull } from "@/hooks/useGitPull.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type {
   OpenPlanDetailSideTabRequest,
@@ -86,6 +91,7 @@ import type { ChatViewSummaryPanelVariant } from "@/v4/legacyChatViewTypes.js";
 import { resolveConversationStatusPanelVariant } from "@/v4/conversationLayout.js";
 import {
   buildConversationStatusPanelModel,
+  type ConversationStatusPanelGitRepository,
   type ConversationStatusPanelRunningSubagent,
   type ConversationStatusPanelModel,
   type ConversationStatusPanelSessionPlanItem,
@@ -109,6 +115,9 @@ export interface ConversationStatusPanelProps {
   gitDirtyFileCount?: number;
   gitWorktreeReviewSourceId?: GitChangeSourceId | null;
   gitWorktreeChangeSummary?: { added: number; removed: number } | null;
+  /** 子目录仓库发现结果（多仓选择器）；缺省退化为单仓。 */
+  gitRepositories?: readonly ConversationStatusPanelGitRepository[] | null;
+  activeGitRepositoryKey?: string | null;
   activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;
   goal?: GoalState | null;
   sessionPlans?: readonly ToolCallRow[];
@@ -141,6 +150,8 @@ export interface ConversationStatusPanelProps {
   onWorkflowSectionOpenChange?: (open: boolean) => void;
   onRefreshGit?: () => void;
   onOpenGitReview?: (sourceId?: GitChangeSourceId) => void;
+  /** 多仓选择器切换目标仓。 */
+  onSelectGitRepository?: (repoKey: string) => void;
   onPauseGoal?: () => void;
   onResumeGoal?: () => void;
   onOpenPlanDetail?: (request: OpenPlanDetailSideTabRequest) => void;
@@ -366,6 +377,7 @@ function GitStatusSection({
   gitWorktreeReviewSourceId,
   model,
   onOpenGitReview,
+  onSelectGitRepository,
   onRefreshGit,
   separated,
   workspaceIdentity,
@@ -377,6 +389,7 @@ function GitStatusSection({
   gitWorktreeReviewSourceId?: GitChangeSourceId | null;
   model: ConversationStatusPanelModel;
   onOpenGitReview?: (sourceId?: GitChangeSourceId) => void;
+  onSelectGitRepository?: (repoKey: string) => void;
   onRefreshGit?: () => void;
   separated: boolean;
   workspaceIdentity?: string;
@@ -385,11 +398,26 @@ function GitStatusSection({
 }) {
   const { intl } = useZCodeIntl();
   const git = model.git;
+  // 多仓下分支切换/拉取/操作菜单都作用于选中仓：操作路径优先取 model 里选中仓的
+  // requestPath，点仓库行切仓后立即跟随新仓，不等 gitSummary 的刷新往返；
+  // 发现链路未接入（单仓模型）时退回 gitSummary.workspacePath（单仓调用路径），
+  // 再退回 workspacePath。
+  const activeRepositoryKey = git?.activeRepositoryKey;
+  const activeRepositoryPath = git?.repositories.find(
+    (repository) => repository.key === activeRepositoryKey,
+  )?.requestPath;
+  const gitActionPath = activeRepositoryPath ?? gitSummary?.workspacePath ?? workspacePath;
+  const { pulling: gitPulling, runPull: runGitPull } = useGitPull({
+    workspacePath: gitActionPath,
+    onPulled: onRefreshGit,
+  });
+  const [gitGraphDialogOpen, setGitGraphDialogOpen] = useState(false);
   if (!git || !gitSummary || !onRefreshGit) {
     return null;
   }
-  const hasChanges = git.added + git.removed > 0;
+  const hasChanges = git.totalAdded + git.totalRemoved > 0;
   const canOpenReview = Boolean(onOpenGitReview && gitSummary.isRepository);
+  const canPull = gitSummary.isRepository && !gitPulling;
 
   return (
     <StatusSection
@@ -400,16 +428,18 @@ function GitStatusSection({
         isOpen ? null : (
           <span className="shrink-0 font-mono text-ui-sm tabular-nums">
             <span className={cn("text-[var(--color-diff-added)]", !hasChanges && "opacity-50")}>
-              +{git.added}
+              +{git.totalAdded}
             </span>{" "}
             <span className={cn("text-[var(--color-diff-removed)]", !hasChanges && "opacity-50")}>
-              -{git.removed}
+              -{git.totalRemoved}
             </span>
           </span>
         )
       }
     >
       <div className="space-y-0">
+        {/* 多仓选择已收进分支弹层（GitBranchSwitcher 两级钻取：仓库列表 -> 分支列表）；
+            面板行只保留更改/分支/拉取/提交或推送/git图谱五个动作，不在此再放仓库下拉。 */}
         {/* Bug 原因：V4 状态面板迁移时只保留了 Changes 的静态展示，
             没有继续透传旧版 Git review 回调，导致规范中的审阅入口不可点击。 */}
         <button
@@ -435,19 +465,43 @@ function GitStatusSection({
           </span>
         </button>
         <GitBranchSwitcher
-          workspacePath={workspacePath}
+          workspacePath={gitActionPath}
           gitSummary={gitSummary}
           dirtyFileCount={git.dirtyFileCount}
           onRefreshGit={onRefreshGit}
+          repositories={git.repositories}
+          activeRepositoryKey={git.activeRepositoryKey}
+          onSelectRepository={onSelectGitRepository}
           className="w-full px-0 pt-0"
           triggerClassName="flex h-8 w-full min-w-0 justify-start gap-2 rounded-lg px-2 text-left text-ui-base text-[var(--color-foreground)] hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] [&>span]:max-w-[calc(100%-3.5rem)] [&_svg:first-child]:text-[var(--color-foreground)]"
           popoverClassName="w-72 max-w-[calc(100vw-2rem)]"
           branchListClassName="max-h-56"
           popoverSide={useVerticalFloatingPanels ? "bottom" : "left"}
-          showFooterActions
         />
+        <button
+          type="button"
+          disabled={!canPull}
+          className={cn(
+            "flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-ui-base text-[var(--color-foreground)] transition-colors",
+            canPull
+              ? "hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-input-border-focused)]"
+              : "cursor-default opacity-50",
+          )}
+          onClick={() => {
+            void runGitPull();
+          }}
+        >
+          {gitPulling ? (
+            <LoaderIcon className="size-4 shrink-0 animate-spin text-[var(--color-foreground)]" />
+          ) : (
+            <ArrowDownToLineIcon className="size-4 shrink-0 text-[var(--color-foreground)]" />
+          )}
+          <span className="min-w-0 flex-1 truncate">
+            {intl.formatMessage({ id: "git.action.pull" })}
+          </span>
+        </button>
         <GitActionMenu
-          workspacePath={workspacePath}
+          workspacePath={gitActionPath}
           workspaceIdentity={workspaceIdentity}
           gitSummary={gitSummary}
           activeTaskChangeSummary={activeTaskChangeSummary ?? null}
@@ -455,7 +509,24 @@ function GitStatusSection({
           triggerLayout="status-row"
           className="w-full"
         />
+        <button
+          type="button"
+          className="flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-ui-base text-[var(--color-foreground)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-input-border-focused)]"
+          onClick={() => {
+            setGitGraphDialogOpen(true);
+          }}
+        >
+          <GitGraph className="size-4 shrink-0 text-[var(--color-foreground)]" />
+          <span className="min-w-0 flex-1 truncate">
+            {intl.formatMessage({ id: "gitGraph.menuAction" })}
+          </span>
+        </button>
       </div>
+      <GitGraphDialog
+        open={gitGraphDialogOpen}
+        workspacePath={gitActionPath}
+        onOpenChange={setGitGraphDialogOpen}
+      />
     </StatusSection>
   );
 }
@@ -1750,8 +1821,9 @@ function StatusSummaryRow({
     goalStatus === "paused" ||
     goalStatus === "verifying";
   const isDoneGoal = goalStatus === "verified";
-  const added = gitWorktreeChangeSummary?.added ?? 0;
-  const removed = gitWorktreeChangeSummary?.removed ?? 0;
+  // 胶囊与折叠头部同口径：多仓时展示全仓聚合的行级变化。
+  const added = model.git?.totalAdded ?? gitWorktreeChangeSummary?.added ?? 0;
+  const removed = model.git?.totalRemoved ?? gitWorktreeChangeSummary?.removed ?? 0;
   const hasGitMiniSummary = Boolean(model.git && added + removed > 0);
 
   // 胶囊摘要过去把所有后台任务都写死成 Activity，纯 Subagent 因而没有复用
@@ -1877,6 +1949,8 @@ function ConversationStatusPanelImpl({
   gitDirtyFileCount = 0,
   gitWorktreeReviewSourceId,
   gitWorktreeChangeSummary,
+  gitRepositories,
+  activeGitRepositoryKey,
   activeTaskChangeSummary,
   goal,
   sessionPlans,
@@ -1901,6 +1975,7 @@ function ConversationStatusPanelImpl({
   onWorkflowSectionOpenChange,
   onRefreshGit,
   onOpenGitReview,
+  onSelectGitRepository,
   onPauseGoal,
   onResumeGoal,
   onOpenPlanDetail,
@@ -1920,6 +1995,8 @@ function ConversationStatusPanelImpl({
         gitSummary,
         gitDirtyFileCount,
         gitWorktreeChangeSummary,
+        gitRepositories,
+        activeGitRepositoryKey,
         goal,
         sessionPlans,
         workspacePath,
@@ -1934,6 +2011,8 @@ function ConversationStatusPanelImpl({
       gitDirtyFileCount,
       gitSummary,
       gitWorktreeChangeSummary,
+      gitRepositories,
+      activeGitRepositoryKey,
       goal,
       sessionPlans,
       plan,
@@ -1995,7 +2074,10 @@ function ConversationStatusPanelImpl({
   // 会话会连整个胶囊一起消失——而那正是重启后打开一条旧对话的样子，run 目录的入口于是又没了。
   // 已结束的 run 因此单独开这道门。（Agents 的已结束行有同一个洞：`endedSubagentCount` 也
   // 没进 `hasContent`。那是既有行为，不在本轮一起翻。）
-  if (!model.hasContent && !canRenderEndedWorkflows) {
+  // Git 操作区常驻（用户定夺 2026-10-29）：git 项目不再「有变更才显示」——model.git 对任何
+  // 仓库非空，hasContent 恒真，面板（含 Git 操作区）对 git 项目始终可见；非 git 空会话不留空壳。
+  const showPill = model.hasContent || canRenderEndedWorkflows;
+  if (!showPill) {
     return null;
   }
 
@@ -2013,8 +2095,10 @@ function ConversationStatusPanelImpl({
         className,
       )}
     >
-      {/* Bugfix: 状态面板恢复旧 ChatView 的同 shell 收起/展开模型。
-          之前 v4 用固定展开卡片替代 summary panel，窄屏会遮挡聊天正文，也丢失用户 override。 */}
+      <div className="flex items-start gap-2">
+        {/* Bugfix: 状态面板恢复旧 ChatView 的同 shell 收起/展开模型。
+            之前 v4 用固定展开卡片替代 summary panel，窄屏会遮挡聊天正文，也丢失用户 override。 */}
+        {showPill ? (
       <aside
         aria-label={intl.formatMessage({ id: "chat.summaryPanel.title" })}
         data-testid={TID_CHAT_SUMMARY_PANEL}
@@ -2116,6 +2200,7 @@ function ConversationStatusPanelImpl({
                 activeTaskChangeSummary={activeTaskChangeSummary}
                 onRefreshGit={onRefreshGit}
                 onOpenGitReview={onOpenGitReview}
+                onSelectGitRepository={onSelectGitRepository}
                 separated={false}
                 useVerticalFloatingPanels={useVerticalFloatingPanels}
               />
@@ -2221,6 +2306,8 @@ function ConversationStatusPanelImpl({
           />
         </div>
       </aside>
+        ) : null}
+      </div>
     </div>
   );
 }

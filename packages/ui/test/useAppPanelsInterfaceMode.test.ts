@@ -9,6 +9,12 @@ vi.mock("@/hooks/useInterfaceMode.js", () => ({ useIsOfficeMode: () => mode.gene
 vi.mock("@/hooks/useServices.js", () => ({
   useServices: () => ({ zcodeSessionService: { closeSession: vi.fn(async () => {}) } }),
 }));
+vi.mock("@/i18n/IntlProvider.js", () => ({
+  useZCodeIntl: () => ({
+    intl: { formatMessage: ({ id }: { id: string }) => id },
+    locale: "zh-CN",
+  }),
+}));
 
 function renderPanels() {
   return renderHook(() =>

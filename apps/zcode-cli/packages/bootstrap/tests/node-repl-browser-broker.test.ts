@@ -152,7 +152,7 @@ describe("node_repl browser broker", () => {
           name: "locator",
           operation: "click",
           selector: "button",
-          // 真机调用按 Playwright 原生字段传 timeout；ZCode 严格 schema 只接受 timeoutMs。
+          // 真机调用按 Playwright 原生字段传 timeout；VCode 严格 schema 只接受 timeoutMs。
           timeout: 10_000,
         },
         method: "playwright",
@@ -309,7 +309,7 @@ function createBrowserControlPort(): BrowserControlPort {
         capabilities: { browser: [], tab: [] },
         generation: 7,
         id: "iab-1",
-        name: "ZCode Browser",
+        name: "VCode Browser",
         type: "iab" as const,
       },
     ]),

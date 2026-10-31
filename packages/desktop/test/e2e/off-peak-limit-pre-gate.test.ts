@@ -12,7 +12,6 @@ import {
   clickTestIdByDom,
   waitForDefaultWorkspaceReady,
 } from "./helpers/desktop-app.js";
-import { loginWithApiKey } from "./helpers/conversation-session.js";
 
 /**
  * 闲时任务「服务端额度快照前置置灰」端到端（D39）。
@@ -54,14 +53,10 @@ describe("闲时任务服务端额度快照置灰 E2E（D39）", () => {
   it("availability 不可创建时按钮置灰并显示 next_take_at", async function () {
     this.timeout(150000);
 
-    // 会话就绪：登录（若停在欢迎页）+ 默认工作区就绪即可进 Automations（在 Settings 内），
+    // 会话就绪：默认工作区就绪即可进 Automations（在 Settings 内），
     // 不走 startNewTask 的对话草稿流程（与 off-peak 无关）。off-peak mock 网关免真实模型请求。
-    try {
-      await waitForDefaultWorkspaceReady(30000);
-    } catch {
-      await loginWithApiKey();
-      await waitForDefaultWorkspaceReady(30000);
-    }
+    // VCode 无登录入口：不再回退 API Key 登录页。
+    await waitForDefaultWorkspaceReady(30000);
 
     // 网关只替代曝光和取票；Registry 模型需要真实的隔离账号与连接前置。
     await restartIntoWorkspace({

@@ -70,7 +70,7 @@ describe("release installer", () => {
     await new ReleaseInstaller(layout).installArchive({ archivePath, target: "win32-x64", version: "1.2.4" });
     const launcher = await readFile(join(layout.stableBinDir, "zcode.cmd"), "utf8");
     expect(launcher).toContain("ZCODE_SERVER_ROOT");
-    expect(launcher).toContain("Invalid current ZCode Server release");
+    expect(launcher).toContain("Invalid current VCode Server release");
   });
 
   // Bugfix: 该用例验证 POSIX shell 版 stable launcher 的 fail-closed 输出；Windows 没有 /bin/sh，只在 POSIX 宿主运行。
@@ -90,13 +90,13 @@ describe("release installer", () => {
         if (error) reject(new Error(`${error.message}: ${stderr}`));
         else resolve();
       });
-    })).rejects.toThrow(/Invalid current ZCode Server release/);
+    })).rejects.toThrow(/Invalid current VCode Server release/);
   });
 
   // Bugfix: 远端以 "$HOME/.zcode/server/bin/zcode" 调用 launcher，NAS 等环境的 $HOME 经过符号链接
   // （/var/services/homes -> /volume1/homes）。update 写 current.json 前把 root 收敛为 realpath，launcher
   // 却用逻辑 pwd 计算 root，两者前缀不同，合法 release 被判越界，SSH 连接固定报
-  // "Invalid current ZCode Server release"。这里按真实调用方式，从别名路径执行 launcher。
+  // "Invalid current VCode Server release"。这里按真实调用方式，从别名路径执行 launcher。
   it.skipIf(process.platform === "win32")("runs the canonical current release when the POSIX launcher is invoked through a symlinked root", async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), "zcode-release-launcher-alias-")));
     await mkdir(join(root, "volume1", "homes", "dev"), { recursive: true });

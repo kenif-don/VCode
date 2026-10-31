@@ -50,7 +50,6 @@ async function requestTrust() {
 
 it("shows all selected paths and does not register a Host or save until explicit trust", async () => {
   const { props, saveProject } = setup();
-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Review me" } });
   const dialog = await requestTrust();
   for (const path of paths) expect(within(dialog).getByText(path)).toBeTruthy();
   expect(within(dialog).getByText("project.thisComputer")).toBeTruthy();
@@ -60,8 +59,12 @@ it("shows all selected paths and does not register a Host or save until explicit
   expect(props.onBeforeSave).not.toHaveBeenCalled();
   fireEvent.click(screen.getByTestId("project-folder-trust-confirm"));
   await waitFor(() => expect(saveProject).toHaveBeenCalledOnce());
+  // 创建态不填项目名（服务按目录自动命名）；确认后保存拿到全部目录与主目录。
   expect(saveProject).toHaveBeenCalledWith(
-    expect.objectContaining({ name: "Review me", roots: paths, primaryRoot: paths[0] }),
+    expect.objectContaining({ roots: paths, primaryRoot: paths[0] }),
+  );
+  expect(saveProject).toHaveBeenCalledWith(
+    expect.not.objectContaining({ name: expect.anything() }),
   );
   expect(props.onBeforeSave.mock.invocationCallOrder[0]).toBeLessThan(
     saveProject.mock.invocationCallOrder[0]!,
@@ -72,18 +75,12 @@ it.each(["cancel", "close", "escape"])(
   "%s returns to the intact form without creating",
   async (action) => {
     const { props, saveProject } = setup();
-    fireEvent.change(screen.getByTestId("virtual-project-name"), {
-      target: { value: "Preserved" },
-    });
     const dialog = await requestTrust();
     if (action === "cancel") fireEvent.click(screen.getByTestId("project-folder-trust-cancel"));
     else if (action === "close")
       fireEvent.click(within(dialog).getByRole("button", { name: "common.close" }));
     else fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByTestId("project-folder-trust-dialog")).toBeNull());
-    expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe(
-      "Preserved",
-    );
     expect(screen.getAllByTestId("virtual-project-root-row")).toHaveLength(2);
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByTestId("virtual-project-save")),
@@ -118,7 +115,8 @@ it("touch cancellation closes only the trust dialog and preserves the parent edi
   await waitFor(() => expect(screen.queryByTestId("project-folder-trust-dialog")).toBeNull());
   expect(props.onClose).not.toHaveBeenCalled();
   expect(saveProject).not.toHaveBeenCalled();
-  expect(screen.getByTestId("virtual-project-name")).toBeTruthy();
+  // 创建态无名字输入；用保存按钮探针确认父编辑器表单原样保留。
+  expect(screen.getByTestId("virtual-project-save")).toBeTruthy();
 });
 
 it("does not reuse another project's folders as approval, and asks again after a save failure", async () => {

@@ -14,7 +14,6 @@ const TEST_BIGMODEL_PROVIDER_ID = "test-bigmodel-api-provider";
 
 const refreshMock = vi.fn(async () => {});
 const getActiveProviderMock = vi.fn(async () => null as string | null);
-const requestLoginEntryMock = vi.fn();
 const startOAuthMock = vi.fn(async () => ({
   authorizeUrl: "https://example.com/oauth/authorize?state=demo",
   provider: "bigmodel" as const,
@@ -148,14 +147,12 @@ vi.mock("@/store/StoreProvider.js", () => ({
   useZCodeStore: (
     selector: (state: {
       user: null;
-      requestLoginEntry: typeof requestLoginEntryMock;
       setUser: typeof setUserMock;
       setOAuthError: typeof setOAuthErrorMock;
     }) => unknown,
   ) =>
     selector({
       user: null,
-      requestLoginEntry: requestLoginEntryMock,
       setUser: setUserMock,
       setOAuthError: setOAuthErrorMock,
     }),
@@ -301,7 +298,6 @@ describe("ModelProviderSection preset subscription action", () => {
     refreshMock.mockClear();
     getActiveProviderMock.mockClear();
     getActiveProviderMock.mockResolvedValue(null);
-    requestLoginEntryMock.mockClear();
     startOAuthMock.mockClear();
     openExternalMock.mockClear();
     registerOAuthStateMock.mockClear();
@@ -312,76 +308,6 @@ describe("ModelProviderSection preset subscription action", () => {
     updateSharedSettingsMock.mockClear();
     setUserMock.mockClear();
     setOAuthErrorMock.mockClear();
-  });
-
-  it("Z.ai Coding Plan Connect 会打开 App 登录入口", async () => {
-    const { ModelProviderSection } = await import("@/settings/ModelProviderSection.js");
-
-    renderToStaticMarkup(createElement(ModelProviderSection));
-
-    expect(capturedDetailProps).not.toBeNull();
-
-    await (
-      capturedDetailProps?.onCodingPlanLogin as
-        | ((presetId: string, providerId: string, providerName: string) => Promise<void>)
-        | undefined
-    )?.(BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan, ZAI_PROVIDER_ID, "Z.ai");
-
-    expect(refreshMock).not.toHaveBeenCalled();
-    expect(requestLoginEntryMock).toHaveBeenCalledWith(ZAI_PROVIDER_ID);
-    expect(startOAuthMock).not.toHaveBeenCalled();
-  });
-
-  it("Z.ai Coding Plan 同步失败时点击登录会重新打开登录入口", async () => {
-    const { ModelProviderSection } = await import("@/settings/ModelProviderSection.js");
-
-    renderToStaticMarkup(createElement(ModelProviderSection));
-
-    expect(capturedDetailProps).not.toBeNull();
-
-    await (
-      capturedDetailProps?.onCodingPlanLogin as
-        | ((
-            presetId: string,
-            providerId: string,
-            providerName: string,
-            status: string,
-          ) => Promise<void>)
-        | undefined
-    )?.(BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan, ZAI_PROVIDER_ID, "Z.ai", "unavailable");
-
-    expect(requestLoginEntryMock).toHaveBeenCalledWith(ZAI_PROVIDER_ID);
-    expect(refreshMock).not.toHaveBeenCalled();
-  });
-
-  it("Z.ai Coding Plan token 恢复强制走应用内登录入口", async () => {
-    const { ModelProviderSection } = await import("@/settings/ModelProviderSection.js");
-
-    renderToStaticMarkup(createElement(ModelProviderSection));
-
-    expect(capturedDetailProps).not.toBeNull();
-
-    await (
-      capturedDetailProps?.onCodingPlanLogin as
-        | ((
-            presetId: string,
-            providerId: string,
-            providerName: string,
-            status: string,
-            options?: { forceOAuth?: boolean },
-          ) => Promise<void>)
-        | undefined
-    )?.(
-      BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan,
-      ZAI_PROVIDER_ID,
-      "Z.ai",
-      "notPurchased",
-      { forceOAuth: true },
-    );
-
-    expect(requestLoginEntryMock).toHaveBeenCalledWith(ZAI_PROVIDER_ID);
-    expect(openExternalMock).not.toHaveBeenCalled();
-    expect(refreshMock).not.toHaveBeenCalled();
   });
 
   it("Coding Plan 购买成功后刷新 Account Source 与设置页", async () => {

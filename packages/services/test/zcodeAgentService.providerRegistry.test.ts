@@ -53,7 +53,7 @@ function createSessionSnapshot(params: {
   thoughtLevel?: string;
 }) {
   return {
-    protocol: { name: "ZCode Protocol", version: 1 },
+    protocol: { name: "VCode Protocol", version: 1 },
     session: {
       sessionId: "sess_1",
       workspace: {
@@ -357,7 +357,7 @@ describe("createZCodeAgentService provider registry", () => {
               if (method === zcodeProtocolMethods.initialize) {
                 return {
                   available: true,
-                  protocolName: "ZCode Protocol",
+                  protocolName: "VCode Protocol",
                   protocolVersion: 1,
                   workspaceKey: "/workspace/app",
                 };
@@ -1268,7 +1268,7 @@ describe("createZCodeAgentService provider registry", () => {
     };
     const firstRequest = vi.fn(async (method: string) => {
       if (method === zcodeProtocolMethods.workspaceReadPresentation) {
-        throw new Error("ZCode agent stdio transport is closed");
+        throw new Error("VCode agent stdio transport is closed");
       }
       return {
         workspace: workspacePresentation.workspace,

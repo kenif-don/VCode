@@ -42,7 +42,7 @@ export interface WorkflowRunSaveController {
   entry: ZCodeSavedWorkflowEntry | undefined;
   /** 这次 run 跑过的实参，给「再次运行」的实参窗做预填。 */
   runArgs: Record<string, unknown> | undefined;
-  /** 老 agent 没有 `workflows/save`：弹层只留 ZCode 那条路。 */
+  /** 老 agent 没有 `workflows/save`：弹层只留 VCode 那条路。 */
   directSaveUnsupported: boolean;
   /** 远程项目不给全局档：`~` 在 agent 机器上，中枢从不读它。 */
   scopeLocked: boolean;

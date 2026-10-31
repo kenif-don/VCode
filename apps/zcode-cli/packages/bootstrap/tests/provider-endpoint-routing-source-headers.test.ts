@@ -38,7 +38,7 @@ describe("createProviderEndpointRoutingSourceHeaders", () => {
 
     expect(headers).toMatchObject({
       "HTTP-Referer": "https://routing-config.example.test",
-      "User-Agent": "ZCode/1.2.3",
+      "User-Agent": "VCode/1.2.3",
       "X-Client-Language": expect.any(String),
       "X-Client-Timezone": expect.any(String),
       "X-Device-Mid": "mid-routing-1",
@@ -47,7 +47,7 @@ describe("createProviderEndpointRoutingSourceHeaders", () => {
       "X-Platform": `${process.platform}-${readOsArch()}`,
       "X-Release-Channel": "test",
       "X-Title": "Z Code@electron",
-      "X-ZCode-App-Version": "1.2.3",
+      "X-VCode-App-Version": "1.2.3",
     });
     expect(headers).not.toHaveProperty("Authorization");
   });
@@ -68,7 +68,7 @@ describe("createProviderEndpointRoutingSourceHeaders", () => {
 
     expect(headers).toMatchObject({
       "HTTP-Referer": "https://zcode.z.ai",
-      "User-Agent": "ZCode/2.0.0",
+      "User-Agent": "VCode/2.0.0",
       "X-Release-Channel": "production",
       "X-Title": "Z Code@cli",
     });

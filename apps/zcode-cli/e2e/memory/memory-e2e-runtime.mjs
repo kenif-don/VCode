@@ -104,7 +104,7 @@ export async function loadZCodeModules() {
     };
   } catch (error) {
     throw new Error(
-      "Unable to load built ZCode packages. Run the Memory E2E e2e:build script first.",
+      "Unable to load built VCode packages. Run the Memory E2E e2e:build script first.",
       { cause: error },
     );
   }

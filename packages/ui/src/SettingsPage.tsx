@@ -3,7 +3,7 @@ import { getWorkspaceSourceServerId } from "@/conversation-workspace-target/sour
 import { RemoteConnectionNavigationDot } from "@/remote-connection/RemoteConnectionNavigationDot.js";
 import { resolveRemoteConnectionNavigationPresentation } from "@/lib/remoteConnectionPresentation.js";
 /* oxlint-disable eslint(max-lines) */
-import { ArrowLeft, Rocket, type LucideIcon } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { useStore } from "zustand";
 import {
   marketingNavigation,
@@ -101,7 +101,6 @@ import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceTab } from "@/store/tabStore.js";
 import type { Theme } from "@/useTheme.js";
-import { WindowsTopLeftLogo } from "@/WindowsTopLeftLogo.js";
 
 import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import { WorkspaceHelpMenuButton } from "@/WorkspaceHelpMenuButton.js";
@@ -167,28 +166,14 @@ function SettingsUsageProviderTabs({
   onTabChange: (tab: UsageStatsSectionTab) => void;
 }) {
   const { intl } = useZCodeIntl();
+  // 白标：套餐（coding plan）用量页签不再展示，使用统计只保留「应用用量」。
   const tabItems = [
     {
       id: "app" as const,
       label: intl.formatMessage({ id: "settings.usage.tab.appUsage" }),
     },
-    ...codingPlanSources.map((source, index) => ({
-      id: createSettingsUsageCodingPlanTabId(source.id),
-      label: resolveSettingsUsageCodingPlanTabLabel({
-        defaultLabel: intl.formatMessage({
-          id: "settings.usage.tab.codingPlan",
-        }),
-        hasMultiplePersonalSources:
-          codingPlanSources.filter((item) => !isTeamCodingPlanUsageSource(item)).length > 1,
-        index,
-        source,
-      }),
-    })),
   ];
-  const visibleActiveTab =
-    activeTab === "codingPlan" && codingPlanSources[0]
-      ? createSettingsUsageCodingPlanTabId(codingPlanSources[0].id)
-      : activeTab;
+  const visibleActiveTab = activeTab === "app" ? "app" : "app";
 
   return (
     <div className="flex items-center gap-1.5">
@@ -302,7 +287,6 @@ export function SettingsPage({
   onOpenWorkspace,
   onOpenRemoteWorkspace,
   allowOpenWorkspace = true,
-  onLogin,
   onLogout,
   user,
 }: {
@@ -318,7 +302,6 @@ export function SettingsPage({
   onOpenRemoteWorkspace?: (preference?: RemoteConnectionOpenPreference) => void;
   /** 远程设备卡「新任务」：激活该设备已打开的 tab 并开新草稿（Root 注入）。 */
   allowOpenWorkspace?: boolean;
-  onLogin?: () => void;
   onLogout?: () => void;
   user?: UserInfo | null;
 }) {
@@ -667,8 +650,6 @@ export function SettingsPage({
         : "app",
     );
   }, [selectedUsageCodingPlanSource, usageActiveTab, usageCodingPlanSources]);
-  const setNewUserOnboardingOpen = useZCodeStore((state) => state.setNewUserOnboardingOpen);
-  const requestOnboardingDialog = () => setNewUserOnboardingOpen(true);
   const setActiveSettingsSection = useCallback(
     (section: SettingsSectionId, fallbackSection: SettingsSectionId = activeSection) => {
       const resolvedSection = resolveSettingsSection(section, fallbackSection);
@@ -1514,7 +1495,6 @@ export function SettingsPage({
           // 固定为单个 minmax(0, 1fr) 行，让普通设置页和内部滚动 viewer 都以窗口剩余高度为边界。
           className="relative grid h-screen min-h-full w-full grid-cols-[68px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] lg:grid-cols-[268px_minmax(0,1fr)]"
         >
-          {isWindowsDesktop ? <WindowsTopLeftLogo /> : null}
 
           {usesInlineWindowControls ? (
             <div
@@ -1658,28 +1638,6 @@ export function SettingsPage({
                     );
                   })}
                 </div>
-
-                <SettingsSidebarButton
-                  icon={Rocket}
-                  label={intl.formatMessage({ id: "settings.onboarding" })}
-                  className="mt-4 border border-dashed border-border hover:border-border-hover"
-                  onClick={() => {
-                    runUserAction({
-                      input: {
-                        featureId: "settings.navigation",
-                        action: "open_onboarding",
-                        trigger: "button",
-                      },
-                      operation: requestOnboardingDialog,
-                      completed: { resultSource: "local_commit" },
-                      failureStage: "dialog_open",
-                    });
-                  }}
-                >
-                  <span className="text-ui-base text-foreground">
-                    {intl.formatMessage({ id: "settings.onboarding" })}
-                  </span>
-                </SettingsSidebarButton>
               </nav>
 
               <div className="max-lg:hidden">
@@ -1691,13 +1649,9 @@ export function SettingsPage({
                   onSettingsButtonClick={onBack}
                   onUsageClick={handleOpenUsageSettings}
                   onUpgradeClick={handleOpenCodingPlanUpgradeSettings}
-                  onLogin={onLogin}
                   onLogout={onLogout}
                   settingsButtonMode="back"
                   user={user}
-                  // 头像菜单是 WorkspaceSidebarFooter 的共享菜单，Settings 场景不能丢失桌面平台能力。
-                  // 之前这里没透传 isDesktop，导致同一个头像菜单在设置页缺少界面缩放入口。
-                  isDesktop={isDesktop}
                 />
               </div>
             </div>
@@ -1927,18 +1881,6 @@ export function SettingsPage({
                               }
                               onAskUserQuestionAutoResolutionEnabledChange={
                                 handleAskUserQuestionAutoResolutionEnabledChange
-                              }
-                              onOpenOnboardingDialog={() =>
-                                runUserAction({
-                                  input: {
-                                    featureId: "settings.navigation",
-                                    action: "open_onboarding",
-                                    trigger: "button",
-                                  },
-                                  operation: requestOnboardingDialog,
-                                  completed: { resultSource: "local_commit" },
-                                  failureStage: "dialog_open",
-                                })
                               }
                             />
                           ) : activeSection === "remoteDevices" ? (

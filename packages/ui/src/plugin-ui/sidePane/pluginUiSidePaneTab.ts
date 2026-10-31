@@ -3,7 +3,12 @@ import { activateSidePaneTab } from "@/lib/workspaceSidePane.js";
 import type { OpenPluginUiSideTabRequest, PluginUiSidePaneTab } from "../contract.js";
 import { buildPluginUiSidePaneTabId, readPluginUiScopeRef } from "../contract.js";
 
+/**
+ * 建 tab 前的请求：parentSessionId 以交集收窄为具体会话 id（草稿打开由宿主补建托管会话，
+ * HBA fr12）。不能用 Omit——请求是 toolCall/surface 两形态的 union，Omit 会丢判别字段。
+ */
 export type OpenScopedPluginUiSideTabRequest = OpenPluginUiSideTabRequest & {
+  parentSessionId: string;
   workspaceKey: string;
 };
 

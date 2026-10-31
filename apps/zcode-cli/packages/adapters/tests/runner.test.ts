@@ -1423,7 +1423,7 @@ describe("AiSdkModelAdapter", () => {
       })();
 
       await waitForTest(20);
-      abortController.abort(new Error("ZCode Protocol session stopped"));
+      abortController.abort(new Error("VCode Protocol session stopped"));
 
       await expect(
         Promise.race([drainStream, waitForTest(500).then(() => "timeout")]),

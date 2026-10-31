@@ -37,6 +37,13 @@ vi.mock("@/logger.js", () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
+vi.mock("@/i18n/IntlProvider.js", () => ({
+  useZCodeIntl: () => ({
+    intl: { formatMessage: ({ id }: { id: string }) => id },
+    locale: "zh-CN",
+  }),
+}));
+
 const WORKSPACE_PATH = "/repo";
 const SESSION_ID = "sess-a";
 const REPORT_URL = "file:///repo/.zcode/workflow-runs/run-1/report.html";

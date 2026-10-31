@@ -34,6 +34,15 @@ describe("plugin-ui contract", () => {
     expect(buildPluginUiSurfaceKey(scope, surface)).not.toBe(
       buildPluginUiSurfaceKey({ ...scope, workspaceIdentity: "ssh:a" }, surface),
     );
+    // HBA fr8/fr19：面板（surface）跟随项目，key 不随会话变化（换锚重绑保持连续）；
+    // 工具卡片（toolCall）仍按会话隔离。
+    expect(buildPluginUiSurfaceKey({ ...scope, sessionId: "s2" }, surface)).toBe(
+      buildPluginUiSurfaceKey(scope, surface),
+    );
+    const toolCall = { kind: "toolCall" as const, toolCallId: "c1" };
+    expect(buildPluginUiSurfaceKey(scope, toolCall)).not.toBe(
+      buildPluginUiSurfaceKey({ ...scope, sessionId: "s2" }, toolCall),
+    );
   });
 
   it("作用域解析：surfaceId 优先，两者都缺为 null", () => {
@@ -98,6 +107,33 @@ describe("plugin-ui contract", () => {
 
   it("默认卡片高度符合宿主约定", () => {
     expect(PLUGIN_UI_CARD_DEFAULT_HEIGHT_PX).toBe(240);
+  });
+
+  it("HBA fr12：草稿（会话待宿主补建）不改变面板 tab id，工具卡片必须带会话", () => {
+    const surfaceRequest = {
+      workspacePath: "/repo",
+      parentSessionId: null,
+      pluginId: "p",
+      surfaceId: "panel",
+      serverName: "p",
+      resourceUri: "ui://p/panel.html",
+      title: "Panel",
+    };
+    // 面板 tab id 的会话段恒为 "*"：草稿打开与正式会话打开收敛到同一 tab。
+    expect(buildPluginUiSidePaneTabId(surfaceRequest)).toBe(
+      buildPluginUiSidePaneTabId({ ...surfaceRequest, parentSessionId: "s1" }),
+    );
+    // 工具卡片 id 嵌会话段，草稿空会话属调用方编程错误，直接拒绝。
+    expect(() =>
+      buildPluginUiSidePaneTabId({
+        workspacePath: "/repo",
+        parentSessionId: null,
+        pluginId: "p",
+        toolCallId: "c1",
+        resourceUri: "ui://p/widget",
+        title: "Widget",
+      }),
+    ).toThrow("parentSessionId");
   });
 
   it("4a-0 / S3：会话动作只剩 sendFollowUp，命令端口是 sendText + uploadAttachment（widgetState 不再经会话命令）", () => {

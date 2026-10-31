@@ -155,7 +155,7 @@ describe("Coding Plan upgrade E2E mock server", () => {
       {
         headers: {
           "X-Client-Language": "zh-CN",
-          "X-ZCode-App-Version": "fixture",
+          "X-VCode-App-Version": "fixture",
           Authorization: "Bearer must-not-be-recorded",
         },
       },

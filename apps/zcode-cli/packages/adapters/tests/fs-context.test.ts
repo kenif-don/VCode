@@ -1021,7 +1021,7 @@ describe("Node file and context adapters", () => {
 
       await runGit(dir, ["init"]);
       await runGit(dir, ["checkout", "-B", "main"]);
-      await runGit(dir, ["config", "user.name", "ZCode Tester"]);
+      await runGit(dir, ["config", "user.name", "VCode Tester"]);
       await runGit(dir, ["config", "user.email", "tester@example.com"]);
 
       await writeFile(join(dir, "tracked.txt"), "first\n");
@@ -1043,7 +1043,7 @@ describe("Node file and context adapters", () => {
       expect(snapshot.envInfo.isGitRepository).toBe(true);
       expect(snapshot.envInfo.gitBranch).toBe("main");
       expect(snapshot.envInfo.gitMainBranch).toBe("main");
-      expect(snapshot.envInfo.gitUser).toBe("ZCode Tester");
+      expect(snapshot.envInfo.gitUser).toBe("VCode Tester");
       expect(snapshot.envInfo.gitStatus).toBe("dirty");
       expect(snapshot.envInfo.gitStatusLines).toEqual(
         expect.arrayContaining(["M tracked.txt", "?? untracked.txt"]),
@@ -1131,7 +1131,7 @@ describe("Node file and context adapters", () => {
 
       await runGit(dir, ["init"]);
       await runGit(dir, ["checkout", "-B", "feature-only"]);
-      await runGit(dir, ["config", "user.name", "ZCode Tester"]);
+      await runGit(dir, ["config", "user.name", "VCode Tester"]);
       await runGit(dir, ["config", "user.email", "tester@example.com"]);
       await writeFile(join(dir, "tracked.txt"), "first\n");
       await runGit(dir, ["add", "tracked.txt"]);
@@ -1159,7 +1159,7 @@ describe("Node file and context adapters", () => {
 
       await runGit(dir, ["init"]);
       await runGit(dir, ["checkout", "-B", "main"]);
-      await runGit(dir, ["config", "user.name", "ZCode Tester"]);
+      await runGit(dir, ["config", "user.name", "VCode Tester"]);
       await runGit(dir, ["config", "user.email", "tester@example.com"]);
       await writeFile(join(dir, "tracked.txt"), "first\n");
       await runGit(dir, ["add", "tracked.txt"]);

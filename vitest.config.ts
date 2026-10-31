@@ -117,6 +117,9 @@ export default defineConfig({
             // Gen UI 目录回归位于源码旁，默认入口也必须执行，避免只在手动定向运行时生效。
             "packages/shared/src/node/genUiPaths.test.ts",
             "packages/services/src/gen-ui/**/*.test.ts",
+            // Git 仓选择持久化与分支弹层过滤的纯函数回归同样位于源码旁，默认入口必须执行。
+            "packages/ui/src/lib/gitSelectedRepository.test.ts",
+            "packages/ui/src/git-branch-switcher/display.test.ts",
             "scripts/assert-safe-cua-helper-zip.test.mjs",
             "scripts/ci/ci-telemetry-keyword-guard.test.mjs",
           ],

@@ -71,7 +71,7 @@ describe("zcode-cua MCP matcher (single source of truth for services + CLI boots
 });
 
 describe("MCP config helpers", () => {
-  it("passes legacy http_headers through to ZCode Agent MCP servers", () => {
+  it("passes legacy http_headers through to VCode Agent MCP servers", () => {
     expect(
       convertToZCodeAgentMcpServer("web-search-prime", {
         type: "http",
@@ -90,7 +90,7 @@ describe("MCP config helpers", () => {
     });
   });
 
-  it("preserves timeoutMs when converting stdio MCP servers for ZCode Agent", () => {
+  it("preserves timeoutMs when converting stdio MCP servers for VCode Agent", () => {
     expect(
       convertToZCodeAgentMcpServer("context7", {
         type: "stdio",
@@ -107,7 +107,7 @@ describe("MCP config helpers", () => {
     });
   });
 
-  it("preserves timeoutMs when converting sse MCP servers for ZCode Agent", () => {
+  it("preserves timeoutMs when converting sse MCP servers for VCode Agent", () => {
     expect(
       convertToZCodeAgentMcpServer("stream", {
         type: "sse",
@@ -123,7 +123,7 @@ describe("MCP config helpers", () => {
     });
   });
 
-  it("preserves HTTP OAuth client credentials when converting MCP servers for ZCode Agent", () => {
+  it("preserves HTTP OAuth client credentials when converting MCP servers for VCode Agent", () => {
     expect(
       convertToZCodeAgentMcpServer("protected", {
         type: "http",
@@ -147,14 +147,14 @@ describe("MCP config helpers", () => {
     });
   });
 
-  it("preserves HTTP OAuth authorization code config when converting MCP servers for ZCode Agent", () => {
+  it("preserves HTTP OAuth authorization code config when converting MCP servers for VCode Agent", () => {
     expect(
       convertToZCodeAgentMcpServer("figma", {
         type: "http",
         url: "https://mcp.figma.com/mcp",
         oauth: {
           type: "authorization_code",
-          clientName: "ZCode",
+          clientName: "VCode",
           redirectPath: "/oauth/callback/mcp/figma",
           scope: "mcp:connect",
         },
@@ -164,7 +164,7 @@ describe("MCP config helpers", () => {
       type: "http",
       oauth: {
         type: "authorization_code",
-        clientName: "ZCode",
+        clientName: "VCode",
         redirectPath: "/oauth/callback/mcp/figma",
         scope: "mcp:connect",
       },
@@ -187,7 +187,7 @@ describe("MCP config helpers", () => {
     });
   });
 
-  it("drops invalid timeoutMs when converting MCP servers for ZCode Agent", () => {
+  it("drops invalid timeoutMs when converting MCP servers for VCode Agent", () => {
     expect(
       convertToZCodeAgentMcpServer("zero", {
         type: "stdio",

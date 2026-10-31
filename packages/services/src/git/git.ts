@@ -2,6 +2,8 @@ import type {
   GitBranchMutationResult,
   GitBranchComparison,
   GitCommitGraphRequest,
+  GitDiscoverRepositoriesRequest,
+  GitDiscoverRepositoriesResult,
   GitCommitGraphResult,
   GitCreateBranchRequest,
   GitCreateWorktreeRequest,
@@ -20,6 +22,8 @@ import type {
   GitPathMutationRequest,
   GitPushRequest,
   GitPushResult,
+  GitPullRequest,
+  GitPullResult,
   GitRefreshRequest,
   GitRefreshResult,
   GitRepositoryRequest,
@@ -34,6 +38,10 @@ import { createServiceDescriptor } from "../descriptors.js";
 export interface IGitService {
   getRepositorySummary(params: GitRepositoryRequest): Promise<GitRepositorySummary>;
   getWorkspaceRepositoryInfo(params: GitRepositoryRequest): Promise<GitWorkspaceRepositoryInfo>;
+  /** 子目录仓库发现：workspace 根仓库（rev-parse，保留 monorepo 子目录语义）+ 根下扫描出的嵌套仓库。 */
+  discoverRepositories(
+    params: GitDiscoverRepositoriesRequest,
+  ): Promise<GitDiscoverRepositoriesResult>;
   getLocalBranches(params: GitRepositoryRequest): Promise<GitLocalBranchListResult>;
   getCommitGraph(params: GitCommitGraphRequest): Promise<GitCommitGraphResult>;
   switchBranch(params: GitSwitchBranchRequest): Promise<GitBranchMutationResult>;
@@ -52,6 +60,8 @@ export interface IGitService {
   ): Promise<GitGenerateCommitMessageResult>;
   commit(params: GitCommitRequest): Promise<GitCommitResult>;
   push(params: GitPushRequest): Promise<GitPushResult>;
+  /** 拉取当前分支的远程更新：优先快进，无法快进时退化为合并拉取；结果以结构化 outcome/issue 返回。 */
+  pull(params: GitPullRequest): Promise<GitPullResult>;
   getIdentity(params: GitRepositoryRequest): Promise<GitIdentity>;
   refresh(params: GitRefreshRequest): Promise<GitRefreshResult>;
 }

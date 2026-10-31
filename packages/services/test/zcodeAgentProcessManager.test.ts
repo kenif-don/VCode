@@ -414,8 +414,8 @@ describe("resolveDefaultZCodeAgentCommand", () => {
     await manager.disposeWorkspace({ workspacePath });
     gate.commitRecovery(recoveryEpoch);
 
-    await expect(starting).rejects.toThrow("ZCode agent process start was cancelled.");
-    await expect(duplicate).rejects.toThrow("ZCode agent process start was cancelled.");
+    await expect(starting).rejects.toThrow("VCode agent process start was cancelled.");
+    await expect(duplicate).rejects.toThrow("VCode agent process start was cancelled.");
     await expect(manager.getClient({ workspacePath })).resolves.toBeDefined();
 
     await manager.disposeAllAndWait();
@@ -469,7 +469,7 @@ describe("resolveDefaultZCodeAgentCommand", () => {
     expect(commandResolver).toHaveBeenCalledTimes(2);
     expect(
       errorSpy.mock.calls.some((args) =>
-        args.some((arg) => String(arg).includes("ZCode agent process cleanup failed")),
+        args.some((arg) => String(arg).includes("VCode agent process cleanup failed")),
       ),
     ).toBe(false);
 
@@ -532,7 +532,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", li
     }));
     const manager = new ZCodeAgentProcessManager({ commandResolver });
     await expect(manager.getRuntimeIdentity({ workspacePath })).rejects.toThrow(
-      "ZCode agent runtime identity is unavailable.",
+      "VCode agent runtime identity is unavailable.",
     );
     expect(commandResolver).not.toHaveBeenCalled();
 
@@ -686,7 +686,7 @@ setInterval(() => {}, 1000);
 
     // Bugfix: app 关闭期间 warmup 仍可能卡在 command/env resolve。
     // disposeAllAndWait 之后不允许这个启动 promise 继续 spawn，否则会绕过关闭快照留下孤儿进程。
-    await expect(starting).rejects.toThrow("ZCode agent process manager is disposed.");
+    await expect(starting).rejects.toThrow("VCode agent process manager is disposed.");
     expect(existsSync(markerPath)).toBe(false);
   });
 
@@ -999,7 +999,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", li
       await vi.waitFor(() => expect(cleanupAttemptCount).toBe(2));
       expect(
         errorSpy.mock.calls.some((args) =>
-          args.some((arg) => String(arg).includes("ZCode agent process cleanup failed")),
+          args.some((arg) => String(arg).includes("VCode agent process cleanup failed")),
         ),
       ).toBe(false);
     } finally {
@@ -1195,7 +1195,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", li
       await exited.promise;
       expect(errorSpy).toHaveBeenCalledWith(
         expect.any(String),
-        `ZCode agent process exited unexpectedly ${ZCODE_AGENT_LIFECYCLE_LOG_MARKER}`,
+        `VCode agent process exited unexpectedly ${ZCODE_AGENT_LIFECYCLE_LOG_MARKER}`,
         expect.objectContaining({
           workspaceKey: workspacePath,
           code: 1,
@@ -1339,7 +1339,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", li
       await vi.waitFor(() =>
         expect(logSpy).toHaveBeenCalledWith(
           expect.any(String),
-          "ZCode agent spawn preflight",
+          "VCode agent spawn preflight",
           expect.objectContaining({
             workspaceKey: workspacePath,
             spawnPreflight: expect.objectContaining({
@@ -1357,7 +1357,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", li
       await vi.waitFor(() =>
         expect(errorSpy).toHaveBeenCalledWith(
           expect.any(String),
-          "ZCode agent process error",
+          "VCode agent process error",
           expect.objectContaining({
             workspaceKey: workspacePath,
             errorMessage: expect.stringContaining("ENOENT"),

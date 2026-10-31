@@ -32,7 +32,7 @@ import { toolCallRowToLegacyNode } from "@/v4/toolCallRowAdapter.js";
 import { useConversationProjection } from "@/v4/useConversationProjection.js";
 import { V4PaneConversationProvider, useV4Conversation } from "@/v4/V4ConversationContext.js";
 import type { McpAppsDisplayMode, PluginUiScopeRef } from "@zcode/shared/mcp-apps";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { resolvePluginUiLogicalScope } from "../domain/pluginUiLogicalScope.js";
 
 const FULLSCREEN_ONLY: readonly McpAppsDisplayMode[] = ["fullscreen"];
@@ -58,22 +58,54 @@ export function usePluginUiSidePaneModel({
   const { layer } = useV4Conversation();
   const [lease, setLease] = useState<SessionLease | null>(null);
   const theme = useZCodeStoreWithDefault((state) => state.theme, "system");
+  // 面板（surface）会话锚点（HBA fr19）：默认钉在创建会话（工具结果行所在），
+  // 锚点会话被归档/删除后换锚到当前活跃会话——面板跟随项目，不随单个会话消亡而失效。
+  const [anchorSessionId, setAnchorSessionId] = useState(tab.parentSessionId);
+  const [anchorLost, setAnchorLost] = useState(false);
+  const retriedStoreRef = useRef(false);
 
   useEffect(() => {
-    const nextLease = layer.acquire(tab.parentSessionId);
+    const nextLease = layer.acquire(anchorSessionId);
     setLease(nextLease);
     return () => nextLease.release();
-  }, [layer, tab.parentSessionId]);
+  }, [layer, anchorSessionId]);
   const state = useConversationProjection(lease);
+  // 锚点消亡信号（HBA fr19）：任务删除经 onSessionLost 直达；归档/冷启动死锚落在
+  // 订阅终态失败（status=error）。会话消亡特征的失败 → 标记待换锚；其余终态失败 → 手动重连一次。
+  useEffect(() => {
+    if (scopeRef.kind !== "surface") return;
+    if (state.status !== "error") {
+      if (state.status === "live") retriedStoreRef.current = false;
+      return;
+    }
+    const message = state.lastError ?? "";
+    if (/Session is not active|Session not found|sessionNotFound/i.test(message)) {
+      setAnchorLost(true);
+      return;
+    }
+    if (!retriedStoreRef.current) {
+      retriedStoreRef.current = true;
+      void lease?.store.retry();
+    }
+  }, [scopeRef.kind, state.status, state.lastError, lease]);
+  // 待换锚且已有存活的活跃会话 → 重绑；活跃会话晚于消亡出现时同样生效。
+  useEffect(() => {
+    if (!anchorLost) return;
+    if (activeSessionId && activeSessionId !== anchorSessionId) {
+      setAnchorSessionId(activeSessionId);
+      setAnchorLost(false);
+      retriedStoreRef.current = false;
+    }
+  }, [anchorLost, activeSessionId, anchorSessionId]);
   // 4b-2 R4：侧栏不在 SessionPane 树内，自己把会话投影的资源通知接到路由表（按 store 引用计数，不重复投递）。
   const feedScope = useMemo<PluginUiSessionScope>(
     () => ({
       workspacePath: tab.workspacePath,
       remoteSessionId: tab.remoteSessionId,
       ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
-      sessionId: tab.parentSessionId,
+      sessionId: anchorSessionId,
     }),
-    [tab.parentSessionId, tab.workspaceIdentity, tab.workspacePath],
+    [anchorSessionId, tab.workspaceIdentity, tab.workspacePath, tab.remoteSessionId],
   );
   usePluginUiResourceDeltaFeed(lease?.store, feedScope);
 
@@ -183,9 +215,11 @@ export function usePluginUiSidePaneModel({
       workspacePath: tab.workspacePath,
       remoteSessionId: tab.remoteSessionId ?? undefined,
       ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
-      sessionId: tab.parentSessionId,
+      sessionId: anchorSessionId,
       scope: scopeRef,
     },
+    // HBA fr19：锚点会话被删除时换锚重绑（managedPage 检测 scope.sessionId 变化整体重启）。
+    onSessionLost: () => setAnchorLost(true),
     theme: resolveTheme(theme),
     locale,
     displayMode: "fullscreen",

@@ -37,7 +37,7 @@ describe("MCP stdio environment", () => {
 
   it("normalizes Windows separators and case before adding the running node directory", () => {
     const env = prependRunningNodeDirectory(
-      { Path: "C:\\ZCode\\Node;C:\\Windows\\System32" },
+      { Path: "C:\\VCode\\Node;C:\\Windows\\System32" },
       {
         execPath: "c:/zcode/node/node.exe",
         isExecutable: () => false,
@@ -45,6 +45,6 @@ describe("MCP stdio environment", () => {
       },
     );
 
-    expect(env).toEqual({ Path: "C:\\ZCode\\Node;C:\\Windows\\System32" });
+    expect(env).toEqual({ Path: "C:\\VCode\\Node;C:\\Windows\\System32" });
   });
 });

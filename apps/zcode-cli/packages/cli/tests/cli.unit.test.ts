@@ -179,7 +179,7 @@ const createPromptDeps = (): RunDependencies => ({
   skipUserConfig: true,
 });
 
-test("prepares a sanitized CLI runtime env with ZCode-owned runtime keys", () => {
+test("prepares a sanitized CLI runtime env with VCode-owned runtime keys", () => {
   const sourceEnv = {
     NODE_ENV: "development",
     HTTP_PROXY: "http://ambient-proxy:8080",
@@ -3079,7 +3079,7 @@ test("command center resolves plugin labels from listings by stable plugin id", 
   );
   assert.equal(
     items.find((item) => item.id === "zcode-cua@unlisted-marketplace")?.primary,
-    "○ ZCode Cua",
+    "○ VCode Cua",
   );
 });
 
@@ -4166,7 +4166,7 @@ export async function main() {
     assert.equal(exitCode, 1);
     assert.match(
       ctx.stderr.output(),
-      /Captured ZCode CUA broker credentials may only launch the trusted shared node_repl host/,
+      /Captured VCode CUA broker credentials may only launch the trusted shared node_repl host/,
     );
     await assert.rejects(readFile(outputPath, "utf8"), { code: "ENOENT" });
   } finally {
@@ -4339,7 +4339,7 @@ export async function main() {
     assert.equal(await run(ctx), 1);
     assert.match(
       ctx.stderr.output(),
-      /Captured ZCode CUA broker credentials may only launch the trusted shared node_repl host/,
+      /Captured VCode CUA broker credentials may only launch the trusted shared node_repl host/,
     );
     await assert.rejects(readFile(outputPath, "utf8"), { code: "ENOENT" });
   } finally {
@@ -5822,7 +5822,7 @@ test("rejects force MCS outside prompt, target, or TUI commands", async () => {
   assert.equal(ctx.stdout.output(), "");
 });
 
-test("dispatches app-server stdio command to the ZCode Protocol runner without production dotenv", async () => {
+test("dispatches app-server stdio command to the VCode Protocol runner without production dotenv", async () => {
   const ctx = createContext(["app-server", "--stdio"]);
   let called = false;
   let dotenvCalls = 0;

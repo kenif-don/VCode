@@ -26,12 +26,12 @@ import {
   GitBranchCreateDialog,
   GitBranchSwitchAssistDialog,
 } from "@/git-branch-switcher/GitBranchDialogs.js";
-import { GitGraphDialog } from "@/git-graph/GitGraphDialog.js";
 import { useGitBranchSwitcher } from "@/hooks/useGitBranchSwitcher.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
-  matchesGitBranchSearch,
+  matchesGitBranchPickerSearch,
   resolveGitBranchTriggerLabel,
+  toGitRepositoryPickerValue,
 } from "@/git-branch-switcher/display.js";
 import {
   isCoarseTouchDevice,
@@ -39,8 +39,9 @@ import {
 } from "@/lib/pickerFocus.js";
 import {
   ChevronDownIcon,
+  ChevronLeftIcon,
+  FolderGit2Icon,
   GitBranchIcon,
-  GitGraph,
   LoaderIcon,
   PlusIcon,
 } from "lucide-react";
@@ -58,7 +59,16 @@ interface GitBranchSwitcherProps {
   compactForRemoteControl?: boolean;
   popoverSide?: "top" | "bottom" | "left" | "right";
   avoidPopoverCollisions?: boolean;
-  showFooterActions?: boolean;
+  /** 多仓选择器数据；多于一个时弹层打开先显示仓库列表，点仓库钻取进分支列表。 */
+  repositories?: Array<{
+    key: string;
+    label: string;
+    branchName?: string | null;
+    added?: number;
+    removed?: number;
+  }>;
+  activeRepositoryKey?: string | null;
+  onSelectRepository?: (repoKey: string) => void;
 }
 
 export function GitBranchSwitcher({
@@ -74,12 +84,13 @@ export function GitBranchSwitcher({
   compactForRemoteControl = false,
   popoverSide = "top",
   avoidPopoverCollisions = true,
-  showFooterActions = true,
+  repositories,
+  activeRepositoryKey,
+  onSelectRepository,
 }: GitBranchSwitcherProps) {
   const { intl, locale } = useZCodeIntl();
   const numberFormatter = new Intl.NumberFormat(locale);
   const commandListRef = useRef<HTMLDivElement | null>(null);
-  const [gitGraphDialogOpen, setGitGraphDialogOpen] = useState(false);
   const {
     open,
     setOpen,
@@ -105,9 +116,30 @@ export function GitBranchSwitcher({
     currentBranchName: gitSummary.branchName,
     headRefType: gitSummary.headRefType,
     onRefreshGit,
+    // 弹层内点仓库行切仓时保持弹层打开；单仓（无仓库选择器）时保持旧行为直接关闭。
+    keepOpenOnWorkspacePathChange: Boolean(repositories && repositories.length > 1),
   });
 
   const isVisible = gitSummary.isGitAvailable && gitSummary.isRepository;
+  // 仓库列表只在多仓且有选择回调时出现；单仓弹层直接进分支列表。
+  const showRepositoryPicker = Boolean(
+    repositories && repositories.length > 1 && onSelectRepository,
+  );
+  // 两级钻取视图：多仓先看仓库列表，点仓库后钻进分支列表。
+  const [pickerView, setPickerView] = useState<"repositories" | "branches">("branches");
+  const userDrilledIntoRepositoriesRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      userDrilledIntoRepositoriesRef.current = false;
+      return;
+    }
+    // 用户已主动钻入分支列表后，即使发现数据晚到（showRepositoryPicker 变 true）
+    // 也不要把视图拉回仓库列表；只有弹层刚打开时按当前能力选初始视图。
+    if (userDrilledIntoRepositoriesRef.current) {
+      return;
+    }
+    setPickerView(showRepositoryPicker ? "repositories" : "branches");
+  }, [open, showRepositoryPicker]);
   const displayedCurrentBranchName =
     branchesResult?.currentBranchName ?? gitSummary.branchName;
   const triggerLabel = useMemo(
@@ -144,7 +176,7 @@ export function GitBranchSwitcher({
   }, [gitSummary.headRefType, intl, switchAssistState, triggerLabel]);
   const branchSearchFilter = useCallback(
     (value: string, search: string) =>
-      matchesGitBranchSearch(value, search) ? 1 : 0,
+      matchesGitBranchPickerSearch(value, search) ? 1 : 0,
     [],
   );
 
@@ -285,7 +317,10 @@ export function GitBranchSwitcher({
             >
               <CommandInput
                 placeholder={intl.formatMessage({
-                  id: "git.branchSwitcher.searchPlaceholder",
+                  id:
+                    pickerView === "repositories"
+                      ? "git.branchSwitcher.searchRepositoryPlaceholder"
+                      : "git.branchSwitcher.searchPlaceholder",
                 })}
                 className="h-8"
               />
@@ -295,47 +330,124 @@ export function GitBranchSwitcher({
                     ? intl.formatMessage({ id: "common.loading" })
                     : intl.formatMessage({ id: "git.branchSwitcher.empty" })}
                 </CommandEmpty>
-                <CommandGroup
-                  heading={intl.formatMessage({
-                    id: "git.branchSwitcher.section.branches",
-                  })}
-                  className="space-y-0.5 p-1 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:py-2 **:[[cmdk-group-heading]]:text-ui-base **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-foreground-subtle"
-                >
-                  {(branchesResult?.branches ?? []).map((branch) => {
-                    const isCurrent =
-                      branch.name === displayedCurrentBranchName;
-                    return (
+                {pickerView === "repositories" ? (
+                  <CommandGroup
+                    heading={intl.formatMessage({
+                      id: "git.branchSwitcher.section.repositories",
+                    })}
+                    className="space-y-0.5 p-1 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:py-2 **:[[cmdk-group-heading]]:text-ui-base **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-foreground-subtle"
+                  >
+                    {(repositories ?? []).map((repository) => {
+                      const isCurrent = repository.key === activeRepositoryKey;
+                      return (
+                        <CommandItem
+                          key={repository.key}
+                          value={toGitRepositoryPickerValue(repository)}
+                          data-checked={isCurrent ? "true" : undefined}
+                          disabled={mutationPending}
+                          className={cn(
+                            "items-start gap-3 rounded-lg px-3 py-2 text-ui-base",
+                          )}
+                          onSelect={() => {
+                            // 钻取到分支列表：切仓后弹层保持打开，分支列表随
+                            // workspacePath 变化重拉，不触发 switchBranch、不关闭弹层。
+                            onSelectRepository?.(repository.key);
+                            userDrilledIntoRepositoriesRef.current = true;
+                            setPickerView("branches");
+                          }}
+                        >
+                          <FolderGit2Icon className="mt-0.5 size-4 text-foreground-subtle" />
+                          <div className="min-w-0 flex-1 flex items-center gap-2 text-left">
+                            <span className="min-w-0 flex-1 truncate text-ui-base font-medium text-foreground">
+                              {repository.label}
+                            </span>
+                            <span className="shrink-0 text-ui-sm opacity-60">
+                              {repository.branchName ?? "—"}
+                            </span>
+                            <span className="shrink-0 font-mono text-ui-sm tabular-nums">
+                              <span className="text-[var(--color-diff-added)]">
+                                +{repository.added ?? 0}
+                              </span>{" "}
+                              <span className="text-[var(--color-diff-removed)]">
+                                -{repository.removed ?? 0}
+                              </span>
+                            </span>
+                          </div>
+                          {/* 行尾下拉箭头：代表这行可点进下一级（分支列表）。 */}
+                          <ChevronDownIcon
+                            aria-hidden="true"
+                            className="mt-0.5 size-4 shrink-0 text-foreground-subtle"
+                          />
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                ) : (
+                  <>
+                    {/* 分支视图顶部的返回行（仅多仓）：点击回到仓库列表。 */}
+                    {showRepositoryPicker ? (
                       <CommandItem
-                        key={branch.name}
-                        value={branch.name}
-                        data-checked={isCurrent ? "true" : undefined}
-                        data-branch-current={isCurrent ? "true" : undefined}
-                        disabled={mutationPending}
-                        className={cn(
-                          "items-start gap-3 rounded-lg px-3 py-2 text-ui-base",
-                        )}
+                        value="__back-to-repositories__"
+                        aria-label={intl.formatMessage({
+                          id: "git.branchSwitcher.backToRepositories",
+                        })}
+                        className="items-center gap-3 rounded-lg px-3 py-2 text-ui-base"
                         onSelect={() => {
-                          void switchBranch(branch.name);
+                          setPickerView("repositories");
                         }}
                       >
-                        <GitBranchIcon className="mt-0.5 size-4 text-foreground-subtle" />
-                        <div className="min-w-0 flex-1 flex flex-col gap-1 text-left">
-                          <div className="truncate text-ui-base font-medium text-foreground">
-                            {branch.name}
-                          </div>
-                          {isCurrent && currentBranchDirtyLabel ? (
-                            <p className="pt-0.5 text-ui-base text-foreground-subtle">
-                              {currentBranchDirtyLabel}
-                            </p>
-                          ) : null}
-                        </div>
+                        <ChevronLeftIcon className="size-4 text-foreground-subtle" />
+                        <span className="min-w-0 flex-1 truncate text-ui-base font-medium text-foreground">
+                          {repositories?.find(
+                            (repository) => repository.key === activeRepositoryKey,
+                          )?.label ?? "—"}
+                        </span>
                       </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
+                    ) : null}
+                    <CommandGroup
+                      heading={intl.formatMessage({
+                        id: "git.branchSwitcher.section.branches",
+                      })}
+                      className="space-y-0.5 p-1 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:py-2 **:[[cmdk-group-heading]]:text-ui-base **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-foreground-subtle"
+                    >
+                      {(branchesResult?.branches ?? []).map((branch) => {
+                        const isCurrent =
+                          branch.name === displayedCurrentBranchName;
+                        return (
+                          <CommandItem
+                            key={branch.name}
+                            value={branch.name}
+                            data-checked={isCurrent ? "true" : undefined}
+                            data-branch-current={isCurrent ? "true" : undefined}
+                            disabled={mutationPending}
+                            className={cn(
+                              "items-start gap-3 rounded-lg px-3 py-2 text-ui-base",
+                            )}
+                            onSelect={() => {
+                              void switchBranch(branch.name);
+                            }}
+                          >
+                            <GitBranchIcon className="mt-0.5 size-4 text-foreground-subtle" />
+                            <div className="min-w-0 flex-1 flex flex-col gap-1 text-left">
+                              <div className="truncate text-ui-base font-medium text-foreground">
+                                {branch.name}
+                              </div>
+                              {isCurrent && currentBranchDirtyLabel ? (
+                                <p className="pt-0.5 text-ui-base text-foreground-subtle">
+                                  {currentBranchDirtyLabel}
+                                </p>
+                              ) : null}
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </>
+                )}
               </CommandList>
             </Command>
-            {showFooterActions ? (
+            {/* footer 只保留「从当前分支新建分支」，且仅在分支视图出现。 */}
+            {pickerView === "branches" ? (
               <div className="border-t border-border p-1">
                 <Button
                   type="button"
@@ -352,19 +464,6 @@ export function GitBranchSwitcher({
                   {intl.formatMessage({
                     id: "git.branchSwitcher.createAction",
                   })}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="lg"
-                  className="w-full justify-start px-2 text-foreground hover:bg-menu-hover hover:text-foreground"
-                  onClick={() => {
-                    setOpen(false);
-                    setGitGraphDialogOpen(true);
-                  }}
-                >
-                  <GitGraph className="size-4 text-foreground-subtle" />
-                  {intl.formatMessage({ id: "gitGraph.menuAction" })}
                 </Button>
               </div>
             ) : null}
@@ -390,12 +489,6 @@ export function GitBranchSwitcher({
         onSubmit={() => {
           void createBranchAndSwitch();
         }}
-      />
-
-      <GitGraphDialog
-        open={gitGraphDialogOpen}
-        workspacePath={workspacePath}
-        onOpenChange={setGitGraphDialogOpen}
       />
 
       <GitBranchSwitchAssistDialog

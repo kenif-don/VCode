@@ -63,12 +63,12 @@ describe("bash source script materializer", () => {
 
   it("converts materialized Windows paths for Git Bash source commands", () => {
     const materialized = {
-      path: "C:\\Users\\me\\AppData\\Local\\ZCode\\startup.sh",
-      shellPath: "/c/Users/me/AppData/Local/ZCode/startup.sh",
+      path: "C:\\Users\\me\\AppData\\Local\\VCode\\startup.sh",
+      shellPath: "/c/Users/me/AppData/Local/VCode/startup.sh",
     };
 
     expect(applyBashSourceScript("echo ok", materialized)).toBe(
-      ". /c/Users/me/AppData/Local/ZCode/startup.sh\necho ok",
+      ". /c/Users/me/AppData/Local/VCode/startup.sh\necho ok",
     );
   });
 
@@ -125,7 +125,7 @@ describe("bash source script materializer", () => {
           kind: "embedded-search" as const,
           backend: {
             kind: "internal-cli" as const,
-            command: "C:\\Program Files\\ZCode\\zcode.exe",
+            command: "C:\\Program Files\\VCode\\zcode.exe",
             args: ["C:\\Users\\me\\z-code\\apps\\zcode-cli\\src\\run.ts", "__internal-search"],
           },
         },
@@ -134,8 +134,8 @@ describe("bash source script materializer", () => {
       const rewritten = applyBashSourcesToExecutionRequest(request, {
         leadingSources: [
           {
-            path: "C:\\Users\\me\\AppData\\Local\\ZCode\\shell-snapshots\\snapshot-bash-1.sh",
-            shellPath: "/c/Users/me/AppData/Local/ZCode/shell-snapshots/snapshot-bash-1.sh",
+            path: "C:\\Users\\me\\AppData\\Local\\VCode\\shell-snapshots\\snapshot-bash-1.sh",
+            shellPath: "/c/Users/me/AppData/Local/VCode/shell-snapshots/snapshot-bash-1.sh",
             optional: true,
           },
         ],
@@ -145,7 +145,7 @@ describe("bash source script materializer", () => {
       });
 
       expect(rewritten.command.command).toMatch(
-        /^\. \/c\/Users\/me\/AppData\/Local\/ZCode\/shell-snapshots\/snapshot-bash-1\.sh 2>\/dev\/null \|\| true\n\. '.+embedded-search-startup-.+\.sh'\ngrep needle file\.txt$/u,
+        /^\. \/c\/Users\/me\/AppData\/Local\/VCode\/shell-snapshots\/snapshot-bash-1\.sh 2>\/dev\/null \|\| true\n\. '.+embedded-search-startup-.+\.sh'\ngrep needle file\.txt$/u,
       );
 
       const startupDir = join(rootDir, "bash-startup", "session");
@@ -155,7 +155,7 @@ describe("bash source script materializer", () => {
       expect(startupFile).toBeDefined();
       const startupContent = readFileSync(join(startupDir, startupFile!), "utf8");
       expect(startupContent).toContain(
-        "command '/c/Program Files/ZCode/zcode.exe' /c/Users/me/z-code/apps/zcode-cli/src/run.ts __internal-search grep \"$@\"",
+        "command '/c/Program Files/VCode/zcode.exe' /c/Users/me/z-code/apps/zcode-cli/src/run.ts __internal-search grep \"$@\"",
       );
     } finally {
       rmSync(rootDir, { force: true, recursive: true });

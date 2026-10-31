@@ -223,7 +223,7 @@ describe("组合输入框焦点", () => {
       const input = $('[role="dialog"] [cmdk-input]');
       await input.waitForDisplayed();
       for (const width of [512, 360]) {
-        // 样式回归只收窄共享面板，不依赖任务 fixture 或手机连接。
+        // 样式回归只收窄共享面板，不依赖任务 fixture。
         await browser.execute((value) => {
           const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
           dialog.style.setProperty("width", `${value}px`, "important");

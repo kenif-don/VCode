@@ -26,9 +26,9 @@ export function useRecommendedUiPlugins(target: {
   } = useServices();
   const store = useScopedPluginManagementStore(service);
   const state = store();
-  const { recommendations, loading: configLoading } = useUiPluginRecommendations(
-    target.sessionId !== null,
-  );
+  // HBA fr12：条目在草稿态（新会话）也列出——推荐读取与目录初始化不再等正式会话，
+  // 此前的 sessionId 门属于「空会话整区隐藏」时代的遗留（读取本就 workspace 级）。
+  const { recommendations, loading: configLoading } = useUiPluginRecommendations(true);
   const key = JSON.stringify([
     target.workspacePath,
     target.workspaceIdentity,
@@ -47,7 +47,7 @@ export function useRecommendedUiPlugins(target: {
     let active = true;
     current.current = context;
     setReady(undefined);
-    if (service && target.sessionId !== null) {
+    if (service) {
       void store
         .getState()
         .initialize({
@@ -134,8 +134,7 @@ export function useRecommendedUiPlugins(target: {
   };
   return {
     entries,
-    loading:
-      target.sessionId !== null && (configLoading || (Boolean(service) && ready !== context)),
+    loading: configLoading || (Boolean(service) && ready !== context),
     resolveSurface,
     prepare,
     isBusy: (item: StorePluginItem) => isItemBusy(item, state),

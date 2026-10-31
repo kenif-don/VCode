@@ -18,6 +18,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
   CODING_PLAN_PROVIDER_SPECS,
   type CodingPlanEntitlementState,
+  type ModelProviderNavItem,
   type ModelProviderNavGroup,
   type PresetProviderSpec,
 } from "@/settings/model-provider-section/constants.js";
@@ -61,6 +62,14 @@ interface UseModelProviderNavigationOptions {
   selectedNodeKey: string | null;
   setSelectedNodeKey: (key: string | null) => void;
   intl: ReturnType<typeof useZCodeIntl>["intl"];
+  /**
+   * 白标等场景只展示部分入口。传入后：
+   * - 选中校正只认可见节点——隐藏节点即使仍在导航数据里也不算有效选中；
+   * - 初始化/回退 key 也只从可见节点推导。
+   * 可见性必须在这里统一收敛：若展示层另写一个可见性校正 effect，本 hook 的回退
+   * 会把选中写回隐藏 key，两者互相改写 selectedNodeKey 形成无限重渲染（React #185）。
+   */
+  isNavItemVisible?: (item: ModelProviderNavItem) => boolean;
 }
 
 export function useModelProviderNavigation({
@@ -80,6 +89,7 @@ export function useModelProviderNavigation({
   selectedNodeKey,
   setSelectedNodeKey,
   intl,
+  isNavItemVisible,
 }: UseModelProviderNavigationOptions) {
   const customProviders = useMemo(() => {
     const allCustomProviders = modelProviders.filter(
@@ -301,10 +311,19 @@ export function useModelProviderNavigation({
 
   const fallbackNodeKey = resolveFallbackModelProviderNodeKey({
     selectedNodeKey,
-    selectableNavigationItems,
+    selectableNavigationItems: selectableNavigationItems.filter(
+      (item) => isNavItemVisible?.(item) !== false,
+    ),
   });
   useEffect(() => {
-    const hasSelectedNode = selectedNodeKey ? sideNavigationItemByKey.has(selectedNodeKey) : false;
+    const selectedSideItem = selectedNodeKey
+      ? sideNavigationItemByKey.get(selectedNodeKey)
+      : undefined;
+    // 隐藏节点（白标过滤掉的预置/套餐入口）不算有效选中：必须回落到可见节点。
+    // 否则展示层的可见性校正会与本回退互抢 selectedNodeKey，形成无限重渲染（React #185）。
+    const hasSelectedNode = selectedSideItem
+      ? isNavItemVisible?.(selectedSideItem) !== false
+      : false;
     if (hasSelectedNode) {
       return;
     }
@@ -314,6 +333,7 @@ export function useModelProviderNavigation({
     }
   }, [
     fallbackNodeKey,
+    isNavItemVisible,
     selectedNavItem,
     selectedNodeKey,
     setSelectedNodeKey,

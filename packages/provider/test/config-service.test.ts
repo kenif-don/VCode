@@ -521,7 +521,7 @@ describe("ProviderConfigService", () => {
     }
   });
 
-  it("把 ZCode Built-in Source 与 Personal Repository 聚合成 Registry Config Source", async () => {
+  it("把 VCode Built-in Source 与 Personal Repository 聚合成 Registry Config Source", async () => {
     const zcodeBuiltin = new MutableSource(
       layerSnapshot(
         "zcodeBuiltin-1",

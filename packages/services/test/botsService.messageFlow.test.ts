@@ -810,7 +810,7 @@ describe("botsService messageFlow", () => {
     service.disposeAll();
   });
 
-  it("syncs active task model, mode, and cli changes through ZCode Agent and broadcasts UI updates", async () => {
+  it("syncs active task model, mode, and cli changes through VCode Agent and broadcasts UI updates", async () => {
     const repo = f.createMemoryRepo(f.weixinConfig, {
       version: 3,
       bots: {
@@ -837,13 +837,13 @@ describe("botsService messageFlow", () => {
             value: "gpt-5.3",
             name: "GPT-5.3",
             modelProviderId: "glm",
-            modelProviderName: "ZCode Agent",
+            modelProviderName: "VCode Agent",
           },
           {
             value: "gpt-5.4",
             name: "GPT-5.4",
             modelProviderId: "glm",
-            modelProviderName: "ZCode Agent",
+            modelProviderName: "VCode Agent",
           },
         ],
       },
@@ -1310,7 +1310,7 @@ describe("botsService messageFlow", () => {
               value: "gpt-5.4",
               name: "GPT-5.4",
               modelProviderId: "glm",
-              modelProviderName: "ZCode Agent",
+              modelProviderName: "VCode Agent",
             },
           ],
         },
@@ -1573,7 +1573,7 @@ describe("botsService messageFlow", () => {
     service.disposeAll();
   });
 
-  it("creates an ZCode Agent task from a bound private message", async () => {
+  it("creates an VCode Agent task from a bound private message", async () => {
     const repo = f.createMemoryRepo(f.baseConfig);
     const legacyTaskService = f.createLegacyTaskService();
     const broadcastService = f.createBroadcastService();
@@ -4151,7 +4151,7 @@ describe("botsService messageFlow", () => {
       actor,
     });
 
-    expect(helpReplies[0]?.text).toContain("ZCode 机器人命令");
+    expect(helpReplies[0]?.text).toContain("VCode 机器人命令");
     expect(statusReplies[0]?.text).toContain("状态: 远端未连接");
     expect(statusReplies[0]?.text).toContain("**/重连**");
     expect(legacyTaskService.listTasks).not.toHaveBeenCalled();
@@ -4957,7 +4957,7 @@ describe("botsService messageFlow", () => {
     service.disposeAll();
   });
 
-  it("skips stale unsupported draft mode when creating a ZCode Agent task", async () => {
+  it("skips stale unsupported draft mode when creating a VCode Agent task", async () => {
     const repo = f.createMemoryRepo(f.weixinConfig, {
       version: 3,
       bots: {

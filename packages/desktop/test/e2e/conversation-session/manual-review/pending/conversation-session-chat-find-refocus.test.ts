@@ -84,7 +84,7 @@ async function prepareFileChangeFindFixture() {
     createdFixtureRepository = true;
   }
 
-  execFileSync(GIT_BINARY, ["config", "user.name", "ZCode E2E"], {
+  execFileSync(GIT_BINARY, ["config", "user.name", "VCode E2E"], {
     cwd: DEFAULT_WORKSPACE,
     stdio: "ignore",
   });

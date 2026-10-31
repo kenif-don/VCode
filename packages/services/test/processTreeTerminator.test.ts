@@ -201,7 +201,7 @@ setInterval(() => {}, 1000);
     const grandchildPid = await readReportedPid(child, grandchildPidPath);
     expect(isPidAlive(grandchildPid)).toBe(true);
 
-    // Bugfix: 用户反馈退出 ZCode 后仍残留 bun 版本的 Agent 子进程。
+    // Bugfix: 用户反馈退出 VCode 后仍残留 bun 版本的 Agent 子进程。
     // 这里用 wrapper -> grandchild 的结构复现，要求关闭 wrapper 时整棵进程树都被回收。
     terminateProcessTree(child);
 

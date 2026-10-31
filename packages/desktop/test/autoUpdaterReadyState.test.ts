@@ -85,7 +85,7 @@ autoUpdaterMock.setFeedURL = vi.fn();
 autoUpdaterMock.forceDevUpdateConfig = false;
 autoUpdaterMock.currentVersion = null;
 autoUpdaterMock.installerPath =
-  "C:\\Users\\demo\\AppData\\Local\\zcode-updater\\pending\\ZCode-0.1.25-win-x64.exe";
+  "C:\\Users\\demo\\AppData\\Local\\zcode-updater\\pending\\VCode-0.1.25-win-x64.exe";
 autoUpdaterMock.autoRunAppAfterInstall = true;
 autoUpdaterMock.installDirectory = null;
 autoUpdaterMock.downloadedUpdateHelper = null;
@@ -221,7 +221,7 @@ describe("autoUpdater ready state sync", () => {
     autoUpdaterMock.forceDevUpdateConfig = false;
     autoUpdaterMock.currentVersion = null;
     autoUpdaterMock.installerPath =
-      "C:\\Users\\demo\\AppData\\Local\\zcode-updater\\pending\\ZCode-0.1.25-win-x64.exe";
+      "C:\\Users\\demo\\AppData\\Local\\zcode-updater\\pending\\VCode-0.1.25-win-x64.exe";
     autoUpdaterMock.autoRunAppAfterInstall = true;
     autoUpdaterMock.installDirectory = null;
     autoUpdaterMock.downloadedUpdateHelper = null;
@@ -714,7 +714,7 @@ describe("autoUpdater ready state sync", () => {
     expect(
       resolveUpdateFeedSourceFromStartupConfig({
         argv: [
-          "ZCode",
+          "VCode",
           "--zcode-update-feed-url",
           "https://arg.example.test/api/v1/releases/electron/manifest",
         ],
@@ -728,7 +728,7 @@ describe("autoUpdater ready state sync", () => {
     expect(
       resolveUpdateFeedSourceFromStartupConfig({
         argv: [
-          "ZCode",
+          "VCode",
           "--zcode-update-feed-url=https://equals.example.test/api/v1/releases/electron/manifest",
         ],
         env: {},
@@ -738,7 +738,7 @@ describe("autoUpdater ready state sync", () => {
     });
     expect(
       resolveUpdateFeedSourceFromStartupConfig({
-        argv: ["ZCode"],
+        argv: ["VCode"],
         env: {
           ZCODE_UPDATE_FEED_URL: "https://env.example.test/api/v1/releases/electron/manifest",
         },
@@ -1533,12 +1533,12 @@ describe("autoUpdater ready state sync", () => {
       releaseDate: new Date("2026-06-23T13:48:54.438Z"),
       releaseNotesByLocale: {
         "zh-CN": {
-          title: "ZCode v0.1.25",
-          markdown: "# ZCode v0.1.25\n\n- 中文说明",
+          title: "VCode v0.1.25",
+          markdown: "# VCode v0.1.25\n\n- 中文说明",
         },
         "en-US": {
-          title: "ZCode v0.1.25",
-          markdown: "# ZCode v0.1.25\n\n- English notes",
+          title: "VCode v0.1.25",
+          markdown: "# VCode v0.1.25\n\n- English notes",
         },
       },
     });
@@ -1552,12 +1552,12 @@ describe("autoUpdater ready state sync", () => {
         releaseDate: "2026-06-23T13:48:54.438Z",
         releaseNotesByLocale: {
           "zh-CN": {
-            title: "ZCode v0.1.25",
-            markdown: "# ZCode v0.1.25\n\n- 中文说明",
+            title: "VCode v0.1.25",
+            markdown: "# VCode v0.1.25\n\n- 中文说明",
           },
           "en-US": {
-            title: "ZCode v0.1.25",
-            markdown: "# ZCode v0.1.25\n\n- English notes",
+            title: "VCode v0.1.25",
+            markdown: "# VCode v0.1.25\n\n- English notes",
           },
         },
       },
@@ -1575,12 +1575,12 @@ describe("autoUpdater ready state sync", () => {
         releaseDate: "2026-06-23T13:48:54.438Z",
         releaseNotesByLocale: {
           "zh-CN": {
-            title: "ZCode v0.1.25",
-            markdown: "# ZCode v0.1.25\n\n- 中文说明",
+            title: "VCode v0.1.25",
+            markdown: "# VCode v0.1.25\n\n- 中文说明",
           },
           "en-US": {
-            title: "ZCode v0.1.25",
-            markdown: "# ZCode v0.1.25\n\n- English notes",
+            title: "VCode v0.1.25",
+            markdown: "# VCode v0.1.25\n\n- English notes",
           },
         },
       },
@@ -1601,12 +1601,12 @@ describe("autoUpdater ready state sync", () => {
         releaseDate: "2026-06-23T13:48:54.438Z",
         releaseNotesByLocale: {
           "zh-CN": {
-            title: "ZCode v0.1.25",
-            markdown: "# ZCode v0.1.25\n\n- 中文说明",
+            title: "VCode v0.1.25",
+            markdown: "# VCode v0.1.25\n\n- 中文说明",
           },
           "en-US": {
-            title: "ZCode v0.1.25",
-            markdown: "# ZCode v0.1.25\n\n- English notes",
+            title: "VCode v0.1.25",
+            markdown: "# VCode v0.1.25\n\n- English notes",
           },
         },
       },

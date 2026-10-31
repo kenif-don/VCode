@@ -56,7 +56,7 @@ interface AboutSnapshotOptions {
   };
 }
 
-const ABOUT_APPLICATION_NAME = "ZCode Desktop App";
+const ABOUT_APPLICATION_NAME = "VCode Desktop App";
 // 自定义 About 内容本体是 256x280；原生窗口如果同尺寸会让内容贴满透明窗口边界。
 // 这里给 BrowserWindow 额外留出背景呼吸空间，避免正式 About 看起来比 demo 更局促。
 const ABOUT_WINDOW_WIDTH = 256;
@@ -72,14 +72,14 @@ const ABOUT_MESSAGES: Record<
   }
 > = {
   "zh-CN": {
-    aboutTitle: "关于 ZCode",
+    aboutTitle: "关于 VCode",
     versionLabel: "版本",
     okButtonLabel: "确定",
     optimizedForAppleSilicon: "已针对 Apple Silicon 优化。",
     copyright: (year) => `版权所有 © ${year} ZCode。`,
   },
   "en-US": {
-    aboutTitle: "About ZCode",
+    aboutTitle: "About VCode",
     versionLabel: "version",
     okButtonLabel: "OK",
     optimizedForAppleSilicon: "Optimized for Apple Silicon.",
@@ -235,6 +235,14 @@ function resolveAboutIconPath(isPackaged: boolean): string {
     : join(import.meta.dirname, "../../build/icon.png");
 }
 
+/** About 自绘页 CSP 只放行 data: 图片,品牌图标转 data URI 注入。 */
+function readAboutIconDataUri(iconPath: string): string | null {
+  if (!existsSync(iconPath)) {
+    return null;
+  }
+  return `data:image/png;base64,${readFileSync(iconPath).toString("base64")}`;
+}
+
 export async function showAboutDialog(
   parentWindow?: BrowserWindow,
   locale: Locale = DEFAULT_LOCALE,
@@ -282,6 +290,7 @@ export async function showAboutDialog(
         optimizationLine: formatAboutOptimizationLine(snapshot, locale),
         versionLabel: aboutMessages.versionLabel,
         okButtonLabel: aboutMessages.okButtonLabel,
+        iconDataUri: readAboutIconDataUri(iconPath),
       }),
     )}`,
   );

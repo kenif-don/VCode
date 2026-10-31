@@ -227,7 +227,7 @@ describe("official mcp end-to-end over a fake plugin and fake HTTP MCP", () => {
 
       const tools = await adapter.listTools();
       expect(tools.map((tool) => tool.toolName)).toContain(TOOL_NAME);
-      // SG-02：http 官方 MCP 的结果来自已校验 origin 的 ZCode 后端，因此可以给结果背书
+      // SG-02：http 官方 MCP 的结果来自已校验 origin 的 VCode 后端，因此可以给结果背书
       // （UI 据此显示额度耗尽 / 无套餐提示）。stdio 不置位，见 stdio-meta 用例。
       expect(tools[0]?.official).toBe(true);
 

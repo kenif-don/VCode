@@ -24,7 +24,6 @@ const CODING_PLAN_TEAM_SPEC_MARKERS = [
   "conversation-session-ssh-disconnect-experience.test.ts",
   "conversation-session-ssh-remote-cold-reconnect.test.ts",
   "conversation-session-r3-mixed-entries.test.ts",
-  "conversation-session-r3-mobile.test.ts",
   // 模拟登录态访问线上账号接口会触发 401 弹窗，遮挡 Logo 的真实 hover 和截图。
   "settings-ui-polish.test.ts",
   "side-pane-tabs-responsive-interactions.test.ts",

@@ -42,7 +42,7 @@ const demoSkills = [
 ];
 
 describe("skillSourceFilter", () => {
-  it("把 .zcode/skills 和官方 plugin cache 识别为 ZCode Agent 技能来源", () => {
+  it("把 .zcode/skills 和官方 plugin cache 识别为 VCode Agent 技能来源", () => {
     expect(resolveSkillSourceType("/tmp/workspace/.zcode/skills/my-skill/SKILL.md")).toBe("glm");
     expect(
       resolveSkillSourceType(
@@ -57,7 +57,7 @@ describe("skillSourceFilter", () => {
     );
   });
 
-  it("过滤混合来源时保留 ZCode Agent 技能", () => {
+  it("过滤混合来源时保留 VCode Agent 技能", () => {
     const expectedIds = [
       "skill-glm-by-path",
       "glm:workspace:zcode-common:abc123",

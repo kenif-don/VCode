@@ -5,7 +5,7 @@ import type { GitChangeSourceId, GitDiffResult } from "@zcode/shared";
 import { TID_GIT_PANE } from "@zcode/shared/test-ids";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
-import { FileTextIcon, GitForkIcon, RefreshCw } from "lucide-react";
+import { ArrowDownToLine, FileTextIcon, GitForkIcon, LoaderIcon, RefreshCw } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select.js";
 import { type GitPaneFileChange, type GitPaneRepositoryState } from "@/hooks/useGitRepository.js";
 import { useServices } from "@/hooks/useServices.js";
+import { useGitPull } from "@/hooks/useGitPull.js";
 import type { CreateTaskRequest } from "@/app-shell/types.js";
 import { GitWorktreeDialog } from "@/GitWorktreeDialog.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
@@ -96,6 +97,10 @@ export function GitPane({
   const resolvedTheme = resolveTheme(theme);
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const [worktreeDialogOpen, setWorktreeDialogOpen] = useState(false);
+  const { pulling: gitPulling, runPull: runGitPull } = useGitPull({
+    workspacePath,
+    onPulled: onRefresh,
+  });
   const [diffStateByKey, setDiffStateByKey] = useState<Record<string, GitDiffLoadState>>({});
   const diffGenerationRef = useRef(0);
   const pendingDiffKeysRef = useRef(new Set<string>());
@@ -470,6 +475,22 @@ export function GitPane({
         </Select>
 
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            disabled={gitPulling}
+            onClick={() => {
+              void runGitPull();
+            }}
+          >
+            {gitPulling ? (
+              <LoaderIcon className="size-3.5 animate-spin" />
+            ) : (
+              <ArrowDownToLine className="size-3.5" />
+            )}
+            {intl.formatMessage({ id: "git.action.pull" })}
+          </Button>
           <Button
             type="button"
             variant="ghost"

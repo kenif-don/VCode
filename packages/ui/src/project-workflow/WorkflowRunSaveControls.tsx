@@ -36,7 +36,7 @@ export interface WorkflowRunSaveSlotsHost {
   workspaceIdentity?: string;
   remoteSessionId?: string;
   runId: string;
-  /** run 名：弹层用它预填说明，交给 ZCode 的那条消息用它指认「刚跑完的哪一个」。 */
+  /** run 名：弹层用它预填说明，交给 VCode 的那条消息用它指认「刚跑完的哪一个」。 */
   runName?: string;
   /** 转写里 SaveWorkflow 认领过这次 run 的候选（`buildWorkflowSaveCandidatesByRunId`）。 */
   candidates?: readonly ZCodeWorkflowsForRunCandidate[];

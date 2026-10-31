@@ -29,6 +29,8 @@ export function WorkspaceFileTreeStickyFolders({
   onRevealRow,
   onOpenPreview,
   onOpenBrowserUrl,
+  onRename,
+  onDelete,
   onKeyDown,
 }: {
   items: WorkspaceFileTreeStickyFolderItem[];
@@ -45,6 +47,8 @@ export function WorkspaceFileTreeStickyFolders({
   onRevealRow: (item: WorkspaceFileTreeStickyFolderItem) => void;
   onOpenPreview: (row: WorkspaceFileTreeRow) => void;
   onOpenBrowserUrl?: (url: string) => void;
+  onRename?: (row: WorkspaceFileTreeRow) => void;
+  onDelete?: (row: WorkspaceFileTreeRow) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
 }) {
   if (items.length === 0) {
@@ -86,6 +90,8 @@ export function WorkspaceFileTreeStickyFolders({
               onToggleDirectory={handleToggle}
               onOpenPreview={onOpenPreview}
               onOpenBrowserUrl={onOpenBrowserUrl}
+              onRename={onRename}
+              onDelete={onDelete}
               onKeyDown={onKeyDown}
             />
           );

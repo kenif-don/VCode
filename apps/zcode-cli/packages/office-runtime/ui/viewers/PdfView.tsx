@@ -454,7 +454,7 @@ export const PdfView = forwardRef<ViewerHandle, ViewerProps>(function PdfView(pr
     );
   }, []);
 
-  // ⌘/Ctrl + wheel zooms around the pointer, like ZCode's PDF preview.
+  // ⌘/Ctrl + wheel zooms around the pointer, like VCode's PDF preview.
   useEffect(() => {
     const container = scrollRef.current!;
     let accumulated = 0;

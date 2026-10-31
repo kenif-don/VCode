@@ -376,7 +376,7 @@ describe("createZCodeDataSizeTelemetryScheduler", () => {
   });
 });
 
-describe("ZCode data size telemetry state", () => {
+describe("VCode data size telemetry state", () => {
   let rootPath = "";
 
   beforeEach(async () => {

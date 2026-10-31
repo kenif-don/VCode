@@ -32,18 +32,10 @@ it.each([
       updateState: null,
       toggleSidebarShortcutLabel: "Ctrl+B",
       newTaskShortcutLabel: "Ctrl+N",
-      goBackShortcutLabel: "Alt+Left",
-      goForwardShortcutLabel: "Alt+Right",
-      canTaskNavBack: false,
-      canTaskNavForward: false,
-      canGoBack: false,
-      canGoForward: false,
       appLogoUrl: "/logo.svg",
       platform: {} as ComponentProps<typeof DesktopTopOverlay>["platform"],
       onToggleSidebar,
       onCreateTask: vi.fn(),
-      onGoBack: vi.fn(),
-      onGoForward: vi.fn(),
     }),
   );
   if (!isDesktop || isMacDesktop) {

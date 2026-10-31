@@ -293,7 +293,7 @@ describe("official mcp credential resolver", () => {
     expect(headers["Bigmodel-Project"]).toBeUndefined();
   });
 
-  it("OMCP-023: sends only the ZCode JWT for a Start Plan connection", async () => {
+  it("OMCP-023: sends only the VCode JWT for a Start Plan connection", async () => {
     const outcome = await resolveOfficialMcpCredentials(
       createDeps({
         registry: createRegistry([
@@ -347,7 +347,7 @@ describe("official mcp credential resolver", () => {
     ).resolves.toEqual({ ok: false, reason: "official_auth_unavailable" });
   });
 
-  it("sends only the ZCode JWT when the selected coding plan connection is absent", async () => {
+  it("sends only the VCode JWT when the selected coding plan connection is absent", async () => {
     const outcome = await resolveOfficialMcpCredentials(
       createDeps({ registry: createRegistry([]) }),
     );

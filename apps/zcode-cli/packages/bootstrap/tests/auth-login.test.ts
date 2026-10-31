@@ -28,7 +28,7 @@ const TEST_ENV = {
   ),
 };
 
-describe("ZCode CLI login", () => {
+describe("VCode CLI login", () => {
   it("没有任何 Standalone 账号凭据时不会误报已配置 Coding Plan", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-no-login-"));
     const credentialStore = createSharedZCodeCredentialStore({
@@ -44,7 +44,7 @@ describe("ZCode CLI login", () => {
     }
   });
 
-  it("uses the production ZCode endpoint by default for OAuth init", async () => {
+  it("uses the production VCode endpoint by default for OAuth init", async () => {
     const httpClient = new FakeHttpClient([
       jsonResponse({
         code: 0,

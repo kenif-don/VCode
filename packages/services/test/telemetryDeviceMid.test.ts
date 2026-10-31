@@ -28,7 +28,7 @@ describe("ensureTelemetryDeviceMid", () => {
     }
   });
 
-  it("远端主机没有 telemetry-state.json 时，确保后 ZCode 来源头才带上同一个 X-Device-Mid", async () => {
+  it("远端主机没有 telemetry-state.json 时，确保后 VCode 来源头才带上同一个 X-Device-Mid", async () => {
     // 复现远端事故前提：全新主机没有任何进程写过 state 文件，来源头缺 X-Device-Mid。
     const { stateFile } = createIsolatedDataBaseDir();
     expect(existsSync(stateFile)).toBe(false);

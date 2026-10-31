@@ -172,7 +172,7 @@ describe(`${CASE_MARKER}: ${variant}，卸载重装与独立环境替换`, () =>
           '"$HOME/.zcode/server/bin/zcode" uninstall --server-root "$HOME/.zcode/server" --json',
         ],
         {
-          prompts: ["Type DELETE to uninstall ZCode Server: ", "Type DELETE again to confirm: "],
+          prompts: ["Type DELETE to uninstall VCode Server: ", "Type DELETE again to confirm: "],
           answer: "DELETE",
           timeoutMs: 120_000,
         },

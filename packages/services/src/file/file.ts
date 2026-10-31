@@ -83,10 +83,10 @@ export interface IFileService {
    */
   deletePath(params: { path: string; recursive?: boolean }): Promise<void>;
   /**
-   * 重命名/移动条目。newPath 目标已存在时抛错（不静默覆盖），
-   * 供文件树重命名按钮/菜单调用，newPath 由 UI 拼同目录新名称后传入。
+   * 重命名条目（同目录内改名）。UI 只传新名称，目标路径由服务端拼接，
+   * 避免 UI 拼路径踩 Windows/远程 Linux 分隔符差异；目标已存在时抛错（不静默覆盖）。
    */
-  renamePath(params: { path: string; newPath: string }): Promise<void>;
+  renamePath(params: { path: string; newName: string }): Promise<{ newPath: string }>;
 }
 
 export const IFileService = createServiceDescriptor<IFileService>(ServiceChannels.File);

@@ -8,7 +8,7 @@
  * plus the notification side (notifications/resources/updated).
  *
  * Tools: run_config_list / run_config_save / run_config_delete / run_config_duplicate /
- *        run_start / run_stop / run_status / run_output / run_history
+ *        run_config_reorder / run_start / run_stop / run_status / run_output / run_history
  *
  * Config + history persistence: <workspace>/.hba/run.json
  * Workspace root: $ZCODE_WORKSPACE_ROOT (set by plugin.json), fallback process.cwd().
@@ -40,6 +40,7 @@ const WORKSPACE_ROOT = path.resolve(
 );
 const HBA_DIR = path.join(WORKSPACE_ROOT, ".hba");
 const RUN_JSON_PATH = path.join(HBA_DIR, "run.json");
+const UI_STATE_PATH = path.join(HBA_DIR, "run-ui-state.json");
 
 const RING_BUFFER_LINES = 2000; // live output ring buffer per run
 const HISTORY_OUTPUT_LINES = 500; // persisted output lines per history entry
@@ -76,6 +77,61 @@ function saveStore() {
 }
 
 loadStore();
+
+// ---------------------------------------------------------------------------
+// Panel UI state: <workspace>/.hba/run-ui-state.json — workspace-scoped so every
+// session/window of the project shares one run-panel state (selected config,
+// open run, autoscroll, sidebar). Read/written by the panel via run_ui_state.
+// ---------------------------------------------------------------------------
+
+function readUiStateFile() {
+  try {
+    const data = JSON.parse(fs.readFileSync(UI_STATE_PATH, "utf8"));
+    if (data && typeof data === "object" && !Array.isArray(data)) return data;
+  } catch {
+    /* missing or corrupt file -> no saved state */
+  }
+  return null;
+}
+
+function writeUiStateFile(state) {
+  fs.mkdirSync(HBA_DIR, { recursive: true });
+  const tmp = UI_STATE_PATH + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2), "utf8");
+  fs.renameSync(tmp, UI_STATE_PATH);
+}
+
+// ---------------------------------------------------------------------------
+// 输出解码:Windows 中文环境的子进程(ffmpeg 包装脚本、批处理、控制台程序)常按
+// 系统 ANSI 代码页(GBK/CP936)输出字节流,与 UTF-8 输出混存。一律按 UTF-8 解会把
+// GBK 汉字解成乱码。按字节切行(0x0A 不会出现在 UTF-8/GBK 多字节序列内部)后逐行
+// 自适应解码:先严格 UTF-8,失败回退 GBK,都不可用时有损 UTF-8。
+// ---------------------------------------------------------------------------
+
+const utf8StrictDecoder = new TextDecoder("utf-8", { fatal: true });
+const utf8LossyDecoder = new TextDecoder("utf-8");
+let gbkDecoder = null;
+try {
+  gbkDecoder = new TextDecoder("gbk");
+} catch {
+  /* small-icu 构建缺 GBK 时退化为有损 UTF-8 */
+}
+
+function decodeOutputLine(buf) {
+  if (!buf || !buf.length) return "";
+  try {
+    return utf8StrictDecoder.decode(buf);
+  } catch {
+    if (gbkDecoder) {
+      try {
+        return gbkDecoder.decode(buf);
+      } catch {
+        /* fall through */
+      }
+    }
+    return utf8LossyDecoder.decode(buf);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Run manager
@@ -120,8 +176,8 @@ class Run {
     this.child = null;
     this.stopTimer = null;
     this.notifyTimer = null;
-    this.partialStdout = "";
-    this.partialStderr = "";
+    this.partialStdout = Buffer.alloc(0);
+    this.partialStderr = Buffer.alloc(0);
     this.exited = false;
   }
 
@@ -203,11 +259,12 @@ function startRun(config) {
   run.appendLine("system", `[hba-run] started: ${run.command} (cwd: ${cwd}, pid: ${run.pid})`);
 
   const pump = (stream, run2, key) => (chunk) => {
-    run2[key] += chunk.toString("utf8");
-    let idx;
-    while ((idx = run2[key].indexOf("\n")) >= 0) {
-      const line = run2[key].slice(0, idx).replace(/\r$/, "");
-      run2[key] = run2[key].slice(idx + 1);
+    run2[key] = Buffer.concat([run2[key], chunk]);
+    let nl;
+    while ((nl = run2[key].indexOf(0x0a)) >= 0) {
+      const raw = run2[key].subarray(0, nl);
+      run2[key] = run2[key].subarray(nl + 1);
+      const line = decodeOutputLine(raw).replace(/\r$/, "");
       run2.appendLine(stream, line);
     }
   };
@@ -223,13 +280,13 @@ function startRun(config) {
 
   child.on("exit", (code, signal) => {
     // flush partial trailing lines
-    if (run.partialStdout) {
-      run.appendLine("stdout", run.partialStdout);
-      run.partialStdout = "";
+    if (run.partialStdout.length) {
+      run.appendLine("stdout", decodeOutputLine(run.partialStdout));
+      run.partialStdout = Buffer.alloc(0);
     }
-    if (run.partialStderr) {
-      run.appendLine("stderr", run.partialStderr);
-      run.partialStderr = "";
+    if (run.partialStderr.length) {
+      run.appendLine("stderr", decodeOutputLine(run.partialStderr));
+      run.partialStderr = Buffer.alloc(0);
     }
     let state;
     if (run.stopped) state = "exited"; // user-initiated stop is not a failure
@@ -324,6 +381,8 @@ function stopRun(run, graceMs = DEFAULT_STOP_GRACE_MS) {
 
 /**
  * Kill a process and all of its descendants. force=true -> uncatchable kill.
+ * Resolves when the kill operation has actually been issued/completed — the
+ * caller MUST await it when the process is about to exit (see shutdown).
  *
  * Windows: `taskkill /pid <pid> /T` (WM_CLOSE-based, graceful-ish) and
  * `taskkill /pid <pid> /T /F` (force). The direct child is deliberately NOT
@@ -336,40 +395,45 @@ function stopRun(run, graceMs = DEFAULT_STOP_GRACE_MS) {
  */
 function killTree(run, force) {
   const pid = run.pid;
-  if (!pid) return;
+  if (!pid) return Promise.resolve();
   if (IS_WIN) {
     const args = ["/pid", String(pid), "/T"];
     if (force) args.push("/F");
-    execFile("taskkill", args, { windowsHide: true }, (err) => {
-      if (err && force) {
-        // Last resort (e.g. taskkill missing): kill the direct child only.
-        try {
-          run.child.kill("SIGKILL");
-        } catch {
-          /* already dead */
+    return new Promise((resolve) => {
+      execFile("taskkill", args, { windowsHide: true }, (err) => {
+        if (err && force) {
+          // Last resort (e.g. taskkill missing): kill the direct child only.
+          try {
+            run.child.kill("SIGKILL");
+          } catch {
+            /* already dead */
+          }
         }
-      }
+        resolve();
+      });
     });
-  } else {
+  }
+  try {
+    process.kill(-pid, force ? "SIGKILL" : "SIGTERM");
+  } catch {
     try {
-      process.kill(-pid, force ? "SIGKILL" : "SIGTERM");
+      run.child.kill(force ? "SIGKILL" : "SIGTERM");
     } catch {
-      try {
-        run.child.kill(force ? "SIGKILL" : "SIGTERM");
-      } catch {
-        /* already dead */
-      }
+      /* already dead */
     }
   }
+  return Promise.resolve();
 }
 
 function killAllRuns() {
+  const jobs = [];
   for (const run of runs.values()) {
     if (!run.exited && run.child) {
       run.stopped = true;
-      killTree(run, true);
+      jobs.push(killTree(run, true));
     }
   }
+  return Promise.all(jobs);
 }
 
 // ---------------------------------------------------------------------------
@@ -555,6 +619,40 @@ const TOOLS = [
     }
   },
   {
+    name: "run_config_reorder",
+    description:
+      "Reorder run configurations: pass every existing config id exactly once in the new order (first = top of the list).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        configIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "All config ids in their new order."
+        }
+      },
+      required: ["configIds"],
+      additionalProperties: false
+    },
+    readOnly: false,
+    handler: async ({ configIds }) => {
+      const ids = Array.isArray(configIds) ? configIds.filter((x) => typeof x === "string") : [];
+      const currentIds = store.configs.map((c) => c.id);
+      const unique = new Set(ids);
+      if (
+        ids.length !== currentIds.length ||
+        unique.size !== ids.length ||
+        !currentIds.every((id) => unique.has(id))
+      ) {
+        return fail("configIds must contain each existing config id exactly once");
+      }
+      store.configs = ids.map((id) => store.configs.find((c) => c.id === id));
+      saveStore();
+      sendResourceUpdated();
+      return ok({ configs: store.configs.map(publicConfig) }, `Reordered ${ids.length} configs`);
+    }
+  },
+  {
     name: "run_start",
     description:
       "Start a run of a saved configuration. Spawns the command (through the platform shell) and streams stdout/stderr into a ring buffer. Returns the runId used by run_output/run_status/run_stop.",
@@ -698,6 +796,43 @@ const TOOLS = [
         outputLines: (e.output || []).length
       }));
       return ok({ history });
+    }
+  },
+  {
+    name: "run_ui_state",
+    description:
+      "Internal panel-state store, shared by every session/window of this workspace (persisted to <workspace>/.hba/run-ui-state.json). Call with no arguments to read the saved run-panel UI state (null when never saved), or with `state` (a JSON object) to persist it. Not meant for agent use.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        state: {
+          type: "object",
+          description: "Panel UI state to persist (free-form JSON object). Omit to read the current state."
+        }
+      },
+      additionalProperties: false
+    },
+    readOnly: false,
+    handler: async (input) => {
+      if (input.state === undefined) {
+        return ok({ state: readUiStateFile() });
+      }
+      const state = input.state;
+      if (!state || typeof state !== "object" || Array.isArray(state)) {
+        return fail("state must be a JSON object");
+      }
+      let serialized;
+      try {
+        serialized = JSON.stringify(state);
+      } catch (err) {
+        return fail(`state is not serializable: ${String(err && err.message ? err.message : err)}`);
+      }
+      try {
+        writeUiStateFile(state);
+      } catch (err) {
+        return fail(`failed to persist ui state: ${String(err && err.message ? err.message : err)}`);
+      }
+      return ok({ updatedAt: nowIso(), bytes: Buffer.byteLength(serialized, "utf8"), file: UI_STATE_PATH });
     }
   }
 ];
@@ -880,14 +1015,25 @@ process.stdin.on("data", (chunk) => {
   }
 });
 
+let shuttingDown = false;
 function shutdown() {
-  killAllRuns();
+  if (shuttingDown) return;
+  shuttingDown = true;
+  // fr9-02: 必须等 killAllRuns 的 taskkill 回调完成再退出。此前 process.exit(0)
+  // 抢跑在 execFile 之前,taskkill 根本没执行,运行中的服务漏杀成孤儿继续跑,
+  // 面板重开后状态与现实脱节(显示未启动、端口仍被占)。
+  const kills = killAllRuns();
   try {
     saveStore();
   } catch {
     /* best effort */
   }
-  process.exit(0);
+  const deadline = setTimeout(() => process.exit(0), 3000);
+  if (typeof deadline.unref === "function") deadline.unref();
+  kills.then(
+    () => process.exit(0),
+    () => process.exit(0)
+  );
 }
 process.stdin.on("end", shutdown);
 process.stdin.on("close", shutdown);

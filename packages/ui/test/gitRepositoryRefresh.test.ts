@@ -6,6 +6,7 @@ describe("shouldRefreshLiveGitData", () => {
     expect(
       shouldRefreshLiveGitData(null, {
         workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
         workspaceKey: "/repo-a",
         includeExtendedData: false,
         refreshToken: 0,
@@ -17,6 +18,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: false,
           refreshToken: 0,
@@ -24,6 +26,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/repo-b",
+          repositoryPath: "/repo-b",
           workspaceKey: "/repo-b",
           includeExtendedData: false,
           refreshToken: 0,
@@ -38,6 +41,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: false,
           refreshToken: 0,
@@ -45,6 +49,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: true,
           refreshToken: 0,
@@ -57,6 +62,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: true,
           refreshToken: 0,
@@ -64,6 +70,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: true,
           refreshToken: 1,
@@ -78,6 +85,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/root",
+        repositoryPath: "/root",
           workspaceKey: "remote:ssh:root@server-a:/root",
           includeExtendedData: false,
           refreshToken: 0,
@@ -85,6 +93,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/root",
+        repositoryPath: "/root",
           workspaceKey: "remote:ssh:root@server-b:/root",
           includeExtendedData: false,
           refreshToken: 0,
@@ -99,6 +108,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: true,
           refreshToken: 1,
@@ -106,6 +116,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: false,
           refreshToken: 1,
@@ -118,6 +129,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: false,
           refreshToken: 1,
@@ -125,6 +137,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/repo-a",
+        repositoryPath: "/repo-a",
           workspaceKey: "/repo-a",
           includeExtendedData: false,
           refreshToken: 1,
@@ -134,10 +147,34 @@ describe("shouldRefreshLiveGitData", () => {
     ).toBe(false);
   });
 
+  it("refreshes when the multi-repo selector switches the target repository", () => {
+    expect(
+      shouldRefreshLiveGitData(
+        {
+          workspacePath: "/workspace",
+          repositoryPath: "/workspace",
+          workspaceKey: "/workspace",
+          includeExtendedData: false,
+          refreshToken: 0,
+          workspaceRpcEnabled: true,
+        },
+        {
+          workspacePath: "/workspace",
+          repositoryPath: "/workspace/sub-repo",
+          workspaceKey: "/workspace",
+          includeExtendedData: false,
+          refreshToken: 0,
+          workspaceRpcEnabled: true,
+        },
+      ),
+    ).toBe(true);
+  });
+
   it("does not refresh disconnected remote placeholders until workspace RPC is available", () => {
     expect(
       shouldRefreshLiveGitData(null, {
         workspacePath: "/root",
+        repositoryPath: "/root",
         workspaceKey: "remote:ssh:root@server:/root",
         includeExtendedData: false,
         refreshToken: 0,
@@ -149,6 +186,7 @@ describe("shouldRefreshLiveGitData", () => {
       shouldRefreshLiveGitData(
         {
           workspacePath: "/root",
+        repositoryPath: "/root",
           workspaceKey: "remote:ssh:root@server:/root",
           includeExtendedData: false,
           refreshToken: 0,
@@ -156,6 +194,7 @@ describe("shouldRefreshLiveGitData", () => {
         },
         {
           workspacePath: "/root",
+        repositoryPath: "/root",
           workspaceKey: "remote:ssh:root@server:/root",
           includeExtendedData: false,
           refreshToken: 0,

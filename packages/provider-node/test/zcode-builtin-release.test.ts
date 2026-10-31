@@ -23,7 +23,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe("ZCode Built-in Release", () => {
+describe("VCode Built-in Release", () => {
   it("失败按 1/2/4 分钟退避并封顶一小时；日志区分未到期与 lease", async () => {
     const root = await temporaryRoot();
     const bundledFilePath = join(root, "bundled.json");

@@ -85,7 +85,6 @@ describe("Coding Plan E2E mock env", () => {
     "conversation-session-ssh-disconnect-experience.test.ts",
     "conversation-session-ssh-remote-cold-reconnect.test.ts",
     "conversation-session-r3-mixed-entries.test.ts",
-    "conversation-session-r3-mobile.test.ts",
     "conversation-session-create-telemetry.test.ts",
     "conversation-session-offpeak-create.test.ts",
     "conversation-session-offpeak-create-existing-session.test.ts",

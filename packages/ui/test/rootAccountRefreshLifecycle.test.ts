@@ -49,7 +49,6 @@ describe("Root 账号刷新生命周期", () => {
         oauthPollingActive: false,
         setOAuthPollingActive: vi.fn(),
         markOAuthSuccess: vi.fn(),
-        onReauthenticationRequired: vi.fn(),
       }),
     );
     try {

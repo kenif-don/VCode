@@ -109,7 +109,7 @@ describe("resolveWorkspaceProviderConfigZCodeService", () => {
     delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: unknown }).IS_REACT_ACT_ENVIRONMENT;
   });
 
-  it("workspace 作用域始终使用 workspace ZCode session service", () => {
+  it("workspace 作用域始终使用 workspace VCode session service", () => {
     const workspaceZCodeService = createMockZCodeService("workspace");
     const baseZCodeService = createMockZCodeService("base");
 
@@ -123,7 +123,7 @@ describe("resolveWorkspaceProviderConfigZCodeService", () => {
     expect(resolved).toBe(workspaceZCodeService);
   });
 
-  it("base 作用域优先使用 base ZCode session service", () => {
+  it("base 作用域优先使用 base VCode session service", () => {
     const workspaceZCodeService = createMockZCodeService("workspace");
     const baseZCodeService = createMockZCodeService("base");
 

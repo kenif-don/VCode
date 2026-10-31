@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Restore a single legacy ACP-era conversation snapshot into the new ZCode stores.
+ * Restore a single legacy ACP-era conversation snapshot into the new VCode stores.
  *
  * Usage:
  *   restore-conversation.mjs --snapshot <path> [--task-index <path>] [--cli-db <path>]
@@ -8,7 +8,7 @@
  * Options:
  *   --snapshot <path>   Path to the legacy snapshot JSON file (required)
  *   --task-index <path> Task index sqlite path. Default: ~/.zcode/v2/tasks-index.sqlite
- *   --cli-db <path>     New ZCode session sqlite path. Default: ~/.zcode/cli/db/db.sqlite
+ *   --cli-db <path>     New VCode session sqlite path. Default: ~/.zcode/cli/db/db.sqlite
  *   --dry-run           Print what would be done without writing
  */
 
@@ -299,7 +299,7 @@ function buildRestorePlan(snapshotPath) {
   const createdAt = optionalNumber(meta.createdAt) ?? Date.now();
   const updatedAt = optionalNumber(meta.updatedAt) ?? createdAt;
 
-  // 旧 ACP provider 只代表来源。恢复后的新 ZCode 任务必须按 glm 写入，否则任务列表会被过滤掉。
+  // 旧 ACP provider 只代表来源。恢复后的新 VCode 任务必须按 glm 写入，否则任务列表会被过滤掉。
   const normalizedMeta = removeUndefined({
     ...meta,
     taskId: restoredTaskId,

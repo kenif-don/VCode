@@ -24,7 +24,7 @@ const items = Array.from({ length: Number(params.get("items") ?? 9) }, (_, i) =>
   unitIndex: i,
   userPreview: i === 0 ? "hello" : `你好，第 ${i + 1} 轮`,
   assistantPreview:
-    "Hello! I'm ZCode, your coding assistant. I can help you explore the repository, understand the implementation, and improve the sharing experience.",
+    "Hello! I'm VCode, your coding assistant. I can help you explore the repository, understand the implementation, and improve the sharing experience.",
   isRunning: params.has("running") || i === 8,
 }));
 function Fixture() {

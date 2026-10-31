@@ -560,7 +560,7 @@ describe("buildConversationStatusPanelModel", () => {
     ]);
   });
 
-  it("does not show git tools for a clean repository without worktree line changes", () => {
+  it("shows git tools for a clean repository without worktree line changes", () => {
     const model = buildConversationStatusPanelModel({
       gitSummary: gitSummary({ isDirty: false, ahead: 0 }),
       gitDirtyFileCount: 0,
@@ -570,8 +570,9 @@ describe("buildConversationStatusPanelModel", () => {
       backgroundWorks: [],
     });
 
-    expect(model.hasContent).toBe(false);
-    expect(model.git).toBeNull();
+    // 用户定夺（2026-10-29）：Git 操作区只要是 git 项目就常驻，不再「有变更才显示」。
+    expect(model.hasContent).toBe(true);
+    expect(model.git).toMatchObject({ added: 0, removed: 0, isClean: true });
   });
 
   it("lists only terminal ExitPlanMode rows with markdown, newest first", () => {

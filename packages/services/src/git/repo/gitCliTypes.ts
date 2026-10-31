@@ -7,6 +7,7 @@ import type {
   GitDiffResult,
   GitIdentity,
   GitLocalBranchListResult,
+  GitPullResult,
   GitPushResult,
   GitRepositorySummary,
   GitWorkspaceRepositoryInfo,
@@ -105,6 +106,7 @@ export interface GitCliRepo {
     options?: { stagedOnly?: boolean },
   ): Promise<{ commitHash: string }>;
   push(workspacePath: string): Promise<GitPushResult>;
+  pull(workspacePath: string): Promise<GitPullResult>;
   getIdentity(workspacePath: string): Promise<GitIdentity>;
 }
 

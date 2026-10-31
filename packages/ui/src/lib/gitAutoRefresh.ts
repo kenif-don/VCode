@@ -66,6 +66,24 @@ export function buildGitAutoRefreshWatchPaths(
   return watchPaths;
 }
 
+/** 多仓 watch 路径聚合：各仓的元数据监听路径取并集，按 path+recursive 去重。 */
+export function unionGitAutoRefreshWatchPaths(
+  watchPathLists: readonly GitAutoRefreshWatchPath[][],
+): GitAutoRefreshWatchPath[] {
+  const union: GitAutoRefreshWatchPath[] = [];
+  for (const watchPath of watchPathLists.flat()) {
+    if (
+      union.some(
+        (entry) => entry.path === watchPath.path && entry.recursive === watchPath.recursive,
+      )
+    ) {
+      continue;
+    }
+    union.push(watchPath);
+  }
+  return union;
+}
+
 export function stringifyGitAutoRefreshWatchPaths(
   watchPaths: readonly GitAutoRefreshWatchPath[],
 ): string {

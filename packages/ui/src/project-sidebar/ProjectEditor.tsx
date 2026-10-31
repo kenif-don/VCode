@@ -457,30 +457,34 @@ export function ProjectEditor({
               </div>
             ) : (
               <>
-                <div className="grid min-w-0 gap-1.5">
-                  <label htmlFor="project-name" className={FIELD_LABEL}>
-                    {msg("name")}
-                  </label>
-                  <Input
-                    id="project-name"
-                    aria-label={msg("name")}
-                    placeholder={msg("new")}
-                    autoFocus
-                    disabled={busy || Boolean(created)}
-                    data-testid="virtual-project-name"
-                    value={name}
-                    onChange={(event) => {
-                      setName(event.target.value);
-                      setNameEdited(true);
-                    }}
-                    className="h-9 rounded-lg max-md:text-mobile-input-safe"
-                  />
-                  {fixedFolder ? (
-                    <p className="break-all text-ui-sm text-foreground-subtle">
-                      {fixedFolder.deviceLabel}
-                    </p>
-                  ) : null}
-                </div>
+                {/* 创建项目不填项目名：由服务按文件夹自动命名（saveProject 未传 name 时取 defaultName/目录名）；
+                    设备（本机/远程服务器）仍在弹框内选择。编辑既有项目与远程固定目录确认保留名字输入。 */}
+                {project || fixedFolder ? (
+                  <div className="grid min-w-0 gap-1.5">
+                    <label htmlFor="project-name" className={FIELD_LABEL}>
+                      {msg("name")}
+                    </label>
+                    <Input
+                      id="project-name"
+                      aria-label={msg("name")}
+                      placeholder={msg("new")}
+                      autoFocus
+                      disabled={busy || Boolean(created)}
+                      data-testid="virtual-project-name"
+                      value={name}
+                      onChange={(event) => {
+                        setName(event.target.value);
+                        setNameEdited(true);
+                      }}
+                      className="h-9 rounded-lg max-md:text-mobile-input-safe"
+                    />
+                    {fixedFolder ? (
+                      <p className="break-all text-ui-sm text-foreground-subtle">
+                        {fixedFolder.deviceLabel}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {devices ? (
                   <div className="grid min-w-0 gap-1.5">
                     <label htmlFor="project-device" className={FIELD_LABEL}>

@@ -3,7 +3,6 @@ import { startProjectPointerDrag } from "#e2e/helpers/project-sidebar";
 import { join, basename } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
-  loginWithApiKey,
   prepareV4ConversationE2E,
   sendV4Prompt,
   waitForV4AssistantMessageContaining,
@@ -23,13 +22,7 @@ declare global {
 
 async function reloadGroupWorkspace() {
   await browser.refresh();
-  const login = $('[data-testid="login-use-api-key-button"]');
-  await browser.waitUntil(
-    async () =>
-      (await login.isDisplayed()) || (await $('[data-testid="sidebar-view-menu"]').isDisplayed()),
-    { timeout: 45_000 },
-  );
-  if (await login.isDisplayed()) await loginWithApiKey();
+  // VCode 无登录入口：刷新不会回欢迎页，直接等待侧栏视图菜单。
   await $('[data-testid="sidebar-view-menu"]').waitForDisplayed({ timeout: 30_000 });
 }
 async function waitForGroupedLayout() {

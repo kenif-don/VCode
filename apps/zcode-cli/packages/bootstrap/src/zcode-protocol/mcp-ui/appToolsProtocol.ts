@@ -16,7 +16,7 @@ import {
 import {
   ProtocolRequestError,
   parseParams,
-  requireSession,
+  requireSessionForMcpUi,
   type ZCodeProtocolAgentServerContext,
 } from "../server-types.js";
 import { McpUiAppToolRegistry } from "./appTools.js";
@@ -97,7 +97,7 @@ export async function registerMcpUiAppTools(
   rawParams: unknown,
 ): Promise<ZCodeMcpUiRegisterAppToolsResult> {
   const params = parseParams(zcodeMcpUiRegisterAppToolsParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, {
+  const record = requireSessionForMcpUi(context, params.sessionId, {
     operation: "mcp/uiRegisterAppTools",
   });
   return withScopeError(async () => {
@@ -128,7 +128,7 @@ export async function claimMcpUiAppToolCall(
   rawParams: unknown,
 ): Promise<ZCodeMcpUiAppToolAcceptedResult> {
   const params = parseParams(zcodeMcpUiClaimAppToolCallParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiClaimAppToolCall" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiClaimAppToolCall" });
   mcpUiInstances.validate(
     params.instance,
     params,
@@ -144,7 +144,7 @@ export async function resolveMcpUiAppToolCall(
   rawParams: unknown,
 ): Promise<ZCodeMcpUiAppToolAcceptedResult> {
   const params = parseParams(zcodeMcpUiResolveAppToolCallParamsSchema, rawParams);
-  const record = requireSession(context, params.sessionId, {
+  const record = requireSessionForMcpUi(context, params.sessionId, {
     operation: "mcp/uiResolveAppToolCall",
   });
   mcpUiInstances.validate(

@@ -53,7 +53,7 @@ describe("about", () => {
     const options = createSystemAboutPanelOptions(appleSiliconSnapshot, 2026, "en-US");
 
     expect(options).toMatchObject({
-      applicationName: "ZCode Desktop App",
+      applicationName: "VCode Desktop App",
       applicationVersion: "version 0.1.7",
       copyright: "Copyright © 2026 ZCode.",
       credits: "Optimized for Apple Silicon.",
@@ -64,7 +64,7 @@ describe("about", () => {
     const options = createSystemAboutPanelOptions(appleSiliconSnapshot, 2026, "zh-CN");
 
     expect(options).toMatchObject({
-      applicationName: "ZCode Desktop App",
+      applicationName: "VCode Desktop App",
       applicationVersion: "版本 0.1.7",
       copyright: "版权所有 © 2026 ZCode。",
       credits: "已针对 Apple Silicon 优化。",

@@ -49,6 +49,7 @@ export { useZCodeAgentService } from "./useZCodeAgentService.js";
 // Git pane
 export { useGitAutoRefresh } from "./useGitAutoRefresh.js";
 export { useGitRepository } from "./useGitRepository.js";
+export { useGitRepositories } from "./useGitRepositories.js";
 export { useGitActions } from "./useGitActions.js";
 // workspace provider 配置路径
 export { useWorkspaceProviderConfigFile } from "./useWorkspaceProviderConfigFile.js";

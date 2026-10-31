@@ -66,17 +66,17 @@ describe("embedded search bash prelude", () => {
       kind: "embedded-search",
       backend: {
         kind: "internal-cli",
-        command: "/Applications/ZCode Helper",
+        command: "/Applications/VCode Helper",
         args: ["/tmp/zcode.cjs", "__internal-search"],
         env: { ELECTRON_RUN_AS_NODE: "1" },
       },
     });
 
     expect(command).toContain(
-      'ELECTRON_RUN_AS_NODE=1 command \'/Applications/ZCode Helper\' /tmp/zcode.cjs __internal-search find "$@"',
+      'ELECTRON_RUN_AS_NODE=1 command \'/Applications/VCode Helper\' /tmp/zcode.cjs __internal-search find "$@"',
     );
     expect(command).toContain(
-      'ELECTRON_RUN_AS_NODE=1 command \'/Applications/ZCode Helper\' /tmp/zcode.cjs __internal-search grep "$@"',
+      'ELECTRON_RUN_AS_NODE=1 command \'/Applications/VCode Helper\' /tmp/zcode.cjs __internal-search grep "$@"',
     );
   });
 
@@ -164,7 +164,7 @@ describe("embedded search bash prelude", () => {
         kind: "embedded-search",
         backend: {
           kind: "internal-cli",
-          command: "C:\\Program Files\\ZCode\\zcode.exe",
+          command: "C:\\Program Files\\VCode\\zcode.exe",
           args: ["C:\\Users\\me\\z-code\\apps\\zcode-cli\\src\\run.ts", "__internal-search"],
         },
       },
@@ -172,10 +172,10 @@ describe("embedded search bash prelude", () => {
     );
 
     expect(command).toContain(
-      "command -v '/c/Program Files/ZCode/zcode.exe' >/dev/null 2>&1 || { command grep \"$@\"; return; }",
+      "command -v '/c/Program Files/VCode/zcode.exe' >/dev/null 2>&1 || { command grep \"$@\"; return; }",
     );
     expect(command).toContain(
-      "command '/c/Program Files/ZCode/zcode.exe' /c/Users/me/z-code/apps/zcode-cli/src/run.ts __internal-search grep \"$@\"",
+      "command '/c/Program Files/VCode/zcode.exe' /c/Users/me/z-code/apps/zcode-cli/src/run.ts __internal-search grep \"$@\"",
     );
   });
 
@@ -186,9 +186,9 @@ describe("embedded search bash prelude", () => {
         kind: "embedded-search",
         backend: {
           kind: "native-binaries",
-          findCommand: "C:\\Program Files\\ZCode\\tools\\bfs\\bfs.exe",
-          grepCommand: "C:\\Program Files\\ZCode\\tools\\ugrep\\ugrep.exe",
-          rgCommand: "C:\\Program Files\\ZCode\\tools\\ripgrep\\rg.exe",
+          findCommand: "C:\\Program Files\\VCode\\tools\\bfs\\bfs.exe",
+          grepCommand: "C:\\Program Files\\VCode\\tools\\ugrep\\ugrep.exe",
+          rgCommand: "C:\\Program Files\\VCode\\tools\\ripgrep\\rg.exe",
         },
       },
       { shellDialect: "git-bash" },
@@ -197,9 +197,9 @@ describe("embedded search bash prelude", () => {
     expect(command).not.toContain("unalias find");
     expect(command).not.toContain("find() {");
     expect(command).toContain(
-      "command '/c/Program Files/ZCode/tools/ugrep/ugrep.exe' -G --ignore-files --hidden -I",
+      "command '/c/Program Files/VCode/tools/ugrep/ugrep.exe' -G --ignore-files --hidden -I",
     );
-    expect(command).toContain("command '/c/Program Files/ZCode/tools/ripgrep/rg.exe' \"$@\"");
+    expect(command).toContain("command '/c/Program Files/VCode/tools/ripgrep/rg.exe' \"$@\"");
   });
 
   it("does not inject POSIX shell functions for CMD or legacy shell fallback", () => {

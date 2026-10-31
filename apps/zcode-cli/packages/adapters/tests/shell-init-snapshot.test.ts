@@ -288,7 +288,7 @@ describe("shell init snapshot", () => {
 
   it("uses host paths in creation scripts and Git Bash paths when sourcing snapshots", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "zcode-shell-init-snapshot-"));
-    const windowsLikeRoot = join(rootDir, "C:\\Users\\me\\ZCode");
+    const windowsLikeRoot = join(rootDir, "C:\\Users\\me\\VCode");
     let creationSnapshotPath = "";
     const execFile = vi.fn(async (_file: string, args: string[]) => {
       if (args[0] === "-lc") return { stdout: "/usr/bin:/bin\n", stderr: "" };
@@ -297,7 +297,7 @@ describe("shell init snapshot", () => {
       const match = script.match(/SNAPSHOT_FILE='([^']+)'/u);
       if (!match) throw new Error("missing snapshot path");
       creationSnapshotPath = match[1];
-      expect(creationSnapshotPath).toContain("C:\\Users\\me\\ZCode");
+      expect(creationSnapshotPath).toContain("C:\\Users\\me\\VCode");
       await mkdir(dirname(creationSnapshotPath), { recursive: true });
       await writeFile(creationSnapshotPath, "alias ll='ls -l git-bash'\n");
       return { stdout: "", stderr: "" };
@@ -314,9 +314,9 @@ describe("shell init snapshot", () => {
 
       expect(result).toBeDefined();
       if (!result) throw new Error("expected ready snapshot");
-      expect(result.path).toContain("C:\\Users\\me\\ZCode");
+      expect(result.path).toContain("C:\\Users\\me\\VCode");
       expect(result.path).toBe(creationSnapshotPath);
-      expect(result.shellPath).toContain("C:/Users/me/ZCode");
+      expect(result.shellPath).toContain("C:/Users/me/VCode");
       expect(result.shellPath).not.toContain("\\");
       expect(execFile).toHaveBeenCalledTimes(2);
 

@@ -7,6 +7,7 @@ const { effects, errorLog } = vi.hoisted(() => ({
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
   useEffect: (effect: () => unknown) => effects.push(effect),
+  useCallback: (fn: unknown) => fn,
   useRef: (current: unknown) => ({ current }),
 }));
 vi.mock("@/hooks/useAlertDialog.js", () => ({ useAlertDialog: () => vi.fn() }));
@@ -50,7 +51,6 @@ describe("失效 OAuth 回调", () => {
       oauthPollingActive,
       setOAuthPollingActive,
       markOAuthSuccess,
-      onReauthenticationRequired: vi.fn(),
     });
     // 只挂载回调订阅；启动恢复和轮询在各自测试中验证。
     effects.at(-1)!();
@@ -173,7 +173,6 @@ describe("OAuth 成功后的真实设置 CAS", () => {
         markOAuthSuccess,
         setIsRestoringOAuthSession: vi.fn(),
         setOAuthPollingActive: vi.fn(),
-        onReauthenticationRequired: vi.fn(),
       });
       if (mode === "polling") {
         effects.at(-2)!();

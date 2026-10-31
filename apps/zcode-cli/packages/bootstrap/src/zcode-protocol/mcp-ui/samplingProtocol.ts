@@ -5,7 +5,7 @@ import {
 import { mcpAppsSamplingResultSchema } from "@zcode/shared/mcp-apps";
 import {
   parseParams,
-  requireSession,
+  requireSessionForMcpUi,
   type ZCodeProtocolAgentServerContext,
 } from "../server-types.js";
 import { mcpUiInstances } from "./instances.js";
@@ -14,7 +14,7 @@ import { McpUiSamplingCalls } from "./samplingCalls.js";
 const calls = new McpUiSamplingCalls();
 export async function sampleMcpUi(context: ZCodeProtocolAgentServerContext, raw: unknown) {
   const params = parseParams(zcodeMcpUiSamplingParamsSchema, raw);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiSampling" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiSampling" });
   const validate = () =>
     mcpUiInstances.validate(
       params.instance,
@@ -55,7 +55,7 @@ export async function sampleMcpUi(context: ZCodeProtocolAgentServerContext, raw:
 }
 export function cancelMcpUiSampling(context: ZCodeProtocolAgentServerContext, raw: unknown) {
   const params = parseParams(zcodeMcpUiCancelSamplingParamsSchema, raw);
-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiCancelSampling" });
+  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiCancelSampling" });
   const active = mcpUiInstances.validate(
     params.instance,
     params,

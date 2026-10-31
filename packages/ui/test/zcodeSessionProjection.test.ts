@@ -2225,7 +2225,7 @@ describe("zcodeSessionProjection", () => {
     });
   });
 
-  it("maps ZCode Protocol context projection updates to legacy usage_update events", () => {
+  it("maps VCode Protocol context projection updates to legacy usage_update events", () => {
     expect(
       zcodeSessionEventToZCodeStreamEvents({
         event: {
@@ -3357,7 +3357,7 @@ describe("zcodeSessionProjection", () => {
     ]);
   });
 
-  it("maps ZCode model retry status updates to apiRetry events", () => {
+  it("maps VCode model retry status updates to apiRetry events", () => {
     const events = zcodeSessionEventToZCodeStreamEvents({
       event: {
         eventId: "evt_retry",
@@ -4031,7 +4031,7 @@ describe("zcodeSessionProjection", () => {
     });
   });
 
-  it("maps nested ZCode Protocol projection context usage", () => {
+  it("maps nested VCode Protocol projection context usage", () => {
     expect(
       zcodeSessionEventToZCodeStreamEvents({
         event: {
@@ -5625,7 +5625,7 @@ describe("zcodeSessionProjection", () => {
     });
   });
 
-  it("projects ZCode settings updates to model and mode state events", () => {
+  it("projects VCode settings updates to model and mode state events", () => {
     const options = zcodeSessionSettingsToConfigOptions(settings);
     const events = zcodeStateUpdatedToZCodeStreamEvents({
       notification: {
@@ -5668,7 +5668,7 @@ describe("zcodeSessionProjection", () => {
     });
   });
 
-  it("parses UI model values into strict ZCode model refs", () => {
+  it("parses UI model values into strict VCode model refs", () => {
     expect(parseModelPickerValue("glm/glm-4.6")).toEqual({
       providerId: "glm",
       modelId: "glm-4.6",

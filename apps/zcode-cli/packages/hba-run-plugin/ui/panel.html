@@ -5,36 +5,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HBA 运行面板</title>
 <style>
-  /* 双主题:默认(=深色)兜底独立打开场景;宿主经 hostContext.theme /
+  /* 双主题:色板消费宿主注入的 MCP Apps 标准样式变量(ZCode 主题 token,
+     见宿主 pluginUiStyleVariables.ts),兜底值 = ZCode 自身 zai-dark / zai-light
+     色值,独立打开时兜底即准;宿主经 hostContext.theme /
      host-context-changed 通知切换 documentElement[data-theme]。 */
   :root, [data-theme="dark"] {
-    --bg: #1e1f24;
-    --bg2: #26272e;
-    --bg3: #2e3038;
-    --console-bg: #141519;
-    --fg: #e6e6e6;
-    --fg-dim: #9a9aa2;
-    --accent: #4f8cff;
-    --accent-soft: rgba(79, 140, 255, 0.16);
-    --ok: #3fb96f;
-    --err: #e5534b;
-    --warn: #d4a72c;
-    --border: #3a3c45;
+    --bg: var(--color-background-primary, #161616);
+    --bg2: var(--color-background-secondary, #202020);
+    --fill: #2b2b2b;
+    --hover: var(--color-background-ghost, rgba(255, 255, 255, 0.05));
+    --selected: rgba(255, 255, 255, 0.1);
+    --console-bg: var(--color-background-primary, #161616);
+    --fg: var(--color-text-primary, #d4d4d4);
+    --fg-dim: var(--color-text-secondary, rgba(212, 212, 212, 0.6));
+    --accent: var(--color-ring-primary, #ffffff);
+    --primary: var(--color-background-inverse, #ffffff);
+    --primary-fg: var(--color-text-inverse, #000000);
+    --ok: var(--color-text-success, #46bf72);
+    --err: var(--color-text-danger, #ff5c5c);
+    --warn: var(--color-text-warning, #ff8a30);
+    --border: var(--color-border-primary, rgba(255, 255, 255, 0.1));
+    --border-hover: var(--color-border-secondary, rgba(255, 255, 255, 0.15));
     --mono: "Cascadia Code", Consolas, "Courier New", monospace;
+    color-scheme: dark;
   }
   [data-theme="light"] {
-    --bg: #FFFFFF;
-    --bg2: #F7F8FA;
-    --bg3: #EEF0F3;
-    --console-bg: #F3F4F6;
-    --fg: #1F2329;
-    --fg-dim: #6B7280;
-    --accent: #3B82F6;
-    --accent-soft: rgba(59, 130, 246, 0.12);
-    --ok: #16A34A;
-    --err: #DC2626;
-    --warn: #B45309;
-    --border: #E5E6EB;
+    --bg: var(--color-background-primary, #f8f8f8);
+    --bg2: var(--color-background-secondary, #ffffff);
+    --fill: #ffffff;
+    --hover: var(--color-background-ghost, rgba(13, 13, 13, 0.05));
+    --selected: rgba(13, 13, 13, 0.05);
+    --console-bg: var(--color-background-primary, #f8f8f8);
+    --fg: var(--color-text-primary, #262626);
+    --fg-dim: var(--color-text-secondary, rgba(38, 38, 38, 0.6));
+    --accent: var(--color-ring-primary, #000000);
+    --primary: var(--color-background-inverse, #000000);
+    --primary-fg: var(--color-text-inverse, #ffffff);
+    --ok: var(--color-text-success, #1e8a3e);
+    --err: var(--color-text-danger, #e03131);
+    --warn: var(--color-text-warning, #e07b00);
+    --border: var(--color-border-primary, rgba(13, 13, 13, 0.1));
+    --border-hover: var(--color-border-secondary, rgba(13, 13, 13, 0.15));
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
@@ -44,31 +56,7 @@
     font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
     display: flex;
     flex-direction: column;
-    min-width: 640px;
   }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 1px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    background: var(--bg3);
-    color: var(--fg-dim);
-    white-space: nowrap;
-  }
-  .badge.ok { color: var(--ok); }
-  .badge.err { color: var(--err); }
-  .badge.run { color: var(--accent); }
-  .badge.run::before {
-    content: "";
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: pulse 1.2s infinite;
-  }
-  @keyframes pulse { 50% { opacity: 0.25; } }
-
   main {
     flex: 1;
     display: flex;
@@ -76,7 +64,7 @@
   }
   aside {
     width: 268px;
-    min-width: 220px;
+    min-width: 140px;
     border-right: 1px solid var(--border);
     background: var(--bg2);
     display: flex;
@@ -85,6 +73,7 @@
   }
   aside .head, .section-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     padding: 8px 10px;
@@ -95,27 +84,29 @@
   #config-items { flex: 1; overflow: auto; padding: 6px; }
   .config-item {
     display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 5px 4px 5px 9px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 7px 9px;
     border-radius: 6px;
-    cursor: pointer;
+    cursor: grab;
+    user-select: none;
     border: 1px solid transparent;
     margin-bottom: 4px;
   }
-  .config-item:hover { background: var(--bg3); }
-  .config-item.selected { background: var(--bg3); border-color: var(--accent); }
-  .config-item .ci-main { flex: 1; min-width: 0; }
-  .config-item .name { font-weight: 600; word-break: break-all; }
+  .config-item:hover { background: var(--hover); }
+  .config-item.selected { background: var(--selected); border-color: var(--accent); }
+  .config-item.dragging { opacity: 0.55; border-color: var(--accent); background: var(--selected); }
+  .config-item .name { display: flex; gap: 6px; align-items: flex-start; font-weight: 600; word-break: break-all; }
+  .ci-grip { flex: none; color: var(--fg-dim); cursor: grab; letter-spacing: -1px; line-height: 1.5; }
   .config-item .cmd {
     color: var(--fg-dim);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .config-item .ci-actions { display: flex; gap: 1px; flex: none; }
+  .config-item .ci-actions { display: flex; gap: 2px; justify-content: flex-end; }
 
   section#work {
     flex: 1;
@@ -123,8 +114,8 @@
     flex-direction: column;
     min-width: 0;
     overflow: hidden;
-    padding: 10px 12px;
-    gap: 10px;
+    padding: 0;
+    gap: 0;
   }
   .card {
     background: var(--bg2);
@@ -132,9 +123,28 @@
     border-radius: 8px;
     overflow: hidden;
   }
-  #console-box { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  #console-box .body { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-  .card .body { padding: 10px 12px; }
+  /* 日志区无内外间距:卡片铺满工作区,日志贴边(需求:取消日志区上下左右间距) */
+  #console-box { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; border: none; border-radius: 0; }
+  /* 「回到底部」浮动按钮:贴日志底部居中,上翻时出现(磁性跟随见 consoleFollowAllowed) */
+  #btn-to-bottom {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    background: var(--fill);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2px 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--fg-dim);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  #btn-to-bottom:hover { color: var(--fg); border-color: var(--border-hover); }
+  #btn-to-bottom[hidden] { display: none; }
+  #console-box .body { flex: 1; display: flex; flex-direction: column; gap: 0; min-height: 0; padding: 0; }
+  .card .body { padding: 0; }
   .form-grid {
     display: grid;
     grid-template-columns: 90px 1fr;
@@ -144,7 +154,7 @@
   .form-grid label { color: var(--fg-dim); padding-top: 5px; }
   input[type=text], textarea {
     width: 100%;
-    background: var(--bg);
+    background: var(--fill);
     color: var(--fg);
     border: 1px solid var(--border);
     border-radius: 5px;
@@ -158,7 +168,7 @@
   .hint { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
 
   button {
-    background: var(--bg3);
+    background: var(--fill);
     color: var(--fg);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -166,10 +176,28 @@
     font-size: 12px;
     cursor: pointer;
   }
-  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:hover:not(:disabled) { border-color: var(--border-hover); }
   button:disabled { opacity: 0.45; cursor: default; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
   button.small { padding: 2px 8px; font-size: 11px; }
+
+  /* 标题区 = 运行配置下拉框:选中项即当前标题,可切换查看不同配置日志 */
+  #cfg-select {
+    font: inherit;
+    font-weight: 600;
+    color: var(--fg);
+    background: var(--fill);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    min-width: 60px;
+    max-width: 240px;
+    cursor: pointer;
+    outline: none;
+  }
+  #cfg-select:hover { border-color: var(--border-hover); }
+  #cfg-select:focus { border-color: var(--accent); }
+  #cfg-select:disabled { opacity: 0.5; cursor: default; }
 
   /* 纯图标按钮(配置行 + 栏头工具):透明底,hover 才显边框,省横向空间 */
   .icon-btn {
@@ -182,33 +210,20 @@
     line-height: 1.6;
     cursor: pointer;
   }
-  .icon-btn:hover:not(:disabled) { background: var(--bg3); border-color: var(--border); color: var(--fg); }
+  .icon-btn:hover:not(:disabled) { background: var(--hover); border-color: var(--border); color: var(--fg); }
   .icon-btn:disabled { opacity: 0.3; cursor: default; }
   .icon-btn.go:hover:not(:disabled) { color: var(--ok); border-color: var(--ok); }
   .icon-btn.stop:hover:not(:disabled) { color: var(--err); border-color: var(--err); }
 
-  #runs-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-  .run-chip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 5px 10px;
-    cursor: pointer;
-  }
-  .run-chip.current { border-color: var(--accent); }
-
-  #console-box .body { display: flex; flex-direction: column; gap: 8px; }
+  #console-box .body { display: flex; flex-direction: column; gap: 0; }
   #console {
     flex: 1;
     background: var(--console-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 0;
+    border-radius: 0;
     font-family: var(--mono);
     font-size: 12px;
-    padding: 8px 10px;
+    padding: 0;
     min-height: 200px;
     overflow: auto;
     white-space: pre-wrap;
@@ -219,7 +234,6 @@
   #console .l-stdout { color: var(--fg); }
 
   .empty { color: var(--fg-dim); padding: 12px; text-align: center; }
-  .tag { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
   .aside-show { display: none; }
   body.aside-hidden aside { display: none; }
   body.aside-hidden .aside-show { display: inline-block; }
@@ -290,14 +304,14 @@
     border-radius: 6px;
     cursor: pointer;
   }
-  .ctx-menu button:hover { background: var(--bg3); border-color: var(--border); }
+  .ctx-menu button:hover { background: var(--hover); border-color: var(--border); }
 
   .toast {
     position: fixed;
     left: 50%;
     bottom: 26px;
     transform: translateX(-50%) translateY(8px);
-    background: var(--bg3);
+    background: var(--fill);
     color: var(--fg);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -320,6 +334,8 @@
     <div class="head">
       运行配置
       <span class="spacer"></span>
+      <button class="icon-btn" id="btn-import" title="导入配置(JSON)">⤒</button>
+      <button class="icon-btn" id="btn-export" title="导出全部配置(JSON)">⤓</button>
       <button class="icon-btn" id="btn-new" title="新建配置">＋</button>
       <button class="icon-btn" id="btn-dup" title="复制当前配置">⧉</button>
       <button class="icon-btn" id="btn-del" title="删除当前配置">🗑</button>
@@ -331,17 +347,18 @@
   <section id="work">
     <div class="card" id="console-box">
       <div class="section-head">
-        运行输出
-        <span id="console-run-tag" class="tag"></span>
+        <select id="cfg-select" title="切换运行配置,查看不同配置的日志"></select>
+        <button class="small primary" id="btn-h-start" title="启动当前配置" disabled>启动</button>
+        <button class="small" id="btn-h-restart" title="重启当前配置(先停止再启动)" hidden>重启</button>
+        <button class="small" id="btn-h-stop" title="停止当前配置" hidden>停止</button>
         <span class="spacer"></span>
-        <label class="hint"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
         <button class="small" id="btn-clear">清空</button>
         <button class="small" id="btn-copy">复制</button>
       </div>
       <div class="body">
-        <div id="runs-bar"></div>
-        <div id="console"><div class="empty">选择一个运行查看输出</div></div>
+        <div id="console"><div class="empty">选择配置查看输出</div></div>
       </div>
+      <button id="btn-to-bottom" title="回到底部" hidden>⤓</button>
     </div>
   </section>
 </main>
@@ -388,10 +405,11 @@
 
 <!-- 日志右键菜单 -->
 <div id="ctx-menu" class="ctx-menu" hidden>
-  <button data-act="send">添加到对话</button>
+  <button data-act="insert">添加到对话</button>
   <button data-act="copy">复制</button>
 </div>
 
+<input type="file" id="import-file" accept=".json,application/json" hidden>
 <div id="toast" class="toast"></div>
 
 <script>
@@ -408,7 +426,9 @@
  *     ui/notifications/host-context-changed 通知推送(部分增量,可能只含 theme);
  *   - 之后走标准 MCP:tools/call、resources/read、resources/subscribe,
  *     服务端以 notifications/resources/updated 推送状态变化;
- *   - ui/message 请求可把文本以用户身份发进会话(宿主可能弹确认框)。
+ *   - 日志添加到对话优先 ui/insert-input-text(VCode 扩展,文本进输入框不发送),
+ *     老宿主降级 ui/update-model-context(插件上下文附到对话输入区);
+ *     ui/message(以用户身份发送,宿主可能弹确认框)已不再使用。
  * ======================================================================== */
 const Bridge = (() => {
   const pending = new Map();
@@ -427,8 +447,11 @@ const Bridge = (() => {
       if (!entry) return;
       pending.delete(msg.id);
       clearTimeout(entry.timer);
-      if (msg.error) entry.reject(new Error(msg.error.message || "JSON-RPC error"));
-      else entry.resolve(msg.result);
+      if (msg.error) {
+        const err = new Error(msg.error.message || "JSON-RPC error");
+        if (typeof msg.error.code === "number") err.code = msg.error.code;
+        entry.reject(err);
+      } else entry.resolve(msg.result);
       return;
     }
     if (typeof msg.method === "string") {
@@ -522,10 +545,10 @@ const App = {
   selectedConfigId: null,
   currentRunId: null,
   outputByRun: Object.create(null), // runId -> { lines: [], since: 0 }
-  autoScroll: true,
   editingConfigId: null, // null = 弹窗处于「新建」模式;否则为被编辑配置 id
   pollTimer: null,
-  refreshTimer: null
+  refreshTimer: null,
+  consoleRenderedRun: null // 当前 #console DOM 对应的 runId(增量追加的同步标记)
 };
 
 // 独立打开(无宿主)时直接拒绝工具调用,给出可读错误而不是桥超时。
@@ -558,11 +581,91 @@ function envToLines(env) {
   return Object.entries(env || {}).map(([k, v]) => k + "=" + v).join("\n");
 }
 
-function stateBadge(run) {
-  if (run.state === "running") return '<span class="badge run">运行中</span>';
-  if (run.stopped && run.state === "exited") return '<span class="badge">已停止</span>';
-  if (run.state === "exited") return '<span class="badge ok">已完成</span>';
-  return '<span class="badge err">失败</span>';
+// ---- ANSI 色码解析 --------------------------------------------------------
+// 进程输出(vite/chalk 等)常带 SGR 色码,直接当文本渲染会显示成 [31m 这类乱码;
+// 这里解析成带内联样式的 span,其余转义序列一律剥掉。调色板随主题切换。
+const ANSI_PALETTE = {
+  // 与 ZCode 内置终端同款(--color-terminal-* 的 zai-dark / zai-light 值)
+  dark: ["#363636", "#ff5c5c", "#46bf72", "#ff8a30", "#4099ff", "#7b5ce5", "#42c8c8", "#adadad",
+         "#747474", "#ff9999", "#87d9a4", "#ffb26b", "#80beff", "#a888f2", "#8ee5e5", "#f8f8f8"],
+  light: ["#5c5c5c", "#e03131", "#1e8a3e", "#e07b00", "#0b7fff", "#9e77ed", "#0aa7a7", "#adadad",
+          "#888888", "#e03131", "#1e8a3e", "#e07b00", "#0066dd", "#9e77ed", "#0aa7a7", "#0d0d0d"]
+};
+
+function ansiPalette() {
+  return document.documentElement.dataset.theme === "light" ? ANSI_PALETTE.light : ANSI_PALETTE.dark;
+}
+
+function ansiColor256(n) {
+  if (n < 16) return ansiPalette()[n];
+  if (n >= 236) { const g = 8 + (n - 236) * 10; return `rgb(${g},${g},${g})`; }
+  n -= 16;
+  const f = (v) => (v ? 55 + v * 40 : 0);
+  return `rgb(${f(Math.floor(n / 36))},${f(Math.floor((n % 36) / 6))},${f(n % 6)})`;
+}
+
+function stripAnsi(s) {
+  return String(s)
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, "")
+    .replace(/\x1b\[[0-9;:?]*[A-Za-z]/g, "")
+    .replace(/\x1b[@-Z\\-_]/g, "");
+}
+
+function ansiToHtml(raw) {
+  const text = String(raw);
+  let out = "";
+  let last = 0;
+  let fg = "", bg = "", bold = false, dim = false, italic = false, underline = false;
+  const flush = (end) => {
+    if (end <= last) return;
+    const chunk = escapeHtml(text.slice(last, end)).replace(/\x1b/g, "");
+    const st = [];
+    if (fg) st.push("color:" + fg);
+    if (bg) st.push("background:" + bg);
+    if (bold) st.push("font-weight:600");
+    if (dim) st.push("opacity:.65");
+    if (italic) st.push("font-style:italic");
+    if (underline) st.push("text-decoration:underline");
+    out += st.length ? '<span style="' + st.join(";") + '">' + chunk + "</span>" : chunk;
+  };
+  const applySgr = (params) => {
+    const nums = (params || "0").split(";").map((x) => (x === "" ? 0 : parseInt(x, 10) || 0));
+    for (let i = 0; i < nums.length; i++) {
+      const c = nums[i];
+      if (c === 0) { fg = bg = ""; bold = dim = italic = underline = false; }
+      else if (c === 1) bold = true;
+      else if (c === 2) dim = true;
+      else if (c === 3) italic = true;
+      else if (c === 4) underline = true;
+      else if (c === 22) { bold = dim = false; }
+      else if (c === 23) italic = false;
+      else if (c === 24) underline = false;
+      else if (c >= 30 && c <= 37) fg = ansiPalette()[c - 30];
+      else if (c === 39) fg = "";
+      else if (c >= 40 && c <= 47) bg = ansiPalette()[c - 40];
+      else if (c === 49) bg = "";
+      else if (c >= 90 && c <= 97) fg = ansiPalette()[c - 90 + 8];
+      else if (c >= 100 && c <= 107) bg = ansiPalette()[c - 100 + 8];
+      else if (c === 38 || c === 48) {
+        let col = "";
+        if (nums[i + 1] === 5) { col = ansiColor256(nums[i + 2] || 0); i += 2; }
+        else if (nums[i + 1] === 2) {
+          col = `rgb(${nums[i + 2] || 0},${nums[i + 3] || 0},${nums[i + 4] || 0})`;
+          i += 4;
+        }
+        if (col) { if (c === 38) fg = col; else bg = col; }
+      }
+    }
+  };
+  const re = /\x1b\[([0-9;:?]*)m|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[[0-9;:?]*[A-Za-z]|\x1b[@-Z\\-_]/g;
+  let m;
+  while ((m = re.exec(text))) {
+    flush(m.index);
+    if (m[1] !== undefined) applySgr(m[1]);
+    last = re.lastIndex;
+  }
+  flush(text.length);
+  return out;
 }
 
 function toast(msg, isErr) {
@@ -577,6 +680,7 @@ function toast(msg, isErr) {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+  renderConsole(); // ANSI 调色板随主题切换,日志重上色
 }
 
 function systemTheme() {
@@ -591,8 +695,89 @@ function runningRunOf(configId) {
   return App.runs.find((r) => r.configId === configId && r.state === "running") || null;
 }
 
+/** 标题区:配置下拉框(选中项即标题)+ 按运行态切换 启动 / 重启+停止。 */
+function renderConsoleHead() {
+  const sel = $("cfg-select");
+  const prev = App.selectedConfigId || "";
+  sel.innerHTML = App.configs.length
+    ? App.configs.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join("")
+    : '<option value="">暂无配置</option>';
+  sel.value = prev;
+  if (sel.value !== prev) sel.selectedIndex = 0;
+  const has = !!App.selectedConfigId;
+  const running = has && !!runningRunOf(App.selectedConfigId);
+  $("btn-h-start").hidden = running;
+  $("btn-h-restart").hidden = !running;
+  $("btn-h-stop").hidden = !running;
+  $("btn-h-start").disabled = !has;
+  $("btn-h-restart").disabled = !has;
+  $("btn-h-stop").disabled = !has;
+}
+
+// ---- 配置列表拖动排序 --------------------------------------------------------
+// 按住行(操作按钮除外)上下拖动即调序,松手经 run_config_reorder 持久化;
+// 4px 阈值区分点击/双击与拖动,拖动只在 mousemove 超过阈值后开始。
+
+function persistConfigOrder(ids) {
+  callTool("run_config_reorder", { configIds: ids }).then(() => {
+    // 本地同步顺序,免等资源刷新;失败才回读服务端真实顺序
+    App.configs = ids.map((id) => App.configs.find((c) => c.id === id)).filter(Boolean);
+    renderConfigs();
+    renderConsoleHead();
+  }).catch((e) => {
+    toast("保存顺序失败:" + (e.message || e), true);
+    refreshConfigs().catch(() => {});
+  });
+}
+
+function beginConfigDrag(e, el) {
+  if (e.button !== 0) return;
+  if (e.target.closest("button")) return; // 行内操作按钮不触发拖动
+  e.preventDefault(); // 避免拖动过程选中文本
+  const startY = e.clientY;
+  let started = false;
+
+  const onMove = (ev) => {
+    if (!started) {
+      if (Math.abs(ev.clientY - startY) < 4) return;
+      started = true;
+      el.classList.add("dragging");
+    }
+    ev.preventDefault();
+    const container = $("config-items");
+    const siblings = [...container.querySelectorAll(".config-item")].filter((n) => n !== el);
+    let target = null;
+    for (const other of siblings) {
+      const r = other.getBoundingClientRect();
+      if (ev.clientY < r.top + r.height / 2) {
+        target = other;
+        break;
+      }
+    }
+    if (target) {
+      if (el.nextElementSibling !== target) container.insertBefore(el, target);
+    } else if (container.lastElementChild !== el) {
+      container.appendChild(el);
+    }
+  };
+  const onUp = () => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    window.removeEventListener("blur", onUp);
+    if (!started) return;
+    el.classList.remove("dragging");
+    const ids = [...$("config-items").querySelectorAll(".config-item")].map((n) => n.dataset.id);
+    const unchanged = ids.join("\n") === App.configs.map((c) => c.id).join("\n");
+    if (!unchanged) persistConfigOrder(ids);
+  };
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+  window.addEventListener("blur", onUp); // 鼠标在窗口外松开也要收尾
+}
+
 function renderConfigs() {
   const box = $("config-items");
+  renderConsoleHead();
   if (!App.configs.length) {
     box.innerHTML = '<div class="empty">暂无配置,点「＋」创建</div>';
     $("btn-dup").disabled = true;
@@ -603,23 +788,24 @@ function renderConfigs() {
     const running = !!runningRunOf(c.id);
     return `
     <div class="config-item ${c.id === App.selectedConfigId ? "selected" : ""}" data-id="${escapeHtml(c.id)}">
-      <div class="ci-main">
-        <div class="name">${escapeHtml(c.name)}</div>
-        <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
-      </div>
+      <div class="name"><span class="ci-grip" title="按住拖动排序">⋮⋮</span>${escapeHtml(c.name)}</div>
+      <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
       <div class="ci-actions">
         <button class="icon-btn" data-act="edit" title="编辑配置">✎</button>
-        <button class="icon-btn go" data-act="start" title="运行该配置" ${running ? "disabled" : ""}>▶</button>
-        <button class="icon-btn stop" data-act="stop" title="停止该配置" ${running ? "" : "disabled"}>■</button>
-        <button class="icon-btn" data-act="restart" title="重启(先停止再启动同一配置)">↻</button>
+        ${running
+          ? `<button class="icon-btn stop" data-act="stop" title="停止该配置">■</button>
+        <button class="icon-btn" data-act="restart" title="重启(先停止再启动同一配置)">↻</button>`
+          : `<button class="icon-btn go" data-act="start" title="运行该配置">▶</button>`}
       </div>
     </div>`;
   }).join("");
   for (const el of box.querySelectorAll(".config-item")) {
     const id = el.dataset.id;
-    el.addEventListener("click", () => selectConfig(id));
+    el.addEventListener("click", () => selectConfig(id).catch((e) => toast(e.message, true)));
     // 双击行 = 打开编辑弹窗(与 ✎ 等价,避免误触直接跑命令)
     el.addEventListener("dblclick", () => openModal(id));
+    // 按住行(按钮除外)拖动排序
+    el.addEventListener("mousedown", (e) => beginConfigDrag(e, el));
     for (const btn of el.querySelectorAll("[data-act]")) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -636,51 +822,75 @@ function renderConfigs() {
   $("btn-del").disabled = !hasSel;
 }
 
-function renderRunsBar() {
-  const bar = $("runs-bar");
-  const live = App.runs.filter((r) => r.state === "running");
-  const recent = App.runs.filter((r) => r.state !== "running").slice(-5);
-  const items = [...live, ...recent];
-  if (!items.length) { bar.innerHTML = ""; return; }
-  bar.innerHTML = items.map((r) => `
-    <div class="run-chip ${r.runId === App.currentRunId ? "current" : ""}" data-run="${escapeHtml(r.runId)}">
-      ${stateBadge(r)}
-      <span>${escapeHtml(r.configName || r.command)}</span>
-      ${r.state === "running" ? `<button class="small" data-stop="${escapeHtml(r.runId)}">停止</button>` : ""}
-    </div>`).join("");
-  for (const el of bar.querySelectorAll(".run-chip")) {
-    el.addEventListener("click", (e) => {
-      if (e.target.dataset.stop) return;
-      selectRun(el.dataset.run);
-    });
-  }
-  for (const el of bar.querySelectorAll("[data-stop]")) {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      stopRun(el.dataset.stop).catch((err) => toast(err.message, true));
-    });
-  }
+function consoleLineEl(l) {
+  const div = document.createElement("div");
+  div.className = "l-" + (l.stream || "stdout");
+  div.innerHTML = ansiToHtml(l.text);
+  return div;
+}
+
+/**
+ * 日志区的「磁性跟随」规则(自动,无开关):
+ *  - 滚动条贴底 → 自动跟随新输出滚到底;用户上翻后 → 保持位置不被拉回,回到底部自动恢复;
+ *  - 有未收起的选区(正在拖选/准备右键发送)时不滚动,避免拖拽终点被带走;
+ *  - 日志 DOM 增量追加而非整体重建,选区锚点不会中途被毁。
+ */
+function isConsoleNearBottom(box) {
+  return box.scrollHeight - box.scrollTop - box.clientHeight <= 40;
+}
+
+function updateToBottomBtn(box) {
+  $("btn-to-bottom").hidden = isConsoleNearBottom(box);
+}
+
+function consoleFollowAllowed(box) {
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) return false;
+  return isConsoleNearBottom(box);
 }
 
 function renderConsole() {
-  const tag = $("console-run-tag");
   const box = $("console");
   const view = App.outputByRun[App.currentRunId];
-  tag.textContent = App.currentRunId ? App.currentRunId : "";
+  App.consoleRenderedRun = App.currentRunId;
   if (!view || !view.lines.length) {
-    box.innerHTML = '<div class="empty">暂无输出</div>';
+    box.innerHTML = '<div class="empty">' +
+      (App.currentRunId ? "暂无输出" : "选择配置查看输出") + "</div>";
+    updateToBottomBtn(box);
     return;
   }
   const frag = document.createDocumentFragment();
-  for (const l of view.lines) {
-    const div = document.createElement("div");
-    div.className = "l-" + (l.stream || "stdout");
-    div.textContent = l.text;
-    frag.appendChild(div);
-  }
+  for (const l of view.lines) frag.appendChild(consoleLineEl(l));
   box.innerHTML = "";
   box.appendChild(frag);
-  if (App.autoScroll) box.scrollTop = box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
+  updateToBottomBtn(box);
+}
+
+/** 增量追加新行。整体重建会毁掉进行中的选区(表现为"选择从日志开头起选"),必须避免。 */
+function appendConsoleLines(newLines) {
+  const box = $("console");
+  if (App.consoleRenderedRun !== App.currentRunId) {
+    renderConsole(); // DOM 与当前运行不同步(切运行/清空后),退回整体渲染
+    return;
+  }
+  if (!newLines || !newLines.length) return;
+  const follow = consoleFollowAllowed(box);
+  const emptyEl = box.querySelector(".empty");
+  if (emptyEl) box.removeChild(emptyEl);
+  for (const l of newLines) box.appendChild(consoleLineEl(l));
+  if (follow) box.scrollTop = box.scrollHeight;
+  updateToBottomBtn(box);
+}
+
+/** 「回到底部」浮动按钮:上翻时出现,点击跳回底部后隐藏,磁性跟随随之恢复。 */
+function setupConsoleScroll() {
+  const box = $("console");
+  box.addEventListener("scroll", () => updateToBottomBtn(box), { passive: true });
+  $("btn-to-bottom").addEventListener("click", () => {
+    box.scrollTop = box.scrollHeight;
+    updateToBottomBtn(box);
+  });
 }
 
 const previewShown = new Set();
@@ -736,6 +946,7 @@ async function saveModal() {
     if (res.config) App.selectedConfigId = res.config.id;
     closeModal();
     await refreshConfigs();
+    scheduleUiStateSave();
   } catch (e) {
     $("modal-error").textContent = e.message;
   }
@@ -743,17 +954,45 @@ async function saveModal() {
 
 // ---- 动作 ------------------------------------------------------------------
 
-function selectConfig(id) {
+async function selectConfig(id) {
   App.selectedConfigId = id;
   renderConfigs();
+  // 切换配置即换日志:优先该配置最近一次活运行;没有活运行则回放最近一次历史日志;
+  // 两者都没有才切空日志,不残留其他配置的输出。
+  const run = App.runs.filter((r) => r.configId === id).pop();
+  if (run) {
+    if (run.runId !== App.currentRunId) selectRun(run.runId);
+    scheduleUiStateSave();
+    return;
+  }
+  try {
+    const res = await callTool("run_history", { limit: 50 });
+    // 等待期间用户可能已切走:只在仍选中该配置时应用,避免旧查询覆盖新选择
+    if (App.selectedConfigId !== id) return;
+    const entry = (res.history || []).find((h) => h.configId === id);
+    if (entry) {
+      selectRun(entry.id);
+      scheduleUiStateSave();
+      return;
+    }
+  } catch (e) {
+    /* 历史不可用时按无日志处理 */
+  }
+  if (App.selectedConfigId !== id) return;
+  if (App.currentRunId) {
+    App.currentRunId = null;
+    renderConsole();
+    scheduleUiStateSave();
+  }
+  scheduleUiStateSave();
 }
 
 function selectRun(runId) {
   App.currentRunId = runId;
   if (!App.outputByRun[runId]) App.outputByRun[runId] = { lines: [], since: 0 };
-  renderRunsBar();
   renderConsole();
   fetchOutput(runId).catch((e) => console.warn(e));
+  scheduleUiStateSave();
 }
 
 async function refreshAll() {
@@ -762,20 +1001,23 @@ async function refreshAll() {
 
 async function refreshConfigs() {
   const res = await callTool("run_config_list", {});
-  App.configs = res.configs || [];
+  const configs = res.configs || [];
+  const changed = JSON.stringify(configs) !== JSON.stringify(App.configs);
+  App.configs = configs;
+  const prevSelected = App.selectedConfigId;
   if (App.selectedConfigId && !App.configs.some((c) => c.id === App.selectedConfigId)) {
     App.selectedConfigId = null;
   }
   if (!App.selectedConfigId && App.configs.length) {
     App.selectedConfigId = App.configs[0].id;
   }
-  renderConfigs();
+  // 兜底轮询会高频调用本函数;数据没变就不重建 DOM,避免打断 hover/焦点
+  if (changed || prevSelected !== App.selectedConfigId) renderConfigs();
 }
 
 async function refreshRuns() {
   const res = await callTool("run_status", {});
   App.runs = res.runs || [];
-  renderRunsBar();
   // 运行态变化会翻转行内 ▶/■ 的可用性,配置列表也要重绘
   renderConfigs();
   maybeAutoPreview();
@@ -784,12 +1026,20 @@ async function refreshRuns() {
 async function fetchOutput(runId) {
   const view = App.outputByRun[runId] || (App.outputByRun[runId] = { lines: [], since: 0 });
   const res = await callTool("run_output", { runId, since: view.since });
-  if (res.lines && res.lines.length) {
-    view.lines.push(...res.lines);
-    if (view.lines.length > 5000) view.lines.splice(0, view.lines.length - 5000);
+  const newLines = res.lines || [];
+  let truncated = false;
+  if (newLines.length) {
+    view.lines.push(...newLines);
+    if (view.lines.length > 5000) {
+      view.lines.splice(0, view.lines.length - 5000);
+      truncated = true;
+    }
   }
   view.since = res.nextSince !== undefined ? res.nextSince : view.since;
-  if (App.currentRunId === runId) renderConsole();
+  if (App.currentRunId !== runId) return;
+  // 没有新行时完全不碰 DOM:轮询每 1.2s 一次,重建会打断用户的选择
+  if (truncated) renderConsole();
+  else appendConsoleLines(newLines);
 }
 
 async function deleteConfig() {
@@ -798,6 +1048,7 @@ async function deleteConfig() {
   await callTool("run_config_delete", { configId: App.selectedConfigId });
   App.selectedConfigId = null;
   await refreshConfigs();
+  scheduleUiStateSave();
 }
 
 async function duplicateConfig() {
@@ -805,6 +1056,7 @@ async function duplicateConfig() {
   const res = await callTool("run_config_duplicate", { configId: App.selectedConfigId });
   if (res.config) App.selectedConfigId = res.config.id;
   await refreshConfigs();
+  scheduleUiStateSave();
 }
 
 async function startRunOf(configId) {
@@ -863,41 +1115,101 @@ async function copyText(text) {
 
 async function copyConsole() {
   const view = App.outputByRun[App.currentRunId];
-  const text = view ? view.lines.map((l) => l.text).join("\n") : "";
+  const text = view ? view.lines.map((l) => stripAnsi(l.text)).join("\n") : "";
   if (!text) return;
   await copyText(text);
 }
 
 function clearConsole() {
   if (!App.currentRunId) return;
-  App.outputByRun[App.currentRunId] = { lines: [], since: 0 };
+  const view = App.outputByRun[App.currentRunId];
+  // 清空只是清「我的视图」:必须保留 since 游标,否则下一次拉取会把
+  // 服务端环形缓冲区从头(seq 1)整个拉回来,表现为「清空无效」。
+  App.outputByRun[App.currentRunId] = { lines: [], since: view ? view.since : 0 };
   renderConsole();
   fetchOutput(App.currentRunId).catch(() => {});
 }
 
 // ---- 日志右键「添加到对话」 ------------------------------------------------
+// 旧实现走 ui/message(以用户身份发送),宿主会弹「插件想以你的身份发送消息」确认框。
+// 现改为直接添加到对话输入区,不发送、不弹框:
+//   1) ui/insert-input-text(VCode 扩展桥方法):文本进输入框,用户改完自己发;
+//   2) 老宿主降级 ui/update-model-context:以「插件上下文」附在对话输入区,同样不弹框,
+//      发送时内容与正文一并送达模型;
+//   3) 输入框(composer)可能尚未挂载(切会话/加载中),宿主回 -32601「没人接住」——
+//      等待就绪后自动重试(ADD_WAIT_*),超时才退到剪贴板;
+//   4) 通道宿主根本没实现(方法不存在)时不再等,直接进下一通道/剪贴板。
+
+const ADD_WAIT_TIMEOUT_MS = 10000;
+const ADD_WAIT_STEP_MS = 500;
+let addInFlight = false;
+
+/** -32601 有两种:「方法不存在」=宿主没实现该通道(重试无意义);其余(如 No composer…) =暂时没接住,可等待重试。 */
+function isBridgeUnsupported(e) {
+  return /method not found|not available|不支持/i.test(String((e && e.message) || ""));
+}
 
 function hideCtxMenu() {
   $("ctx-menu").hidden = true;
 }
 
-async function sendSelectionToChat(text) {
+async function insertSelectionToInput(text) {
   const payload = "【运行输出摘录 · " + (App.currentRunId || "未知运行") + "】\n" + text;
   if (window.parent === window || !Bridge.connected) {
     // 独立模式没有宿主可以代发,降级为复制到剪贴板
     await copyText(payload);
-    toast("独立模式:无法发送到会话,已复制到剪贴板");
+    toast("独立模式:无法添加到对话,已复制到剪贴板");
     return;
   }
+  if (addInFlight) {
+    toast("正在添加到对话,请稍候…");
+    return;
+  }
+  addInFlight = true;
   try {
-    const res = await Bridge.request("ui/message", {
-      role: "user",
-      content: [{ type: "text", text: payload }]
-    });
-    if (res && res.isError) toast("宿主拒绝了消息发送(isError)", true);
-    else toast("已添加到对话");
-  } catch (e) {
-    toast("发送失败: " + e.message, true);
+    let insertOk = true, contextOk = true;
+    let waited = false;
+    const deadline = Date.now() + ADD_WAIT_TIMEOUT_MS;
+    for (;;) {
+      if (insertOk) {
+        try {
+          await Bridge.request("ui/insert-input-text", { text: payload }, 3000);
+          toast("已添加到对话");
+          return;
+        } catch (e) {
+          if (isBridgeUnsupported(e)) insertOk = false;
+        }
+      }
+      if (contextOk) {
+        try {
+          await Bridge.request("ui/update-model-context", {
+            content: [{ type: "text", text: payload }]
+          }, 3000);
+          toast("已添加到对话输入区(宿主不支持直插文本,以插件上下文附上)");
+          return;
+        } catch (e) {
+          if (isBridgeUnsupported(e)) contextOk = false;
+        }
+      }
+      if (!insertOk && !contextOk) {
+        // 两条通道宿主都没实现,再等也没用
+        await copyText(payload);
+        toast("宿主不支持添加到对话,已复制到剪贴板");
+        return;
+      }
+      if (Date.now() >= deadline) {
+        await copyText(payload);
+        toast("等待输入框就绪超时,已复制到剪贴板");
+        return;
+      }
+      if (!waited) {
+        waited = true;
+        toast("输入框尚未就绪,等待后自动添加…");
+      }
+      await new Promise((r) => setTimeout(r, ADD_WAIT_STEP_MS));
+    }
+  } finally {
+    addInFlight = false;
   }
 }
 
@@ -919,7 +1231,7 @@ function setupCtxMenu() {
       const sel = String(window.getSelection() || "");
       hideCtxMenu();
       if (!sel.trim()) return;
-      if (btn.dataset.act === "send") sendSelectionToChat(sel).catch((e) => toast(e.message, true));
+      if (btn.dataset.act === "insert") insertSelectionToInput(sel).catch((e) => toast(e.message, true));
       else copyText(sel).then(() => toast("已复制选中文本")).catch(() => toast("复制失败", true));
     });
   }
@@ -928,13 +1240,190 @@ function setupCtxMenu() {
   window.addEventListener("scroll", hideCtxMenu, true);
 }
 
+// ---- 配置导入/导出(同事间交换配置) ------------------------------------------
+// 导出走 ui/download-file(宿主弹原生另存为;面板 iframe 无下载权限,浏览器下载会被沙箱拦),
+// 取消/不支持时退到剪贴板。导入用 <input type=file> 读文件,不带 id 逐条 run_config_save 新建,
+// 同名不覆盖不合并——双方各自维护自己的副本。
+
+const CONFIG_EXPORT_FORMAT = "hba-run-configs";
+
+function exportFileName() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `hba-run-configs-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.json`;
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportConfigs() {
+  // 只导出共享需要的字段:id/时间戳由双方各自生成,避免导入时覆盖对方已有配置
+  const configs = App.configs.map((c) => ({
+    name: c.name,
+    command: c.command,
+    cwd: c.cwd || "",
+    env: c.env || {},
+    previewUrl: c.previewUrl || ""
+  }));
+  if (!configs.length) {
+    toast("暂无配置可导出", true);
+    return;
+  }
+  const json = JSON.stringify({
+    format: CONFIG_EXPORT_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    configs
+  }, null, 2);
+  const filename = exportFileName();
+  if (window.parent === window || !Bridge.connected) {
+    downloadTextFile(filename, json); // 独立打开:直接触发浏览器下载
+    toast(`已导出 ${configs.length} 条配置`);
+    return;
+  }
+  try {
+    const res = await Bridge.request("ui/download-file", {
+      contents: [{
+        type: "resource",
+        resource: { uri: "file:///" + filename, name: filename, mimeType: "application/json", text: json }
+      }]
+    }, 30000);
+    if (res && res.isError) throw new Error("save cancelled");
+    toast(`已导出 ${configs.length} 条配置`);
+  } catch (e) {
+    await copyText(json);
+    toast("导出未完成,已复制配置 JSON 到剪贴板");
+  }
+}
+
+async function importConfigsFromText(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    throw new Error("不是有效的 JSON 文件");
+  }
+  // 兼容裸数组;标准格式为 { format, version, configs: [] }
+  const list = Array.isArray(data) ? data : data && Array.isArray(data.configs) ? data.configs : null;
+  if (!list) throw new Error("缺少 configs 数组,不是有效的配置文件");
+  if (!list.length) throw new Error("配置文件里没有配置");
+  let count = 0;
+  for (const raw of list) {
+    const name = String((raw && raw.name) || "").trim();
+    const command = String((raw && raw.command) || "").trim();
+    if (!name || !command) continue; // 缺必填字段的条目跳过
+    const envIn = raw.env && typeof raw.env === "object" && !Array.isArray(raw.env) ? raw.env : {};
+    const env = {};
+    for (const [k, v] of Object.entries(envIn)) {
+      if (k && v != null) env[String(k)] = String(v);
+    }
+    await callTool("run_config_save", {
+      name,
+      command,
+      cwd: String(raw.cwd || "").trim(),
+      env,
+      previewUrl: String(raw.previewUrl || "").trim()
+    });
+    count += 1;
+  }
+  if (!count) throw new Error("没有可导入的配置(条目缺少 name/command)");
+  await refreshConfigs();
+  return count;
+}
+
+function setupImportExport() {
+  const fileInput = $("import-file");
+  $("btn-export").addEventListener("click", () => exportConfigs().catch((e) => toast(e.message, true)));
+  $("btn-import").addEventListener("click", () => {
+    if (window.parent === window || !Bridge.connected) {
+      toast("独立模式:无法导入(需连接宿主)", true);
+      return;
+    }
+    fileInput.value = ""; // 重置后才能重复选同一个文件
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    try {
+      const count = await importConfigsFromText(await file.text());
+      toast(`已导入 ${count} 条配置`);
+    } catch (e) {
+      toast("导入失败:" + (e.message || e), true);
+    }
+  });
+}
+
+// ---- 面板状态持久化(B 方案:项目级共享) --------------------------------------
+// UI 状态(选中配置/当前运行/侧栏折叠)经 run_ui_state 工具持久化到
+// <workspace>/.hba/run-ui-state.json:同项目所有会话/窗口的运行面板共享一份
+// 状态,打开面板即恢复。独立模式(未连接宿主)不持久化。
+const UI_STATE_SAVE_DEBOUNCE_MS = 500;
+let uiStateTimer = null;
+let uiStateRestoring = false;
+
+function currentUiState() {
+  return {
+    selectedConfigId: App.selectedConfigId,
+    currentRunId: App.currentRunId,
+    asideCollapsed: document.body.classList.contains("aside-hidden")
+  };
+}
+
+function scheduleUiStateSave() {
+  if (uiStateRestoring || window.parent === window || !Bridge.connected) return;
+  if (uiStateTimer) clearTimeout(uiStateTimer);
+  uiStateTimer = setTimeout(() => {
+    uiStateTimer = null;
+    callTool("run_ui_state", { state: currentUiState() }).catch(() => {});
+  }, UI_STATE_SAVE_DEBOUNCE_MS);
+}
+
+async function loadUiState() {
+  try {
+    const res = await callTool("run_ui_state", {});
+    return res && res.state && typeof res.state === "object" ? res.state : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyUiChromeState(saved) {
+  if (typeof saved.asideCollapsed === "boolean") {
+    document.body.classList.toggle("aside-hidden", saved.asideCollapsed);
+  }
+}
+
+async function restoreCurrentRun(runId) {
+  App.currentRunId = runId;
+  if (!App.outputByRun[runId]) App.outputByRun[runId] = { lines: [], since: 0 };
+  try {
+    await fetchOutput(runId);
+  } catch {
+    // 运行记录已滚出历史,恢复不了就回落到空控制台
+    App.currentRunId = null;
+  }
+  renderConsole();
+}
+
 // ---- 启动 ------------------------------------------------------------------
 
 function scheduleRefresh() {
   if (App.refreshTimer) return;
   App.refreshTimer = setTimeout(() => {
     App.refreshTimer = null;
-    Promise.all([refreshRuns()])
+    // 配置列表必须一起刷:Agent 可经 run_config_* 工具改配置,
+    // 服务端 run_config_save/delete/duplicate 都会发 resources/updated
+    Promise.all([refreshConfigs(), refreshRuns()])
       .then(() => {
         if (App.currentRunId) return fetchOutput(App.currentRunId);
       })
@@ -942,9 +1431,22 @@ function scheduleRefresh() {
   }, 250);
 }
 
+// 无活动进程时配置变更的兜底轮询:宿主不转发 resources/updated 时,
+// 面板也能在数秒内同步 Agent 经工具做的配置改动(见 batch-report 待联测项)。
+const CONFIG_POLL_MS = 5000;
+let lastConfigPollAt = 0;
+
+function pollConfigsThrottled() {
+  const now = Date.now();
+  if (now - lastConfigPollAt < CONFIG_POLL_MS) return;
+  lastConfigPollAt = now;
+  refreshConfigs().catch(() => {});
+}
+
 function startPolling() {
   if (App.pollTimer) return;
   App.pollTimer = setInterval(() => {
+    pollConfigsThrottled();
     const anyRunning = App.runs.some((r) => r.state === "running");
     if (!anyRunning) return;
     refreshRuns()
@@ -969,12 +1471,28 @@ async function init() {
   $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => toast(e.message, true)));
   $("btn-clear").addEventListener("click", clearConsole);
   $("btn-copy").addEventListener("click", () => copyConsole().catch((e) => console.warn(e)));
-  $("chk-autoscroll").addEventListener("change", (e) => {
-    App.autoScroll = e.target.checked;
-    if (App.autoScroll) renderConsole();
+  // 标题区:下拉框切换配置(换日志)+ 按运行态显示的 启动 / 重启 / 停止
+  $("cfg-select").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id) selectConfig(id).catch((err) => toast(err.message, true));
   });
-  $("btn-aside-hide").addEventListener("click", () => document.body.classList.add("aside-hidden"));
-  $("btn-aside-show").addEventListener("click", () => document.body.classList.remove("aside-hidden"));
+  $("btn-h-start").addEventListener("click", () => {
+    if (App.selectedConfigId) startRunOf(App.selectedConfigId).catch((e) => toast(e.message, true));
+  });
+  $("btn-h-restart").addEventListener("click", () => {
+    if (App.selectedConfigId) restartConfig(App.selectedConfigId).catch((e) => toast(e.message, true));
+  });
+  $("btn-h-stop").addEventListener("click", () => {
+    if (App.selectedConfigId) stopConfig(App.selectedConfigId).catch((e) => toast(e.message, true));
+  });
+  $("btn-aside-hide").addEventListener("click", () => {
+    document.body.classList.add("aside-hidden");
+    scheduleUiStateSave();
+  });
+  $("btn-aside-show").addEventListener("click", () => {
+    document.body.classList.remove("aside-hidden");
+    scheduleUiStateSave();
+  });
   $("modal-save").addEventListener("click", () => saveModal());
   $("modal-cancel").addEventListener("click", closeModal);
   $("modal-close").addEventListener("click", closeModal);
@@ -983,6 +1501,11 @@ async function init() {
     if (e.key === "Escape" && !$("cfg-modal").hidden) closeModal();
   });
   setupCtxMenu();
+  setupImportExport();
+  setupConsoleScroll();
+
+  // 先落一次标题区状态(无配置=下拉占位+按钮禁用),避免首帧三个按钮齐亮
+  renderConsoleHead();
 
   if (window.parent === window) {
     return; // standalone preview mode: no host bridge
@@ -1013,7 +1536,21 @@ async function init() {
   });
 
   await Bridge.subscribe("ui://run/state");
-  await refreshAll();
+
+  // 恢复共享面板状态(B 方案):先恢复外观与选中配置,refreshAll 之后恢复当前运行
+  // 及其日志(run_output 对活运行和历史记录都能回放)。
+  const savedUi = await loadUiState();
+  uiStateRestoring = true;
+  try {
+    if (savedUi) {
+      applyUiChromeState(savedUi);
+      if (savedUi.selectedConfigId) App.selectedConfigId = savedUi.selectedConfigId;
+    }
+    await refreshAll();
+    if (savedUi && savedUi.currentRunId) await restoreCurrentRun(savedUi.currentRunId);
+  } finally {
+    uiStateRestoring = false;
+  }
   startPolling();
   Bridge.sendSizeChanged();
   window.addEventListener("resize", () => Bridge.sendSizeChanged());

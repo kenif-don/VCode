@@ -321,7 +321,7 @@ describe("resolveAppRuntimeConfig", () => {
   });
 
   it("projects explicit session tool filters into the runtime tool surface", () => {
-    // Explicit filters come from ZCode Protocol session/create or the headless CLI
+    // Explicit filters come from VCode Protocol session/create or the headless CLI
     // flags; they are the only inputs that shape the provider-visible tool surface.
     const configResult = createConfig({
       cliOverrides: {
@@ -549,7 +549,7 @@ describe("resolveAppRuntimeConfig", () => {
     const name = "plugin:computer-use:computer-use";
     const officialPluginConfig = {
       type: "stdio" as const,
-      command: "/Applications/ZCode Computer Use.app/Contents/MacOS/server",
+      command: "/Applications/VCode Computer Use.app/Contents/MacOS/server",
       env: { [ZCODE_PLUGIN_ID_ENV_KEY]: ZCODE_CUA_OFFICIAL_PLUGIN_ID },
     };
     const baseInput = {

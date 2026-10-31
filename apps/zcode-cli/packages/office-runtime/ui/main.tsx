@@ -131,7 +131,7 @@ function Shell() {
   });
   /**
    * The agent's current target stays in view until the user scrolls, clicks or types in the
-   * document: ZCode animates the pane open, and each resize re-lays the pages out under it.
+   * document: VCode animates the pane open, and each resize re-lays the pages out under it.
    */
   const pinned = useRef(false);
 

@@ -208,7 +208,7 @@ function assertPackagedCuaHelper(context) {
     HELPER_APP_NAME,
   );
   if (!existsSync(appPath)) {
-    throw new Error(`Packaged ZCode is missing bundled Computer Use Helper: ${appPath}`);
+    throw new Error(`Packaged VCode is missing bundled Computer Use Helper: ${appPath}`);
   }
 }
 const shouldEnableWindowsVsign =
@@ -225,7 +225,7 @@ if (
   !macSigningIdentity
 ) {
   throw new Error(
-    "ZCode Preview macOS packaging requires APPLE_SIGNING_IDENTITY or CSC_NAME when ZCODE_ENABLE_MAC_SIGN=1",
+    "VCode Preview macOS packaging requires APPLE_SIGNING_IDENTITY or CSC_NAME when ZCODE_ENABLE_MAC_SIGN=1",
   );
 }
 
@@ -289,7 +289,7 @@ async function runTimedAsync(label, fn) {
 
 function resolveAppAsarPath(context) {
   if (context.electronPlatformName === "darwin") {
-    const appName = `${context.packager?.appInfo?.productFilename ?? "ZCode"}.app`;
+    const appName = `${context.packager?.appInfo?.productFilename ?? "VCode"}.app`;
     return resolve(context.appOutDir, appName, "Contents", "Resources", "app.asar");
   }
 
@@ -298,7 +298,7 @@ function resolveAppAsarPath(context) {
 
 function resolvePackagedResourcesDir(context) {
   if (context.electronPlatformName === "darwin") {
-    const appName = `${context.packager?.appInfo?.productFilename ?? "ZCode"}.app`;
+    const appName = `${context.packager?.appInfo?.productFilename ?? "VCode"}.app`;
     return resolve(context.appOutDir, appName, "Contents", "Resources");
   }
 
@@ -565,7 +565,7 @@ export default {
     zcodeProductFlavor: desktopProductIdentity.flavor,
     homepage: "https://zcode.z.ai",
     author: {
-      name: "ZCode",
+      name: "VCode",
       email: "dev@zcode.z.ai",
     },
   },
@@ -729,7 +729,7 @@ export default {
       to: "config/default.json",
     },
     {
-      // Provider Registry 的 ZCode Built-in Config 是静态 Provider/Model 事实的唯一内置来源。
+      // Provider Registry 的 VCode Built-in Config 是静态 Provider/Model 事实的唯一内置来源。
       // 显式随包发布，避免正式 Host 回退到旧 Catalog/Preset hardcode。
       from: builtinProviderConfig.sourcePath,
       to: "config/provider/zcode-builtin.json",
@@ -876,7 +876,7 @@ export default {
     // 与 /usr/share/icons/hicolor/*/apps/zcode.png 保持一致。
     executableName: desktopProductIdentity.linuxExecutableName,
     category: "Development",
-    maintainer: "ZCode <dev@zcode.z.ai>",
+    maintainer: "VCode <dev@zcode.z.ai>",
   },
   deb: {
     // 生产版与 Preview 必须是两个 dpkg package；只改可执行名仍会让安装器把另一版本当成升级替换。

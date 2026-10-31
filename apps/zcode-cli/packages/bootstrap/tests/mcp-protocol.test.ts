@@ -114,7 +114,7 @@ describe("mcp protocol contracts", () => {
           headers: [],
           oauth: {
             type: "authorization_code",
-            clientName: "ZCode",
+            clientName: "VCode",
             redirectPath: "/oauth/callback/mcp/figma",
             scope: "mcp:connect",
           },
@@ -126,7 +126,7 @@ describe("mcp protocol contracts", () => {
       name: "figma",
       oauth: {
         type: "authorization_code",
-        clientName: "ZCode",
+        clientName: "VCode",
         redirectPath: "/oauth/callback/mcp/figma",
         scope: "mcp:connect",
       },

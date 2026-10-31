@@ -8,7 +8,7 @@ const descriptor = {
   id: "iab-runtime",
   generation: 7,
   type: "iab" as const,
-  name: "ZCode In-app Browser",
+  name: "VCode In-app Browser",
   capabilities: {},
 };
 

@@ -868,49 +868,46 @@ export function AnimatedSidePanePanel({
               />
             ))}
           </div>
-          {/* 空会话暂不支持应用插件，连同分区入口一起隐藏。 */}
-          {activeTaskId ? (
-            <>
-              <div aria-hidden="true" className="my-4 h-px w-24 self-center bg-border" />
-              <section className="min-w-0" data-testid="side-pane-ui-recommendations">
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
-                  <h2 className="pl-2 text-ui-lg font-semibold text-foreground">
-                    {intl.formatMessage({ id: "settings.plugins.store.ui.title" })}
-                  </h2>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 text-foreground-subtle"
-                    data-testid="side-pane-plugin-market"
-                    onClick={() => {
-                      if (!onOpenPluginMarket) return;
-                      setMarketReturnTarget({
-                        workspaceKey,
-                        ownerId: sidePaneOwnerId ?? null,
-                        tabId: visibleActiveTabId,
-                      });
-                      onOpenPluginMarket();
-                    }}
-                  >
-                    {intl.formatMessage({ id: "sidePane.launcher.viewAllPlugins" })}
-                    <ChevronRightIcon className="size-3.5" aria-hidden="true" />
-                  </Button>
-                </div>
-                <div className="mt-2 grid min-w-0 grid-cols-1 gap-x-8 gap-y-1 @min-[36rem]/launcher:grid-cols-2">
-                  {onOpenPluginUi ? (
-                    <PluginUiLauncherItems
-                      workspacePath={workspaceAbsPath}
-                      workspaceIdentity={workspaceIdentity}
-                      remoteSessionId={workspaceRemoteSessionId}
-                      sessionId={activeTaskId}
-                      onOpenPluginUi={onOpenPluginUi}
-                    />
-                  ) : null}
-                </div>
-              </section>
-            </>
-          ) : null}
+          {/* HBA fr12：应用插件区不再随空会话隐藏——新会话（草稿态）也默认显示全部条目；
+              草稿点击时由宿主按需补建 deferred 托管会话（面板已是项目级，会话只作宿主绑定）。 */}
+          <div aria-hidden="true" className="my-4 h-px w-24 self-center bg-border" />
+          <section className="min-w-0" data-testid="side-pane-ui-recommendations">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+              <h2 className="pl-2 text-ui-lg font-semibold text-foreground">
+                {intl.formatMessage({ id: "settings.plugins.store.ui.title" })}
+              </h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-foreground-subtle"
+                data-testid="side-pane-plugin-market"
+                onClick={() => {
+                  if (!onOpenPluginMarket) return;
+                  setMarketReturnTarget({
+                    workspaceKey,
+                    ownerId: sidePaneOwnerId ?? null,
+                    tabId: visibleActiveTabId,
+                  });
+                  onOpenPluginMarket();
+                }}
+              >
+                {intl.formatMessage({ id: "sidePane.launcher.viewAllPlugins" })}
+                <ChevronRightIcon className="size-3.5" aria-hidden="true" />
+              </Button>
+            </div>
+            <div className="mt-2 grid min-w-0 grid-cols-1 gap-x-8 gap-y-1 @min-[36rem]/launcher:grid-cols-2">
+              {onOpenPluginUi ? (
+                <PluginUiLauncherItems
+                  workspacePath={workspaceAbsPath}
+                  workspaceIdentity={workspaceIdentity}
+                  remoteSessionId={workspaceRemoteSessionId}
+                  sessionId={activeTaskId}
+                  onOpenPluginUi={onOpenPluginUi}
+                />
+              ) : null}
+            </div>
+          </section>
         </div>
       </div>
     </div>

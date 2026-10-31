@@ -5,8 +5,8 @@
 //   17:26:44.395 [cua-product-helper] cua helper ready
 //                → reconcileRecoveredHelper → recycleUntilStable → disposeWorkspace
 //   17:26:44.719 在途 subscribe 被 transport.onClose 的 rejectAll 打断：
-//                Error: ZCode agent transport closed
-//   17:26:44.96  ZCode agent process exited terminationReason='workspace-dispose'
+//                Error: VCode agent transport closed
+//   17:26:44.96  VCode agent process exited terminationReason='workspace-dispose'
 //
 // 修复前 store 的两处缺陷让面板永久卡死（SessionPane 的 errored 分支整块替换成红字+重连按钮）：
 //   1. constructor 无条件只订阅 onRuntimeRestart。但 transport.ts 已写明：dispose 当场只有
@@ -56,7 +56,7 @@ function lifecycleEvent(state: "available" | "unavailable", generation: number):
 }
 
 /** workspace-dispose 打断在途 subscribe 时，ZCodeProtocolClient.rejectAll 抛出的真实文案。 */
-const TRANSPORT_CLOSED = "ZCode agent transport closed";
+const TRANSPORT_CLOSED = "VCode agent transport closed";
 
 /** 与实现的 RUNTIME_RECYCLE_RETRY_DELAYS_MS 长度一致（250/1000/3000ms）。 */
 const RUNTIME_RECYCLE_RETRY_ATTEMPTS = 3;
@@ -355,7 +355,7 @@ describe("conversation projection 在 CUA Helper 回收 agent runtime 后自愈"
       const { store } = createStore(base, "conn-retry");
 
       await store.connect();
-      // 修复前：这里已是 status="error" + lastError="ZCode agent transport closed"，
+      // 修复前：这里已是 status="error" + lastError="VCode agent transport closed"，
       // 且没有任何 timer——面板从此只能靠用户点「重新连接」。
       expect(store.getState().status).not.toBe("error");
       expect(mocks.subscribeConversationV4).toHaveBeenCalledTimes(1);

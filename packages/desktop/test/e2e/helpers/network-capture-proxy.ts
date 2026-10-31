@@ -700,7 +700,7 @@ function buildProxyEnv(
     REQUESTS_CA_BUNDLE: caBundlePath,
     SSL_CERT_FILE: caBundlePath,
     // Bugfix: agent provider fetch 会过滤标准 HTTP_PROXY/HTTPS_PROXY，只认
-    // ZCode 显式网络出口配置；否则真实模型请求会直连上游，capture artifact 为空。
+    // VCode 显式网络出口配置；否则真实模型请求会直连上游，capture artifact 为空。
     [ZCODE_AGENT_CA_CERT_ENV_KEY]: caCertPath,
     [ZCODE_HTTP_PROXY_ENV_KEY]: proxyUrl,
     [ZCODE_NO_PROXY_ENV_KEY]: noProxy,

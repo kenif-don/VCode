@@ -79,7 +79,7 @@ const rows: ConversationRow[] = [
           kind: "assistantText" as const,
           state: "complete" as const,
           entityId: "assistant-1",
-          text: "你好！我是 ZCode，有什么可以帮你的吗？\n\n直接告诉我你想做什么就行。",
+          text: "你好！我是 VCode，有什么可以帮你的吗？\n\n直接告诉我你想做什么就行。",
         },
       ]
     : []),

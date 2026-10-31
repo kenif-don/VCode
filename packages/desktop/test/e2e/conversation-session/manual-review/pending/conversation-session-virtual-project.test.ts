@@ -39,7 +39,7 @@ import {
 } from "../../../helpers/desktop-app.js";
 
 import { waitForUpstreamNetworkCapture } from "../../../helpers/upstream-capture.js";
-import { loginWithApiKey, prepareV4ConversationE2E } from "../../../helpers/v4-conversation.js";
+import { prepareV4ConversationE2E } from "../../../helpers/v4-conversation.js";
 
 describe("虚拟项目", () => {
   before(async () => {
@@ -299,103 +299,6 @@ describe("虚拟项目", () => {
       await waitForWorkspaceApp(DEFAULT_WORKSPACE, 30_000);
     }
   });
-  it("VP12：Bot 访问范围选择项目 ID，同 cwd 的项目分别保存", async function () {
-    this.timeout(90_000);
-    await waitForWorkspaceApp(DEFAULT_WORKSPACE, 45_000);
-    const testHome = process.env.ZCODE_E2E_HOME_DIR!;
-    if (!testHome || !basename(testHome).startsWith("zcode-virtual-project-e2e-"))
-      throw new Error("隔离 HOME required");
-    const cwd = join(testHome, "E2E_VP12_SHARED_ROOT");
-    await mkdir(cwd, { recursive: true });
-    const names = ["E2E_VP12_A", "E2E_VP12_B"];
-    const ids: string[] = [];
-    for (const name of names) {
-      await openLocalProjectEditor();
-      await $('[data-testid="virtual-project-name"]').setValue(name);
-      await chooseProjectRoot(cwd);
-      await $('[data-testid="virtual-project-save"]').click();
-      await $('[data-testid="project-folder-trust-confirm"]').waitForDisplayed();
-      await $('[data-testid="project-folder-trust-confirm"]').click();
-      const project = $(`[data-project-name="${name}"]`);
-      await project.waitForDisplayed();
-      const projectId = await project.getAttribute("data-project-id");
-      if (!projectId) throw new Error("项目 ID 缺失");
-      ids.push(projectId);
-    }
-    const configPath = join(testHome, ".zcode/v2/bot-config.v3.json");
-    await writeFile(
-      configPath,
-      JSON.stringify({
-        version: 3,
-        bots: [
-          {
-            id: "E2E_VP12_BOT",
-            name: "E2E_VP12_BOT",
-            provider: "webhook",
-            enabled: false,
-            allowedWorkspaces: ["*"],
-            allowedCommands: {
-              status: true,
-              new: true,
-              workspace: true,
-              model: true,
-              thoughtLevel: true,
-              reply: true,
-            },
-            currentOptions: {},
-            replyMode: "assistant_changes",
-          },
-        ],
-      }),
-    );
-    const remoteControl = $(
-      'button[aria-label="移动端远程控制"], button[aria-label="Mobile remote control"]',
-    );
-    await remoteControl.waitForClickable();
-    await remoteControl.click();
-    await $('[data-testid="web-remote-control-open-bots"]').waitForClickable();
-    await $('[data-testid="web-remote-control-open-bots"]').click();
-    try {
-      const access = $('[data-testid="bots-project-access-trigger"]');
-      await access.waitForClickable();
-      await access.click();
-      // Radix 选项文本承载于内部 span，点击公开 option 元素。
-      await browser.waitUntil(async () => (await $$('[role="option"]').length) > 0);
-      await browser.execute(() => {
-        const item = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
-          (node) => /指定项目|Selected projects/.test(node.textContent ?? ""),
-        );
-        if (!item) throw new Error("指定项目选项缺失");
-        item.click();
-      });
-      for (let index = 0; index < names.length; index++) {
-        const button = $(`button[title="${names[index]}"]`);
-        await button.waitForClickable();
-        const readAllowed = async () =>
-          JSON.parse(await readFile(configPath, "utf8")).bots[0].allowedWorkspaces as string[];
-        const id = JSON.stringify(["local", ids[index]]);
-        if (!(await readAllowed()).includes(id)) await button.click();
-        await browser.waitUntil(async () => (await readAllowed()).includes(id));
-      }
-      const allowed = JSON.parse(await readFile(configPath, "utf8")).bots[0]
-        .allowedWorkspaces as string[];
-      expect(ids.every((id) => allowed.includes(JSON.stringify(["local", id])))).toBe(true);
-      expect(allowed.includes(cwd)).toBe(false);
-      expect(
-        await browser.execute((path) => {
-          const store = (
-            window as Window & {
-              __zcodeTabStoreE2E?: { getState(): { tabs: Array<{ workspacePath?: string }> } };
-            }
-          ).__zcodeTabStoreE2E;
-          return store?.getState().tabs.some((tab) => tab.workspacePath === path) ?? false;
-        }, cwd),
-      ).toBe(false);
-    } finally {
-      await browser.keys("Escape");
-      await browser.keys("Escape");
-    }
-  });
   it("VP01：首个窗口可用时 app 与 CLI 两库的版本化迁移已经完成", async function () {
     this.timeout(60_000);
     await waitForWorkspaceApp(DEFAULT_WORKSPACE, 45_000);
@@ -444,15 +347,7 @@ describe("虚拟项目", () => {
       db.close();
     }
     await browser.refresh();
-    // 隔离测试刷新后可能重新进入欢迎页；复用既有登录准备，不放宽离线项目断言。
-    const apiKeyEntry = $('[data-testid="login-use-api-key-button"]');
-    await browser.waitUntil(
-      async () =>
-        (await apiKeyEntry.isDisplayed()) ||
-        (await $('[data-workspace-shell="true"]').isDisplayed()),
-      { timeout: 45_000 },
-    );
-    if (await apiKeyEntry.isDisplayed()) await loginWithApiKey();
+    // VCode 无登录入口：刷新不会回欢迎页，直接等待默认工作区，不放宽离线项目断言。
     await waitForWorkspaceApp(DEFAULT_WORKSPACE, 45_000);
     const offline = $('[data-project-name="E2E_VP08_Offline"]');
     try {
@@ -1289,12 +1184,6 @@ async function captureProjectDialogLayouts(stage: string) {
 
 async function refreshVirtualProjectWorkspace() {
   await browser.refresh();
-  const login = $('[data-testid="login-use-api-key-button"]');
-  await browser.waitUntil(
-    async () =>
-      (await login.isDisplayed()) || (await $('[data-testid="project-section"]').isDisplayed()),
-    { timeout: 45_000 },
-  );
-  if (await login.isDisplayed()) await loginWithApiKey();
+  // VCode 无登录入口：刷新不会回欢迎页，直接等待项目区。
   await $('[data-testid="project-section"]').waitForDisplayed({ timeout: 30_000 });
 }

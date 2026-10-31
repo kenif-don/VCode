@@ -163,17 +163,21 @@ async function selectDevice(id: string) {
     }),
   );
 }
-it("opens the complete form directly and creates a local project without folders", async () => {
+it("opens a create form without a name field but with device selection and auto-names on save", async () => {
   const { service } = await setup();
-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Draft" } });
+  // 创建项目弹框不填项目名（服务按目录自动命名）；设备（本机/远程服务器）下拉仍在。
+  expect(screen.queryByTestId("virtual-project-name")).toBeNull();
   expect(screen.getByTestId("virtual-project-device").textContent).toContain(
     "project.thisComputer",
   );
   fireEvent.click(screen.getByTestId("virtual-project-save"));
   await waitFor(() =>
     expect(service.saveProject).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Draft", roots: [] }),
+      expect.objectContaining({ defaultName: "project.new", roots: [] }),
     ),
+  );
+  expect(service.saveProject).toHaveBeenCalledWith(
+    expect.not.objectContaining({ name: expect.anything() }),
   );
 });
 it("selects the saved project only after directory refresh and preserves the draft group", async () => {
@@ -224,9 +228,6 @@ it.each(["existing", "save", "refresh", "draft", "workspace", "failure"])(
 );
 it("selects an added device without connecting and persists only after explicit create", async () => {
   const { service, remoteService, props } = await setup();
-  fireEvent.change(screen.getByTestId("virtual-project-name"), {
-    target: { value: "Remote draft" },
-  });
   await selectDevice("remote:server:source");
   expect(props.onConnectRemote).not.toHaveBeenCalled();
   expect(service.saveProject).not.toHaveBeenCalled();
@@ -242,10 +243,12 @@ it("selects an added device without connecting and persists only after explicit 
   );
   expect(service.saveProject).toHaveBeenCalledWith(
     expect.objectContaining({
-      name: "Remote draft",
       hostId: "remote:server:source",
       roots: ["/source/selected"],
     }),
+  );
+  expect(service.saveProject).toHaveBeenCalledWith(
+    expect.not.objectContaining({ name: expect.anything() }),
   );
   await waitFor(() =>
     expect(props.onCreateTask).toHaveBeenCalledExactlyOnceWith({
@@ -256,9 +259,8 @@ it("selects an added device without connecting and persists only after explicit 
     }),
   );
 });
-it("keeps name and folders when device switch is rejected and clears folders only after confirmation", async () => {
+it("keeps folders when device switch is rejected and clears folders only after confirmation", async () => {
   const { service } = await setup();
-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Preserved" } });
   fireEvent.click(screen.getByTestId("virtual-project-browse"));
   fireEvent.click(await screen.findByText("choose-root"));
   state.confirm.mockResolvedValueOnce(false);
@@ -270,14 +272,12 @@ it("keeps name and folders when device switch is rejected and clears folders onl
   );
   await selectDevice("remote:server:source");
   await waitFor(() => expect(screen.queryByTitle("/source/selected")).toBeNull());
-  expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe("Preserved");
   expect(service.saveProject).not.toHaveBeenCalled();
 });
 it("keeps the offline default, waits for explicit connection, and retains draft after cancellation", async () => {
   state.devices[0]!.aggregatedStatus = "offline";
   const { props } = await setup("remote:server:source");
   expect(screen.getByTestId("virtual-project-device").textContent).toContain("offline");
-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Preserved" } });
   fireEvent.click(screen.getByRole("button", { name: "project.connectAndBrowse" }));
   await waitFor(() => expect(props.onOpenRemoteWorkspace).toHaveBeenCalledOnce());
   const first = props.onOpenRemoteWorkspace.mock.calls[0]![0];
@@ -287,9 +287,8 @@ it("keeps the offline default, waits for explicit connection, and retains draft 
     returnTarget: expect.objectContaining({ kind: "connect-device" }),
   });
   await act(async () => first.returnTarget.finish({ kind: "cancelled" }));
-  expect(((await screen.findByTestId("virtual-project-name")) as HTMLInputElement).value).toBe(
-    "Preserved",
-  );
+  // 取消后创建草稿仍在：设备选择与表单原样保留。
+  expect((await screen.findByTestId("virtual-project-device")).textContent).toContain("offline");
   fireEvent.click(screen.getByRole("button", { name: "project.connectAndBrowse" }));
   await act(async () =>
     props.onOpenRemoteWorkspace.mock.calls[1]![0].returnTarget.finish({
@@ -413,20 +412,18 @@ it("returns from device settings into the same draft and confirms before replaci
   const { rerender, props, service } = await setup();
   const open = vi.fn();
   rerender(createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: open } as never));
-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Round trip" } });
   fireEvent.click(screen.getByTestId("virtual-project-browse"));
   fireEvent.click(await screen.findByText("choose-root"));
   fireEvent.click(screen.getByTestId("virtual-project-device"));
   fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
   expect(open).toHaveBeenCalledOnce();
-  expect(screen.queryByTestId("virtual-project-name")).toBeNull();
+  expect(screen.queryByTestId("virtual-project-browse")).toBeNull();
   const intent = open.mock.calls[0]![0];
   expect(intent.completion).toBe("device-management");
   state.confirm.mockResolvedValueOnce(false);
   await act(async () =>
     intent.returnTarget.finish({ kind: "connected", sourceServerId: "source" }),
   );
-  expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe("Round trip");
   expect(screen.getByTitle("/source/selected")).toBeTruthy();
   expect(screen.getByTestId("virtual-project-device").textContent).toContain(
     "project.thisComputer",
@@ -436,22 +433,16 @@ it("returns from device settings into the same draft and confirms before replaci
 });
 
 it.each(["connected", "cancelled"] as const)(
-  "restores the original name only once after %s and ignores a late return",
+  "switches the draft device only once after %s and ignores a late return",
   async (kind) => {
     const { props, rerender, service, unmount } = await setup();
     const open = vi.fn();
     rerender(createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: open } as never));
-    fireEvent.change(screen.getByTestId("virtual-project-name"), {
-      target: { value: "Empty draft" },
-    });
     fireEvent.click(screen.getByTestId("virtual-project-device"));
     fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
     const target = open.mock.calls[0]![0].returnTarget;
     expect(target.isCurrent()).toBe(true);
     await act(async () => target.finish({ kind, sourceServerId: "source" }));
-    expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe(
-      "Empty draft",
-    );
     expect(screen.getByTestId("virtual-project-device").textContent).toContain(
       kind === "connected" ? "Saved device" : "project.thisComputer",
     );
@@ -460,7 +451,6 @@ it.each(["connected", "cancelled"] as const)(
     unmount();
     await setup();
     await act(async () => target.finish({ kind: "connected", sourceServerId: "source" }));
-    expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe("");
     expect(screen.getByTestId("virtual-project-device").textContent).toContain(
       "project.thisComputer",
     );
@@ -472,10 +462,12 @@ it("does not hide the draft when the current device operation cannot accept a ne
   rerender(
     createElement(ProjectCreation, { ...props, onOpenRemoteWorkspace: () => false } as never),
   );
-  fireEvent.change(screen.getByTestId("virtual-project-name"), { target: { value: "Retained" } });
   fireEvent.click(screen.getByTestId("virtual-project-device"));
   fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
-  expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe("Retained");
+  expect(screen.getByTestId("virtual-project-browse")).toBeTruthy();
+  expect(screen.getByTestId("virtual-project-device").textContent).toContain(
+    "project.thisComputer",
+  );
 });
 
 it("does not revive an abandoned draft when device addition finishes later", async () => {
@@ -512,18 +504,12 @@ it("adds the selected existing identity without creating a project and preserves
     projects: [project, { ...project, id: "existing-two", name: "Same directory second identity" }],
     tasks: [],
   });
-  fireEvent.change(screen.getByTestId("virtual-project-name"), {
-    target: { value: "Preserved draft" },
-  });
   fireEvent.click(screen.getByTestId("virtual-project-browse"));
   fireEvent.click(await screen.findByText("choose-root"));
   fireEvent.click(screen.getByTestId("virtual-project-existing"));
   expect(await screen.findByText("Original project")).toBeTruthy();
   expect(screen.getAllByText("/same/directory")).toHaveLength(2);
   fireEvent.click(screen.getByTestId("remote-project-back"));
-  expect((screen.getByTestId("virtual-project-name") as HTMLInputElement).value).toBe(
-    "Preserved draft",
-  );
   expect(screen.getByTitle("/source/selected")).toBeTruthy();
   fireEvent.click(screen.getByTestId("virtual-project-existing"));
   fireEvent.click(await screen.findByText("Same directory second identity"));
@@ -661,20 +647,17 @@ it("background cancellation leaves the project draft hidden until its original t
     return ready ? createElement(ProjectCreation, props as never) : null;
   }
   render(createElement(TabStoreProvider, null, createElement(Harness)));
-  fireEvent.change(await screen.findByTestId("virtual-project-name"), {
-    target: { value: "Retained" },
-  });
+  fireEvent.click(await screen.findByTestId("virtual-project-browse"));
+  fireEvent.click(await screen.findByText("choose-root"));
   fireEvent.click(screen.getByTestId("virtual-project-device"));
   fireEvent.click(await screen.findByRole("option", { name: "project.addRemoteDevice" }));
   const request = props.onOpenRemoteWorkspace.mock.calls[0]![0];
   const origin = tabs.getState().activeTabId!;
   act(() => tabs.getState().openSettingsTab());
   await act(async () => request.returnTarget.finish({ kind: "cancelled", background: true }));
-  expect(screen.queryByTestId("virtual-project-name")).toBeNull();
+  expect(screen.queryByTestId("virtual-project-browse")).toBeNull();
   act(() => tabs.getState().activateTab(origin));
-  expect(((await screen.findByTestId("virtual-project-name")) as HTMLInputElement).value).toBe(
-    "Retained",
-  );
+  expect(await screen.findByTitle("/source/selected")).toBeTruthy();
 });
 
 it.each([

@@ -55,8 +55,8 @@ const enUS: Record<string, string> = {
   "project.hasUnread": "Project has unread tasks",
   "project.projectOrder": "Project order",
   "project.taskOrder": "Task order",
-  "project.browseHint": "ZCode can read and edit these folders",
-  "project.connectAndBrowseHint": "Device status: {status}. ZCode connects first.",
+  "project.browseHint": "VCode can read and edit these folders",
+  "project.connectAndBrowseHint": "Device status: {status}. VCode connects first.",
   "project.selectHost": "Choose a remote connection",
   "project.back": "Back",
   "project.next": "Next",
@@ -69,7 +69,7 @@ const enUS: Record<string, string> = {
   "project.trustFolderTitle": "Trust this folder?",
   "project.trustFoldersTitle": "Trust these folders?",
   "project.trustFoldersDescription":
-    "ZCode can read and edit files in these folders and run commands within your current permission settings. Continue only if you trust every folder listed.",
+    "VCode can read and edit files in these folders and run commands within your current permission settings. Continue only if you trust every folder listed.",
   "project.trustFoldersAndCreate": "Trust folders and create",
   "project.trustFoldersAndRestore": "Trust folders and restore",
   "project.existingOnDeviceHint": "Already have projects on this device?",
@@ -330,7 +330,7 @@ const enUS: Record<string, string> = {
   "startPlan.recommendation.dismiss": "Don’t show again",
   "occupationOnboarding.stepMode": "UI mode",
   "occupationOnboarding.modeTitle": "Choose your UI mode",
-  "occupationOnboarding.modeDescription": "How would you like ZCode to show its work?",
+  "occupationOnboarding.modeDescription": "How would you like VCode to show its work?",
   "occupationOnboarding.coding": "Coding mode",
   "occupationOnboarding.codingDescription":
     "I want to see code, command output, and change details throughout the development process.",
@@ -381,27 +381,27 @@ const enUS: Record<string, string> = {
   "occupationOnboarding.migration": "Migrate conversations",
   "occupationOnboarding.migrationDescription": "Migrate conversation history from Claude Code",
   "occupationOnboarding.memory": "Enable Workspace Memory",
-  "occupationOnboarding.memoryDescription": "Let ZCode remember your preferences and work context.",
+  "occupationOnboarding.memoryDescription": "Let VCode remember your preferences and work context.",
   "occupationOnboarding.suggestions": "Enable proactive task suggestions",
   "occupationOnboarding.suggestionsDescription":
     "Show suggestions in new conversations. Click to fill the composer.",
   "occupationOnboarding.close": "Exit onboarding",
-  "startup.global.silent": "Starting ZCode",
+  "startup.global.silent": "Starting VCode",
   "startup.global.upgrading": "Upgrading local data",
   "startup.global.initializing": "Initializing local data",
   "startup.global.waiting": "Waiting for database preparation",
   "startup.global.saving": "Saving updates",
   "startup.global.finishing": "Finishing startup",
   "startup.global.servicesFailed":
-    "Local data is ready, but app services failed to start. Copy the diagnostics, then exit and reopen ZCode.",
+    "Local data is ready, but app services failed to start. Copy the diagnostics, then exit and reopen VCode.",
   "startup.global.starting": "Preparing local data",
   "startup.global.preparing_host_storage": "Preparing task index",
   "startup.global.preparing_session_storage": "Preparing chat history",
-  "startup.global.starting_services": "Starting ZCode",
+  "startup.global.starting_services": "Starting VCode",
   "startup.global.ready": "Local data is ready",
   "startup.global.failed": "Startup preparation failed",
   "startup.global.help":
-    "ZCode will open when preparation finishes. Large histories may take longer. Please keep the app running.",
+    "VCode will open when preparation finishes. Large histories may take longer. Please keep the app running.",
   "startup.global.diagnostic": "Diagnostic ID",
   "startup.global.copy": "Copy diagnostics",
   "startup.global.exit": "Exit",
@@ -422,15 +422,15 @@ const enUS: Record<string, string> = {
   "startup.global.error.open_failed":
     "The database could not be opened. Check that the data directory exists and is accessible, then retry.",
   "startup.global.error.lock_timeout":
-    "Waiting for the database write lock timed out. Another ZCode or CLI process may be updating data. Retry after it finishes.",
+    "Waiting for the database write lock timed out. Another VCode or CLI process may be updating data. Retry after it finishes.",
   "startup.global.error.sql_failed":
     "Preparation did not finish. Copy the diagnostics and check the logs. Resolve the issue, then retry manually. The app will not retry automatically.",
   "startup.global.error.startup_status_timeout":
-    "No startup status was received. Exit and reopen ZCode. If it fails again, provide the diagnostics to support.",
+    "No startup status was received. Exit and reopen VCode. If it fails again, provide the diagnostics to support.",
   "startup.global.error.transport_closed":
-    "The preparation process exited or disconnected. Exit and reopen ZCode to check the migration records again.",
+    "The preparation process exited or disconnected. Exit and reopen VCode to check the migration records again.",
   "startup.global.error.unsupported_runtime":
-    "The configured Agent does not support storage preparation. Restore the bundled Agent, then reopen ZCode.",
+    "The configured Agent does not support storage preparation. Restore the bundled Agent, then reopen VCode.",
 
   "startup.database.checking": "Checking history",
   "startup.database.waiting_for_lock": "Waiting for another window to prepare data",
@@ -486,7 +486,7 @@ const enUS: Record<string, string> = {
   "offPeak.chatCreated.queuedAt": "#{position} in queue",
   "offPeak.chatCreated.open": "Go to idle-time tasks",
   "settings.computerUse.disabledToast":
-    "Computer Use is disabled. Existing conversations require a ZCode restart to take effect.",
+    "Computer Use is disabled. Existing conversations require a VCode restart to take effect.",
   "settings.modelProvider.connectionUnavailableNotice": "The current plan is unavailable.",
   "settings.modelProvider.switchConnection": "Switch to “{connection}”",
   "settings.modelProvider.connectionSuggestionStale":
@@ -598,7 +598,7 @@ const enUS: Record<string, string> = {
   "manualClaimPlan.claim.share.copyImageSucceeded": "Image copied",
   "manualClaimPlan.claim.share.actionFailed": "Share action failed. Please try again.",
   "manualClaimPlan.claim.share.twitterText":
-    "I claimed {subtitle} on ZCode. Download and install ZCode to claim yours. https://zcode.z.ai",
+    "I claimed {subtitle} on VCode. Download and install VCode to claim yours. https://zcode.z.ai",
   "manualClaimPlan.claim.share.twitterTextLabel": "Twitter/X post text",
   // Common
   "common.loading": "Loading...",
@@ -649,7 +649,7 @@ const enUS: Record<string, string> = {
   "conversationShare.readonly.artifactPreview": "Download file",
   "conversationShare.readonly.markerCompact": "Context compacted",
   "conversationShare.readonly.markerModelChange": "Model switched",
-  "conversationShare.readonly.unsupportedRows": "Some content requires a newer version of ZCode",
+  "conversationShare.readonly.unsupportedRows": "Some content requires a newer version of VCode",
   "conversationShare.workflowSnapshot": "Snapshot at tool execution; does not update live",
   "conversationShare.shareTitle": "Share title",
   "conversationShare.permissionLabel": "Access",
@@ -680,7 +680,7 @@ const enUS: Record<string, string> = {
   "conversationShare.error.preparationExpired": "Share preparation expired. Generate a new link.",
   "conversationShare.import.notAllowed":
     "This share is view-only. Ask the author to enable importing.",
-  "conversationShare.import.unsupportedVersion": "This share format is unsupported. Update ZCode.",
+  "conversationShare.import.unsupportedVersion": "This share format is unsupported. Update VCode.",
   "conversationShare.issue.ruleLabel": "Validation rule",
   "conversationShare.issue.pathLabel": "Field path",
   "conversationShare.issue.fieldLabel": "Field",
@@ -688,7 +688,7 @@ const enUS: Record<string, string> = {
   "conversationShare.issue.rowKindLabel": "Content type",
   "conversationShare.publishFailed": "Could not generate the share link. Try again.",
   "conversationShare.error.authenticationRequired":
-    "Sign in to ZCode before sharing. If you're already signed in, sign in again and retry.",
+    "Sign in to VCode before sharing. If you're already signed in, sign in again and retry.",
   "conversationShare.error.featureDisabled": "Sharing is currently unavailable. Try again later.",
   "conversationShare.error.artifactNotAllowed":
     "A previewed file type is not supported for sharing. Deselect that conversation and retry.",
@@ -698,7 +698,7 @@ const enUS: Record<string, string> = {
   "conversationShare.error.invalidContractHttp":
     "The share service returned HTTP {status}. Retry, and provide the error details if the problem persists.",
   "conversationShare.error.invalidContract":
-    "ZCode could not read the share service’s response, so sharing could not finish. Try again later. If it still fails, copy the request ID from Error details and contact support.",
+    "VCode could not read the share service’s response, so sharing could not finish. Try again later. If it still fails, copy the request ID from Error details and contact support.",
   "conversationShare.issue.clientRequestIdLabel": "Client request ID",
   "conversationShare.issue.codeLabel": "Error code",
   "conversationShare.error.network":
@@ -900,7 +900,7 @@ const enUS: Record<string, string> = {
   "conversationShare.import.committing": "Creating the shared conversation",
   "conversationShare.import.complete": "Share import complete",
   "conversationShare.import.loginRequired":
-    "This share cannot be imported anonymously. Sign in to ZCode and try again",
+    "This share cannot be imported anonymously. Sign in to VCode and try again",
   "conversationShare.import.notFound":
     "Share not found or access denied. Check the link and your account.",
   "conversationShare.import.expired": "The share expired. Ask the author to create a new one",
@@ -981,7 +981,6 @@ const enUS: Record<string, string> = {
   "quickPick.command.myTickets": "My feedback",
   "quickPick.command.community": "Community",
   "quickPick.command.productDocs": "Product docs",
-  "quickPick.command.login": "Connect",
   "quickPick.command.logout": "Disconnect",
   "commandCenter.placeholder": "Search actions, tasks, or files",
   "commandCenter.open": "Search",
@@ -1024,7 +1023,7 @@ const enUS: Record<string, string> = {
   "confirmDialog.taskArchiveDescription":
     "Task “{taskTitle}” will move to the archive list and can still be restored later.",
   "bots.title": "Bots",
-  "bots.description": "Connect external chats and webhooks to ZCode bots.",
+  "bots.description": "Connect external chats and webhooks to VCode bots.",
   "bots.listTitle": "Bots",
   "bots.addBot": "New bot",
   "bots.addBinding": "Add binding",
@@ -1078,9 +1077,9 @@ const enUS: Record<string, string> = {
   "bots.setup.guide.weixin.create.1":
     "Start Weixin QR login, scan the QR code with Weixin, then confirm on your phone.",
   "bots.setup.guide.weixin.create.2":
-    "ZCode saves the bot_token returned by iLink automatically; after scanning, send any message to the bot in Weixin to activate the chat.",
+    "VCode saves the bot_token returned by iLink automatically; after scanning, send any message to the bot in Weixin to activate the chat.",
   "bots.setup.guide.weixin.create.3":
-    "ZCode uses a built-in iLink client: `/ilink/bot/getupdates` for long polling and `/ilink/bot/sendmessage` for replies.",
+    "VCode uses a built-in iLink client: `/ilink/bot/getupdates` for long polling and `/ilink/bot/sendmessage` for replies.",
   "bots.setup.guide.weixin.bind.1": "Open the Weixin direct chat you want to bind.",
   "bots.setup.guide.weixin.bind.2": "Send {command}.",
   "bots.setup.guide.weixin.bind.3":
@@ -1097,13 +1096,13 @@ const enUS: Record<string, string> = {
   "bots.setup.guide.feishu.bind.3":
     "Return here after the bind succeeds to finish the workspace and CLI defaults.",
   "bots.setup.guide.webhook.create.1":
-    "Webhook mode does not require a native bot in the third-party product; your integration only needs to POST messages to ZCode.",
+    "Webhook mode does not require a native bot in the third-party product; your integration only needs to POST messages to VCode.",
   "bots.setup.guide.webhook.create.2":
     "Set a shared secret first; add an outbound webhook URL as well if you want asynchronous replies pushed back.",
   "bots.setup.guide.webhook.create.3":
     "Keep one stable userId per external user so binding and future context resolve to the same person.",
   "bots.setup.guide.webhook.bind.1":
-    "POST a private-message callback to ZCode's `/api/bots/webhook` endpoint.",
+    "POST a private-message callback to VCode's `/api/bots/webhook` endpoint.",
   "bots.setup.guide.webhook.bind.2":
     'The payload should at least include this botId, a stable userId, `chatType: "private"`, and set text to {command}.',
   "bots.setup.guide.webhook.bind.3":
@@ -1242,7 +1241,7 @@ const enUS: Record<string, string> = {
   "bots.runtime.telegramLongPollingStarting": "Telegram long polling is starting.",
   "bots.runtime.telegramLongPollingStopped": "Telegram long polling is stopped.",
   "bots.runtime.telegramLongPollingHandledElsewhere":
-    "Telegram long polling is handled by another ZCode window.",
+    "Telegram long polling is handled by another VCode window.",
   "bots.runtime.telegramTokenMissing": "Telegram bot credential is missing.",
   "bots.runtime.telegramPollingFailedRetrying": "Telegram polling failed; retrying.",
   "bots.runtime.feishuWebSocketStarting": "Feishu WebSocket is starting.",
@@ -1329,58 +1328,10 @@ const enUS: Record<string, string> = {
   "bots.unbindFailed": "Failed to unbind bot: {error}",
   "bots.deleteFailed": "Failed to delete bot: {error}",
 
-  // Welcome / Login
-  "welcome.title": "Welcome to ZCode",
-  "welcome.username": "Username",
-  "welcome.password": "Password",
-  "welcome.login": "Login",
-  "welcome.loggingIn": "Logging in...",
-  "welcome.loginFailed": "Login failed",
-  "login.title": "Welcome to ZCode",
-  "login.description": "Connect your account to start using ZCode",
-  "login.oauth.activeProviderHint":
-    "Current active provider: {provider}. Signing in again replaces the current identity.",
-  "login.oauth.loadingProviders": "Loading account providers...",
-  "login.oauth.noProviders":
-    "No account providers are available right now. Please try again later.",
-  "login.oauth.button": "Continue with {provider}",
-  "login.oauth.button.zai": "Connect to Z.ai",
-  "login.oauth.button.bigmodel": "Connect to BigModel",
-  "login.oauth.regionTag.zai": "Global",
-  "login.oauth.regionTag.bigmodel": "CN",
-  "login.oauth.waiting": "Waiting for {provider} authentication...",
-  "login.oauth.loginFailure": "Login failed, please try again",
-  "login.oauth.cancel": "Cancel",
-  "login.oauth.retry": "Retry login",
-  "login.expired.title": "Your session has expired",
-  "login.expired.description": "To keep your account secure, please sign in again.",
-  "login.expired.action": "Sign in again",
-  "login.expired.restart": "Confirm and restart",
-  "login.useApiKey": "Use API key",
-  "login.apiKey.title": "API Key",
-  "login.apiKey.placeholder": "Enter API key",
-  "login.apiKey.providerLabel": "API key provider",
-  "login.apiKey.provider.zai": "Z.ai",
-  "login.apiKey.provider.bigmodel": "BigModel",
-  "login.apiKey.getApiKey": "Get API Key",
-  "login.apiKey.cancel": "Cancel",
-  "login.apiKey.continue": "Continue",
-  "login.apiKey.emptyError": "Enter an API key.",
-  "login.apiKey.providerMissingError":
-    "Built-in provider configuration for {provider} was not found. Please try again later.",
-  "login.apiKey.saveError": "Failed to save API key: {error}",
-  "login.apiKey.skipError": "Failed to skip API key setup: {error}",
-  "login.skip": "Skip for now",
-  "settings.onboarding": "Onboard",
-  "settings.onboardingDescription":
-    "Choose your role, interface mode, and preferences again. Use Migration settings to import data.",
-  "settings.onboardingOpen": "Open onboarding",
-
   // App header
   "app.currentTheme": "Current: {theme}",
-  "app.login": "Connect",
   "app.logout": "Disconnect",
-  "logout.confirm.title": "Disconnect and restart ZCode?",
+  "logout.confirm.title": "Disconnect and restart VCode?",
   "logout.confirm.descriptionWithRunningSessions":
     "{count} session(s) are currently running. Disconnecting will interrupt them and restart the app.",
   "logout.confirm.descriptionDefault":
@@ -1633,7 +1584,7 @@ const enUS: Record<string, string> = {
   "modelTrajectory.refresh": "Refresh",
   "modelTrajectory.close": "Close",
   "modelTrajectory.loading": "Loading trajectory…",
-  "modelTrajectory.empty": "No model calls recorded (only ZCode Agent writes model-io)",
+  "modelTrajectory.empty": "No model calls recorded (only VCode Agent writes model-io)",
   "modelTrajectory.error": "Failed to load trajectory",
   "modelTrajectory.truncatedNotice": "Too many records, showing the most recent calls",
   "modelTrajectory.summaryCalls": "{count} calls",
@@ -1699,6 +1650,7 @@ const enUS: Record<string, string> = {
   "diff.placeholder.toast":
     "The Diff panel is still using UI placeholder mode for now because the Git service is not fully wired up yet.",
   "git.readonly": "Read-only",
+  "git.repoSelector.label": "Switch Git repository",
   "git.head.detached": "Detached HEAD",
   "git.summary.aheadBehind": "Ahead {ahead} / Behind {behind}",
   "git.summary.scopeWorkspace": "Current workspace subtree",
@@ -1750,6 +1702,16 @@ const enUS: Record<string, string> = {
   "sidePane.time.hoursAgo": "{count}h ago",
   "sidePane.time.daysAgo": "{count}d ago",
   "git.action.refresh": "Refresh",
+  "git.action.pull": "Pull",
+  "git.pull.toast.upToDate": "Already up to date",
+  "git.pull.toast.fastForwarded": "Pulled the latest updates",
+  "git.pull.toast.merged": "Merged the latest remote commits",
+  "git.pull.error.detachedHead": "Cannot pull while HEAD is detached. Switch back to a branch first.",
+  "git.pull.error.noUpstream": "The current branch has no upstream branch to pull from.",
+  "git.pull.error.localChangesBlocked": "Local uncommitted changes would be overwritten. Commit or stash them first.",
+  "git.pull.error.mergeConflict":
+    "Merge conflicts occurred while pulling. Review the conflicted files or ask the agent to resolve the merge.",
+  "git.pull.error.failed": "Pull failed: {error}",
   "git.action.stage": "Stage",
   "git.action.unstage": "Unstage",
   "git.action.discard": "Discard",
@@ -1866,6 +1828,9 @@ const enUS: Record<string, string> = {
   "git.worktree.error.failed": "Failed to create worktree. See logs.",
   "git.branchSwitcher.trigger.ariaLabel": "Switch Git branch",
   "git.branchSwitcher.searchPlaceholder": "Search branches",
+  "git.branchSwitcher.searchRepositoryPlaceholder": "Search repositories",
+  "git.branchSwitcher.backToRepositories": "Back to repositories",
+  "git.branchSwitcher.section.repositories": "Repositories",
   "git.branchSwitcher.section.branches": "Branches",
   "git.branchSwitcher.empty": "No matching branches",
   "git.branchSwitcher.currentDirty": "Uncommitted changes: {count} files",
@@ -2122,7 +2087,7 @@ const enUS: Record<string, string> = {
   "titleBar.menu.view.actualSize": "Actual size",
   "titleBar.menu.view.zoomIn": "Zoom in",
   "titleBar.menu.view.zoomOut": "Zoom out",
-  "titleBar.menu.help.about": "About ZCode",
+  "titleBar.menu.help.about": "About VCode",
   "titleBar.menu.help.checkForUpdates": "Check for updates",
   "titleBar.menu.help.feedback": "Feedback",
   "sidebar.menu.community": "Community",
@@ -2179,7 +2144,7 @@ const enUS: Record<string, string> = {
   "update.toast.ready": "v{version} downloaded, restart to install",
   "update.toast.devSkipped": "Updates are disabled in dev builds",
   "update.toast.error": "Update check failed: {error}",
-  "forceUpdate.title": "Update ZCode to continue",
+  "forceUpdate.title": "Update VCode to continue",
   "forceUpdate.description":
     "Your current version v{currentVersion} is below the minimum supported version v{minimalVersion}. Update first before continuing with this client.",
   "forceUpdate.currentVersion": "Current version",
@@ -2268,7 +2233,7 @@ const enUS: Record<string, string> = {
   "remote.error.credentialsRequired":
     "No usable SSH password or private-key credential is available. Return to settings to add one.",
   "remote.error.sourceServerUpgradeRequired":
-    "remote device is incompatible with this ZCode Desktop version and must be upgraded.",
+    "remote device is incompatible with this VCode Desktop version and must be upgraded.",
   "remote.error.sourceServerRunningTasks":
     "remote device still has running tasks. Wait for them to finish or confirm a forced update.",
   "remote.error.workspaceTaskIdentityConflict":
@@ -2302,7 +2267,7 @@ const enUS: Record<string, string> = {
   "remote.error.retryableHint": "You can try again later.",
   "remote.error.connectionClosed": "The remote connection was closed",
   "workspaceSidebar.unavailableLocalDirectory":
-    "The workspace directory does not exist or cannot be accessed. You can only view history for now. Restore the directory and restart ZCode to continue.",
+    "The workspace directory does not exist or cannot be accessed. You can only view history for now. Restore the directory and restart VCode to continue.",
   "workspaceSidebar.toggleSidebar": "Toggle sidebar",
   "workspaceSidebar.resizeSidebar": "Resize sidebar",
   "workspaceSidebar.showFileTree": "Show files",
@@ -2321,6 +2286,15 @@ const enUS: Record<string, string> = {
   "workspaceFileTree.openInBrowser": "Open in built-in browser",
   "workspaceFileTree.openFailed": "Could not open this item",
   "workspaceFileTree.addToChat": "Add to chat",
+  "workspaceFileTree.rename": "Rename",
+  "workspaceFileTree.renamePlaceholder": "Enter a new name",
+  "workspaceFileTree.renameFailed": "Rename failed",
+  "workspaceFileTree.deleteConfirmTitle": "Delete \"{name}\"?",
+  "workspaceFileTree.deleteConfirmFileDescription":
+    "This will delete the file from disk. This cannot be undone.",
+  "workspaceFileTree.deleteConfirmDirectoryDescription":
+    "This will delete the folder and all of its contents from disk. This cannot be undone.",
+  "workspaceFileTree.deleteFailed": "Delete failed",
   "workspaceFileTree.gitStatus.ignored": "Ignored",
 
   // SSH dialog
@@ -2339,7 +2313,7 @@ const enUS: Record<string, string> = {
   "ssh.assetInstallMode.local-download-upload": "Download locally, then upload",
   "ssh.assetInstallMode.remote-download": "Download on remote server",
   "ssh.assetInstallModeDescription":
-    "Remote server download reduces upload waiting, but the server must reach the ZCode CDN and have download, extract, and checksum tools.",
+    "Remote server download reduces upload waiting, but the server must reach the VCode CDN and have download, extract, and checksum tools.",
   "ssh.password": "Password",
   "ssh.passwordPlaceholder": "Enter your SSH password",
   "ssh.privateKey": "Private key",
@@ -2431,7 +2405,7 @@ const enUS: Record<string, string> = {
     "Connection failed · retry, or adjust the configuration and try again",
   "remote.phase.channel": "Connect to device",
   "remote.phase.identify": "Identify device",
-  "remote.phase.deploy": "Install ZCode Server",
+  "remote.phase.deploy": "Install VCode Server",
   "remote.phase.handshake": "Start and check compatibility",
   "remote.progress.step": "Step {current}/{total}",
   "remote.progress.elapsedSeconds": "{seconds}s elapsed",
@@ -2439,7 +2413,7 @@ const enUS: Record<string, string> = {
   "remote.progress.copyError": "Copy error details",
   "remote.progress.copied": "Copied",
   "remote.link.local": "This device",
-  "remote.link.localVersion": "ZCode v{version}",
+  "remote.link.localVersion": "VCode v{version}",
   "remote.link.deviceHint": "Device details appear after connecting",
   "remote.link.devicePending": "Remote device",
   "remote.recognizedDevice": "Connected to device {device}",
@@ -2461,6 +2435,10 @@ const enUS: Record<string, string> = {
   "remote.renameDevice": "Device name",
   "remote.renameDeviceHint":
     "Give it a memorable name on first connect; change it anytime in Settings · Remote devices",
+  "remote.customName": "Custom name",
+  "remote.customNamePlaceholder": "e.g. Staging server",
+  "remote.customNameHint":
+    "Leave empty to keep the default name. Applied as the device and connection name once connected; change it later in Settings · Remote devices",
   "remote.quickOpen": "Quick open",
   "remote.connectionLogLines": "{count} line(s)",
   "remote.errorPanel.uploadFailedTitle": "Asset upload failed",
@@ -2471,7 +2449,7 @@ const enUS: Record<string, string> = {
   "remote.phaseSub.channelEstablished.docker": "Connected to the container",
   "remote.phaseSub.channelEstablished": "Connected to device",
   "remote.phaseSub.identifyExisting": "Connected to device {device}",
-  "remote.phaseSub.identifyNew": "New device · ZCode Server not installed",
+  "remote.phaseSub.identifyNew": "New device · VCode Server not installed",
   "remote.phaseSub.deploySkipped": "Remote already on v{version} · deployment skipped",
   "remote.phaseSub.deployWaitingConfirm": "Waiting for install confirmation…",
   "remote.phaseSub.deployUploading": "Uploading {file} · {sent} / {total}",
@@ -2480,110 +2458,16 @@ const enUS: Record<string, string> = {
   "remote.phaseSub.handshakeDone": "systemd --user · port {port}",
   "remote.phaseSub.readyOnline": "Device online; workspace history ready",
   "remote.sourceServerInstallCancelled": "Installation cancelled. You can retry when ready.",
-  "webRemoteControl.trigger": "Mobile remote control",
-  "webRemoteControl.triggerStatus.idle": "Remote control is off",
-  "webRemoteControl.triggerStatus.starting": "Remote control is starting",
-  "webRemoteControl.triggerStatus.waiting": "Waiting for phone",
-  "webRemoteControl.triggerStatus.connecting": "Connecting phone",
-  "webRemoteControl.triggerStatus.connected": "Phone connected",
-  "webRemoteControl.triggerStatus.error": "Remote control failed",
-  "webRemoteControl.authRequired.title": "Sign in required",
-  "webRemoteControl.authRequired.description":
-    "Sign in to control this computer from your phone. Use the same account on both devices.",
-  "webRemoteControl.authRequired.login": "Sign in",
-  "webRemoteControl.title": "Mobile remote control",
-  "webRemoteControl.description":
-    "Scan the QR code or open the link on your phone to control this workspace.",
-  "webRemoteControl.statusLabel": "Session status",
-  "webRemoteControl.status.idle": "Idle",
-  "webRemoteControl.status.starting": "Starting",
-  "webRemoteControl.status.running": "Waiting for phone",
-  "webRemoteControl.status.connecting": "Connecting phone",
-  "webRemoteControl.status.active": "Phone connected",
-  "webRemoteControl.status.error": "Connection failed",
   "webRemoteControl.themeMenu.trigger": "Choose theme",
-  "webRemoteControl.statusDetail.idle": "Ready to connect.",
-  "webRemoteControl.statusDetail.starting": "Starting remote control...",
-  "webRemoteControl.statusDetail.running": "Scan the QR code or open the link on your phone.",
-  "webRemoteControl.statusDetail.connecting": "Phone is connecting...",
-  "webRemoteControl.statusDetail.active": "Your phone can control this workspace.",
-  "webRemoteControl.statusDetail.error": "Could not start mobile remote control.",
-  "webRemoteControl.generating": "Preparing QR code...",
-  "webRemoteControl.qrAlt": "Web remote control QR code",
-  "webRemoteControl.mobileQr.title": "Scan from phone",
-  "webRemoteControl.mobileQr.description": "Use your phone camera to open this workspace remotely.",
-  "webRemoteControl.statusTag.phone": "Phone",
-  "webRemoteControl.statusTag.ready": "Ready",
-  "webRemoteControl.botChannel.title": "Use a bot channel",
-  "webRemoteControl.botChannel.description": "Connect a chat bot for longer-running mobile access.",
-  "webRemoteControl.botChannel.weixin.title": "Weixin",
-  "webRemoteControl.botChannel.weixin.description": "Open this workspace from Weixin chat.",
-  "webRemoteControl.botChannel.feishu.title": "Feishu",
-  "webRemoteControl.botChannel.feishu.description": "Open this workspace from Feishu.",
-  "webRemoteControl.botChannel.lark.title": "Lark",
-  "webRemoteControl.botChannel.lark.description": "Open this workspace from Lark.",
-  "webRemoteControl.botChannel.telegram.title": "Telegram",
-  "webRemoteControl.botChannel.telegram.description": "Open this workspace from Telegram.",
-  "webRemoteControl.botChannel.configure": "Configure in bot channels",
-  "webRemoteControl.botChannel.manageBots": "Manage bots",
-  "webRemoteControl.linkLabel": "Remote control link",
-  "webRemoteControl.linkPending": "The remote control link will appear here once ready.",
-  "webRemoteControl.singlePageNote":
-    "This relay pairing supports one phone page at a time. If it is already open elsewhere, close the old page first.",
-  "webRemoteControl.copyLink.description": "Can't scan? Open the link on your phone.",
-  "webRemoteControl.failure.sessionNotFound":
-    "This Web remote control link is no longer valid. Start it again from desktop.",
-  "webRemoteControl.failure.sessionExpired":
-    "This Web remote control session has already ended. Generate a new link from desktop to continue.",
-  "webRemoteControl.failure.sessionConflict":
-    "This link is already being used by another page. Close the other page and scan again.",
-  "webRemoteControl.failure.kicked":
-    "The relay kicked this pairing. Close the other page and generate a new QR code from desktop.",
-  "webRemoteControl.failure.workspaceClosed":
-    "The shared desktop window has been closed. Go back to desktop and start Web remote control again.",
-  "webRemoteControl.failure.desktopDisconnected":
-    "The desktop side disconnected, so this Web remote control session can no longer continue.",
-  "webRemoteControl.failure.invalidMobileConnection":
-    "The current mobile connection is no longer valid. Reload the page and reconnect.",
-  "webRemoteControl.failure.desktopBootstrapTimeout":
-    "The desktop window did not respond in time. Make sure it is still running, then reload.",
-  "webRemoteControl.failure.connectionRecoveryTimeout":
-    "The mobile connection did not recover in time, so Web remote control cannot keep syncing yet.",
-  "webRemoteControl.failure.relayUnavailable":
-    "The external relay connection is unavailable. Make sure desktop is online, then try again.",
-  "webRemoteControl.failure.unsupportedAction":
-    "Web remote control mode can only open workspaces that are already open in the current desktop window.",
-  "webRemoteControl.failure.unexpectedError":
-    "Could not start mobile remote control. Try again from desktop.",
-  "webRemoteControl.copyLink": "Copy link",
-  "webRemoteControl.copyLink.copied": "Remote control link copied",
-  "webRemoteControl.copyLinkFailed": "Could not copy remote control link: {error}",
-  "webRemoteControl.refreshQr": "Refresh QR",
-  "webRemoteControl.refreshQr.confirmTitle": "Refresh QR code?",
-  "webRemoteControl.refreshQr.confirmDescription":
-    "Refreshing will invalidate any remote control links that were copied or scanned before. Connected phones will need to scan the new QR code.",
-  "webRemoteControl.refreshQr.success": "Remote control QR refreshed",
-  "webRemoteControl.refreshQr.failed": "Could not refresh remote control QR: {error}",
-  "webRemoteControl.stop": "Stop",
-  "webRemoteControl.switchWorkspace": "Switch workspace",
   "webRemoteControl.expandNavigation": "Expand tasks and workspaces",
   "webRemoteControl.collapseNavigation": "Collapse tasks and workspaces",
   "webRemoteControl.homeOnlyWorkspaces": "Workspaces",
   "webRemoteControl.noSwitchableWorkspaces": "No switchable workspaces",
-  "webRemoteControl.noTasks": "No tasks available in the current desktop window",
-  "webRemoteControl.openTask": "Open task {title}",
-  "webRemoteControl.taskStatus.idle": "Idle",
-  "webRemoteControl.taskStatus.running": "Running",
-  "webRemoteControl.taskStatus.completed": "Done",
-  "webRemoteControl.taskStatus.error": "Error",
   "webRemoteControl.switchDevice": "Switch device",
   "webRemoteControl.unnamedDevice": "Unnamed device",
   "webRemoteControl.mobileShell.backHome": "Back to task home",
   "webRemoteControl.mobileShell.chatTitle": "Task chat",
   "webRemoteControl.mobileShell.reconnecting": "Reconnecting automatically...",
-  "webRemoteControl.stopSuccess": "Web remote control stopped",
-  "webRemoteControl.startFailed": "Failed to start Web remote control: {error}",
-  "webRemoteControl.stopFailed": "Failed to stop Web remote control: {error}",
   "remote.selectDirectoryTitle": "Choose directory",
   "remote.selectDirectoryDescription": "Choose a directory on {method} as the workspace.",
   "remote.backToConnection": "Back to configuration",
@@ -2595,7 +2479,7 @@ const enUS: Record<string, string> = {
   "remote.kind.wsl": "WSL",
   "remote.kind.docker": "Docker",
   "remote.kind.server.note":
-    "Server (direct connection to a running ZCode service) is shown only in development builds.",
+    "Server (direct connection to a running VCode service) is shown only in development builds.",
   "remote.addAndConnect": "Add and connect",
   "remote.connect": "Connect",
   "remote.connecting": "Connecting...",
@@ -2606,16 +2490,16 @@ const enUS: Record<string, string> = {
   "remote.connectionLog": "Connection log",
   "remote.connectionLogEmpty": "waiting for connection output...",
   "remote.connectingConfirmTitle": "Stop the current connection?",
-  "remote.sourceServerInstallTitle": "ZCode Server installation required",
+  "remote.sourceServerInstallTitle": "VCode Server installation required",
   "remote.sourceServerInstallDescription":
-    "ZCode will upload the matching release, install it under ~/.zcode/server, and start the background daemon. Existing legacy remote files will be preserved.",
+    "VCode will upload the matching release, install it under ~/.zcode/server, and start the background daemon. Existing legacy remote files will be preserved.",
   "remote.sourceServerInstallConfirm": "Install and continue",
   "remote.installTarget": "Target account",
   "remote.installVersion": "Install version",
   "remote.installLocation": "Install location",
   "remote.sourceServerBoundaryTitle": "Local offline, tasks keep running",
   "remote.sourceServerBoundaryDescription":
-    "Remote tasks keep running, even when you close ZCode or put your computer to sleep.",
+    "Remote tasks keep running, even when you close VCode or put your computer to sleep.",
   "remote.sourceServerBoundaryEyebrow": "New remote connection",
   "remote.sourceServerBoundaryLocalDevice": "This computer",
   "remote.sourceServerBoundaryLocalStatus": "Sleeping / closed",
@@ -2639,7 +2523,7 @@ const enUS: Record<string, string> = {
   "settings.source.retiredEntryNote": "Connection target changed; new identity confirmed",
   "settings.source.retiredNameSuffix": " (old)",
   "settings.source.reinstallRequired":
-    "ZCode Server was uninstalled remotely; connection and task records remain on this device.",
+    "VCode Server was uninstalled remotely; connection and task records remain on this device.",
   "settings.source.reinstallAndConnect": "Reinstall and connect",
   "settings.source.copyDeviceId": "Copy device ID",
   "common.justNow": "just now",
@@ -2663,7 +2547,7 @@ const enUS: Record<string, string> = {
   "settings.machine.scope": "{scope} · {machine}",
   "settings.source.connectionName": "Connection name",
   "settings.source.connectionAddress": "Address",
-  "settings.source.connectionNameHint": "Used only to distinguish this connection in ZCode.",
+  "settings.source.connectionNameHint": "Used only to distinguish this connection in VCode.",
   "settings.source.deviceNameRequired": "Device name is required.",
   "settings.source.error.connection-profile-unavailable":
     "This connection is no longer available. Refresh and try again.",
@@ -2699,7 +2583,7 @@ const enUS: Record<string, string> = {
   "settings.source.updatePhase.checking": "Checking the device and update files",
   "settings.source.updatePhase.downloading": "Downloading update files",
   "settings.source.updatePhase.uploading": "Uploading update files",
-  "settings.source.updatePhase.installing": "Installing ZCode Server",
+  "settings.source.updatePhase.installing": "Installing VCode Server",
   "settings.source.updatePhase.reconnecting": "Starting the service and reconnecting",
   "settings.source.updatePhase.completed": "Update complete",
   "settings.source.updateLog": "Update log ({count})",
@@ -2754,13 +2638,13 @@ const enUS: Record<string, string> = {
   "sourceServer.updateFailedToast":
     "{source} could not be updated. Review the log under Remote devices and try again.",
   "sourceServer.controllerUpdateAvailableToast":
-    "ZCode has an update for {source}\nDesktop {current} → {available}; update ZCode to match this Source.",
+    "VCode has an update for {source}\nDesktop {current} → {available}; update VCode to match this Source.",
   "settings.source.forceUpdate": "Force update",
   "settings.source.forceUpdateTitle": "Force-update this device?",
   "settings.source.forceUpdateDescription":
     "A forced update stops tasks that are still running on this device. Confirm that those tasks may be interrupted.",
   "settings.source.controllerUpdateRequired":
-    "Update this ZCode Desktop first; the Server cannot be updated from here.",
+    "Update this VCode Desktop first; the Server cannot be updated from here.",
   "settings.source.neverConnected": "Not connected",
   "settings.source.unidentifiedProfiles": "Not connected",
   "settings.source.unidentifiedProfilesDescription":
@@ -2823,7 +2707,7 @@ const enUS: Record<string, string> = {
   "remote.log.requestingSession": "Requesting the host process to create a remote session...",
   "remote.log.sessionReady":
     "Remote session created successfully. You can choose a directory next.",
-  "server.description": "Connect to an already running ZCode server.",
+  "server.description": "Connect to an already running VCode server.",
   "server.url": "Server URL",
   "server.urlPlaceholder": "e.g. https://studio.example.com:3030",
   "server.name": "Display name",
@@ -2962,7 +2846,7 @@ const enUS: Record<string, string> = {
   "chat.changeSummary.reverted": "Undone",
   "chat.changeSummary.rewindDialog.title": "Undo file changes",
   "chat.changeSummary.rewindDialog.description":
-    "ZCode checks current file content again before writing. If another process changed a file, no files will be written.",
+    "VCode checks current file content again before writing. If another process changed a file, no files will be written.",
   "chat.changeSummary.rewindDialog.loading": "Checking reversible files…",
   "chat.changeSummary.rewindDialog.safeTitle": "Safe to undo {count}",
   "chat.changeSummary.rewindDialog.unsafeTitle": "Unsafe to undo {count}",
@@ -3019,8 +2903,6 @@ const enUS: Record<string, string> = {
   "chat.turnNavigator.userFallback": "User query",
   "chat.rewind.conflictConfirm":
     "These files changed outside this turn. Force rewinding may create conflicts:\n\n{paths}",
-  "taskNav.back": "Go back",
-  "taskNav.forward": "Go forward",
   "taskNav.noMoreBack": "No previous tasks",
   "taskNav.noMoreForward": "No next tasks",
   "taskList.switchBlockedByModelRestart":
@@ -3141,7 +3023,7 @@ const enUS: Record<string, string> = {
     "When launching the built-in terminal, inherit login shell environment, proxy, Kubernetes variables, and local terminal font when possible.",
   "settings.terminalFontFamily": "Terminal font",
   "settings.terminalFontFamilyDescription":
-    "Leave blank to auto-detect system terminal settings; set a value to override the ZCode terminal font.",
+    "Leave blank to auto-detect system terminal settings; set a value to override the VCode terminal font.",
   "settings.terminalFontFamilyPlaceholder": "Leave blank to inherit, e.g. MesloLGS NF, monospace",
   "settings.integratedTerminalShell": "Integrated terminal shell",
   "settings.integratedTerminalShellDescription":
@@ -3270,7 +3152,7 @@ const enUS: Record<string, string> = {
     "Group consecutive Write, Edit, and ApplyPatch calls into a Changes section.",
   "settings.zcodeInteractionBehavior": "Interaction behavior",
   "settings.zcodeInteractionBehaviorDescription":
-    "While ZCode is running, add follow-up actions to the queue or guide them to run after the next tool call.",
+    "While VCode is running, add follow-up actions to the queue or guide them to run after the next tool call.",
   "settings.zcodeInteractionBehavior.option.queue": "Queue",
   "settings.zcodeInteractionBehavior.option.guide": "Guide",
   "settings.askUserQuestionAutoResolution": "Automatically continue questions",
@@ -3314,7 +3196,7 @@ const enUS: Record<string, string> = {
   "settings.dataBaseDirCopying": "Copying data, please do not close the app...",
   "settings.dataBaseDirCopyFailed": "Data copy failed. Path was not changed.",
   "settings.dataBaseDirForbiddenInstallDir":
-    "The data directory cannot be the ZCode installation folder on Windows. Choose a folder outside the app install location.",
+    "The data directory cannot be the VCode installation folder on Windows. Choose a folder outside the app install location.",
   "settings.dataBaseDirRestartRequired": "Data saved. Please restart the app to take effect.",
   "settings.locale.system": "System default",
   "settings.locale.zh-CN": "中文简体",
@@ -3330,7 +3212,7 @@ const enUS: Record<string, string> = {
   "settings.migration.title": "Migration",
   "settings.migration.sectionTitle": "Claude History Migration",
   "settings.migration.sectionDescription":
-    "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching ZCode task lists.",
+    "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching VCode task lists.",
   "settings.migration.badge.localOnly": "Local Claude records",
   "settings.migration.badge.manualOnly": "Manual only",
   "settings.migration.currentWorkspace": "Current workspace",
@@ -3384,14 +3266,14 @@ const enUS: Record<string, string> = {
   "settings.usageTitle": "Usage stats",
   "settings.usageDescription":
     "Review rough activity and model usage aggregated from local sessions.",
-  "resourceManager.storage.summaryTotal": "Total used by ZCode",
+  "resourceManager.storage.summaryTotal": "Total used by VCode",
   "resourceManager.storage.scanning": "Calculating…",
   "resourceManager.storage.lastScanned": "Last calculated {time}",
   "resourceManager.storage.idle": "Not calculated yet",
   "resourceManager.storage.failed": "Calculation failed",
   "resourceManager.storage.rescan": "Recalculate",
   "resourceManager.storage.disk": "Disk",
-  "resourceManager.storage.diskUsage": "ZCode uses {used}",
+  "resourceManager.storage.diskUsage": "VCode uses {used}",
   "resourceManager.storage.diskFree": "{free} free of {total}",
   "resourceManager.storage.diskUnknown": "Disk capacity unavailable",
   "resourceManager.storage.roots": "Data directories",
@@ -3459,7 +3341,7 @@ const enUS: Record<string, string> = {
   "settings.embeddedBrowserAllowInsecureCertificatesSavedHint":
     "Certificate setting saved. Restart the app to take effect.",
   "settings.browser.data.section": "Browser data",
-  "settings.browser.desktopOnly": "Browser data can only be managed in the ZCode desktop app.",
+  "settings.browser.desktopOnly": "Browser data can only be managed in the VCode desktop app.",
   "settings.browser.import.title": "Import Chrome sign-in state",
   "settings.browser.import.description":
     "Bring your Chrome sign-in state into the built-in browser once, so the AI can open sites you are already signed in to and work more smoothly.",
@@ -3477,13 +3359,13 @@ const enUS: Record<string, string> = {
   "settings.browser.import.elevationCancelled":
     "Windows administrator access was canceled. No cookies were imported.",
   "settings.browser.import.helperVerificationFailed":
-    "ZCode could not verify its Windows secure import component. Reinstall or update ZCode before importing cookies.",
+    "VCode could not verify its Windows secure import component. Reinstall or update VCode before importing cookies.",
   "settings.browser.import.appBoundFailed":
     "Windows could not unlock Chrome's App-Bound cookies. No cookies were imported.",
   "settings.browser.import.adminConfirmTitle":
     "Allow administrator access to import Chrome cookies?",
   "settings.browser.import.adminConfirmDescription":
-    "Chrome protects cookies with App-Bound encryption on Windows. For this import only, ZCode will request administrator access, start a temporary system service, and delete it immediately afterward. Chrome passwords are never read or imported.",
+    "Chrome protects cookies with App-Bound encryption on Windows. For this import only, VCode will request administrator access, start a temporary system service, and delete it immediately afterward. Chrome passwords are never read or imported.",
   "settings.browser.import.adminConsent":
     "I confirm administrator access for this cookie import only",
   "settings.browser.import.adminConfirmAction": "Continue and request access",
@@ -3542,7 +3424,7 @@ const enUS: Record<string, string> = {
   "settings.previewBadge.dark": "Dark",
   "settings.modelProviderTitle": "Model settings",
   "settings.mcpTitle": "MCP Servers",
-  "settings.mcp.description": "Manage MCP server configurations used by ZCode Agent.",
+  "settings.mcp.description": "Manage MCP server configurations used by VCode Agent.",
   "settings.mcp.create.open": "Add MCP server",
   "settings.mcp.import.open": "Import MCP servers from external agents",
   "settings.mcp.import.action": "Import",
@@ -3619,7 +3501,7 @@ const enUS: Record<string, string> = {
     "This plugin MCP server is loaded but not currently connected.",
   "settings.mcp.host.active": "Host built-in",
   "settings.mcp.host.activeDescription":
-    "ZCode provides this MCP server for the {pluginName} plugin. Its runtime identity is managed by the host.",
+    "VCode provides this MCP server for the {pluginName} plugin. Its runtime identity is managed by the host.",
   "settings.mcp.plugin.disabled": "Plugin disabled",
   "settings.mcp.plugin.disabledDescription":
     "This MCP server is built into a plugin. Enable the plugin to load it.",
@@ -3631,7 +3513,7 @@ const enUS: Record<string, string> = {
     "Open authorization to finish connecting this plugin MCP server.",
   "settings.mcp.oauth.openAuthorization": "Open authorization",
   "settings.mcp.statusOnlyUnsupported":
-    "This ZCode Agent cannot refresh OAuth status. Upgrade or restart ZCode, then reopen MCP settings to run a full refresh.",
+    "This VCode Agent cannot refresh OAuth status. Upgrade or restart VCode, then reopen MCP settings to run a full refresh.",
   "settings.mcp.refreshFailed": "Failed to refresh MCP status: {error}",
   "settings.mcp.status.toolCount": "{count} tools",
   "settings.mcp.status.connectedReason": "Connected and available.",
@@ -3658,7 +3540,7 @@ const enUS: Record<string, string> = {
   "settings.mcp.failure.official_origin_untrusted":
     "The MCP server URL failed the security check. The connection was blocked.",
   "settings.mcp.failure.not_authenticated":
-    "You are not signed in. Sign in to ZCode to use this MCP server.",
+    "You are not signed in. Sign in to VCode to use this MCP server.",
   "settings.mcp.failure.coding_plan_required":
     "This account has no Coding Plan. Purchase or configure a Coding Plan to use this MCP server.",
   "settings.mcp.failure.server_not_found":
@@ -3728,7 +3610,7 @@ const enUS: Record<string, string> = {
   "settings.mcpServers.import.targetLabel": "Import target",
   "settings.mcpServers.import.target.global": "Import to Global",
   "settings.mcpServers.import.target.project": "Import to Project",
-  "settings.mcpServers.import.importing": "Importing MCP servers into ZCode",
+  "settings.mcpServers.import.importing": "Importing MCP servers into VCode",
   "settings.mcpServers.import.imported": "Imported",
   "settings.mcpServers.import.skipped": "Skipped",
   "settings.mcpServers.import.failed": "Failed",
@@ -3841,7 +3723,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.connectionMode.noAvailablePlan": "No available plan",
   "settings.modelProvider.accountProviderConfigMissing":
     "The account provider configuration is unavailable. Refresh and try again.",
-  "settings.modelProvider.startPlan.login": "Log in",
   "settings.modelProvider.startPlan.status.loginRequired": "Log in to view and use your Start Plan",
   "settings.modelProvider.startPlan.status.expired": "Start Plan expired",
   "settings.modelProvider.startPlan.status.noPlan": "No available Start Plan",
@@ -3864,7 +3745,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.trial.label": "Trial period",
   "settings.modelProvider.startPlan.highlight.trial.value": "5 calendar days",
   "settings.modelProvider.startPlan.highlight.trial.description":
-    "Timing starts after signing in to ZCode 3.x.",
+    "Timing starts after signing in to VCode 3.x.",
   "settings.modelProvider.startPlan.highlight.quota.label": "Daily quota",
   "settings.modelProvider.startPlan.highlight.quota.value": "3M tokens daily",
   "settings.modelProvider.startPlan.highlight.quota.description":
@@ -3874,7 +3755,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.metering.description":
     "Metered only after using platform GLM flagship models.",
   "settings.modelProvider.startPlan.compatibility":
-    "Supports BYOK and BYOA. Base URL, API format, and API Key are maintained by ZCode automatically.",
+    "Supports BYOK and BYOA. Base URL, API format, and API Key are maintained by VCode automatically.",
   "settings.modelProvider.codingPlan.title": "{provider} - Coding Plan",
   "settings.modelProvider.codingPlan.webview.title": "Upgrade Plan",
   "settings.modelProvider.codingPlan.webview.authInjectFailed":
@@ -3914,7 +3795,6 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.codingPlan.description.unsupported":
     "This provider does not support Coding Plan status checks yet.",
   "settings.modelProvider.codingPlan.login": "Sign in to {provider}",
-  "settings.modelProvider.codingPlan.connect": "Connect to {provider}",
   "settings.modelProvider.codingPlan.purchaseLoginRequiredShort": "Sign in to purchase",
   "settings.modelProvider.codingPlan.purchaseConnectRequiredShort": "Connect to purchase",
   "settings.modelProvider.codingPlan.disconnect": "Unlink",
@@ -4013,7 +3893,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeTitle":
     "Assign members to your team plan",
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeDescription":
-    "Add yourself or other members on the BigModel team plan management page. Once assigned, the team quota will be available in ZCode.",
+    "Add yourself or other members on the BigModel team plan management page. Once assigned, the team quota will be available in VCode.",
   "settings.modelProvider.codingPlan.purchase.manageTeamPlan": "Manage team plan",
   "settings.modelProvider.codingPlan.manage": "Manage",
   "settings.modelProvider.planCard.codingPlan": "Coding Plan",
@@ -4396,7 +4276,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.resetForm": "Reset form",
   "settings.modelProvider.fieldHelp": "About {field}",
   "settings.modelProvider.help.contextWindow":
-    "The context capacity the model can process at once, in tokens. ZCode uses this to manage context.\nDo not exceed the model's actual limit.",
+    "The context capacity the model can process at once, in tokens. VCode uses this to manage context.\nDo not exceed the model's actual limit.",
   "settings.modelProvider.help.maxOutputTokens":
     "The maximum number of tokens a single model request may generate.\nDo not exceed the model's actual limit.",
   "settings.modelProvider.help.inputModalities":
@@ -4412,7 +4292,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.help.advanced":
     "**MFJS tool schema**: Enables Moonshot Flavored JSON Schema compatibility, commonly used by Moonshot's Kimi model API. Enable only when the model API requires this format.",
   "settings.modelProvider.help.followRecommendedConfig":
-    "Matches recommended configuration using the model ID, Base URL, and API format. ZCode continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
+    "Matches recommended configuration using the model ID, Base URL, and API format. VCode continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
   "settings.modelProvider.modelDefaultsLoaded": "Smart configuration matched for this model",
   "settings.modelProvider.modelConfigIncomplete": "Model configuration is incomplete",
   "settings.modelProvider.models": "Model list",
@@ -4490,7 +4370,7 @@ const enUS: Record<string, string> = {
   "settings.usage.sourceProvider": "Source: {provider}",
   "settings.usage.billingBanner.title": "{provider} Coding Plan",
   "settings.usage.billingBanner.description":
-    "Connect your {provider} account to query Coding Plan entitlement, then keep coding in ZCode after purchase or setup.",
+    "Connect your {provider} account to query Coding Plan entitlement, then keep coding in VCode after purchase or setup.",
   "settings.usage.billingBanner.compactDescription":
     "Connect your {provider} account to sync usage.",
   "settings.usage.billingBanner.buy": "Buy Coding Plan",
@@ -4549,7 +4429,7 @@ const enUS: Record<string, string> = {
   "settings.usage.entitlementFiveHourUsage": "5-hour remaining",
   "settings.usage.entitlementWeeklyUsage": "Weekly remaining",
   "settings.usage.entitlementMonthlyMcpUsage": "Tool calls",
-  "settings.usage.entitlementServerMcpUsage": "ZCode MCP",
+  "settings.usage.entitlementServerMcpUsage": "VCode MCP",
   "settings.usage.entitlementResetAt": "Resets {time}",
   "settings.usage.entitlementUsageDetails": "Tool usage detail",
   "settings.usage.entitlementPromptCap": "5-hour prompt pool",
@@ -4607,9 +4487,9 @@ const enUS: Record<string, string> = {
   "sidebar.usage.plan.fiveHour": "5 hours",
   "sidebar.usage.plan.weekly": "Weekly",
   "sidebar.usage.plan.toolCalls": "Tool calls",
-  "sidebar.usage.plan.mcp": "ZCode MCP",
-  "sidebar.usage.plan.zcodeMcp": "ZCode MCP",
-  "sidebar.usage.plan.zcodeMcpDescription": "Daily aggregate quota for ZCode built-in plugin MCPs",
+  "sidebar.usage.plan.mcp": "VCode MCP",
+  "sidebar.usage.plan.zcodeMcp": "VCode MCP",
+  "sidebar.usage.plan.zcodeMcpDescription": "Daily aggregate quota for VCode built-in plugin MCPs",
   "chat.planUsage.title": "Plan usage",
   "chat.planUsage.titleWithPlan": "{plan} Plan usage",
   "chat.planUsage.providerFallback": "Current provider",
@@ -4794,7 +4674,7 @@ const enUS: Record<string, string> = {
   "settings.skills.delete.title": "Delete skill",
   "settings.skills.delete.description":
     'Delete "{name}"? This removes the skill folder from disk and cannot be undone.',
-  "settings.skills.agent.glm": "ZCode Agent",
+  "settings.skills.agent.glm": "VCode Agent",
   "settings.skills.agent.unknown": "Unknown source",
   "settings.skills.create.open": "New skill",
   "settings.skills.create.taskCreateFailed":
@@ -4835,10 +4715,10 @@ const enUS: Record<string, string> = {
   "settings.skills.import.mode.copy": "Copy",
   "settings.skills.import.mode.symlink": "Symlink",
   "settings.skills.import.mode.copy.description":
-    "Copy the full skill directory into ZCode. Later changes in the external agent directory will not sync automatically.",
+    "Copy the full skill directory into VCode. Later changes in the external agent directory will not sync automatically.",
   "settings.skills.import.mode.symlink.description":
-    "Create a directory link to the external agent skill. ZCode follows later source changes, but the skill depends on that source path remaining available.",
-  "settings.skills.import.importing": "Importing skills into ZCode",
+    "Create a directory link to the external agent skill. VCode follows later source changes, but the skill depends on that source path remaining available.",
+  "settings.skills.import.importing": "Importing skills into VCode",
   "settings.skills.import.imported": "Imported",
   "settings.skills.import.skipped": "Skipped",
   "settings.skills.import.failed": "Failed",
@@ -4914,7 +4794,7 @@ const enUS: Record<string, string> = {
   "settings.skills.diagnostics.code.skill_not_found": "Skill not found",
   "settings.subagents.title": "Subagents",
   "settings.subagents.description":
-    "Manage user-level subagent Markdown files consumed by ZCode Agent.",
+    "Manage user-level subagent Markdown files consumed by VCode Agent.",
   "settings.subagents.workspaceScopeUnsupported":
     "Workspace-level creation or editing is unsupported",
   "settings.subagents.searchPlaceholder": "Search subagents...",
@@ -5281,10 +5161,10 @@ const enUS: Record<string, string> = {
   "settings.plugins.import.mode.copy": "Copy",
   "settings.plugins.import.mode.symlink": "Symlink",
   "settings.plugins.import.mode.copy.description":
-    "Copy the full plugin directory into ZCode and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
+    "Copy the full plugin directory into VCode and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
   "settings.plugins.import.mode.symlink.description":
-    "Create a directory link to the external agent plugin and register it in plugins.dirs. ZCode follows later source changes, but the plugin depends on that source path remaining available.",
-  "settings.plugins.import.importing": "Importing plugins into ZCode",
+    "Create a directory link to the external agent plugin and register it in plugins.dirs. VCode follows later source changes, but the plugin depends on that source path remaining available.",
+  "settings.plugins.import.importing": "Importing plugins into VCode",
   "settings.plugins.import.imported": "Imported",
   "settings.plugins.import.skipped": "Skipped",
   "settings.plugins.import.failed": "Failed",
@@ -5293,9 +5173,9 @@ const enUS: Record<string, string> = {
   "settings.plugins.import.finish": "Done",
   "settings.commands.title": "Commands",
   "settings.commands.description":
-    "Manage ZCode Agent .md command files. Commands can be invoked with /command-name in chat.",
+    "Manage VCode Agent .md command files. Commands can be invoked with /command-name in chat.",
   "settings.commands.sourceFilterLabel": "Source filter",
-  "settings.commands.source.zcodeAgent": "ZCode Agent",
+  "settings.commands.source.zcodeAgent": "VCode Agent",
   "settings.commands.add": "New",
   "settings.commands.addNew": "New command",
   "settings.commands.addDescription":
@@ -5355,10 +5235,10 @@ const enUS: Record<string, string> = {
   "settings.commands.import.mode.copy": "Copy",
   "settings.commands.import.mode.symlink": "Symlink",
   "settings.commands.import.mode.copy.description":
-    "Copy the command file into ZCode. Later changes in the external agent file will not sync automatically.",
+    "Copy the command file into VCode. Later changes in the external agent file will not sync automatically.",
   "settings.commands.import.mode.symlink.description":
-    "Create a file link to the external agent command. ZCode follows later source changes, but the command depends on that source path remaining available.",
-  "settings.commands.import.importing": "Importing commands into ZCode",
+    "Create a file link to the external agent command. VCode follows later source changes, but the command depends on that source path remaining available.",
+  "settings.commands.import.importing": "Importing commands into VCode",
   "settings.commands.import.imported": "Imported",
   "settings.commands.import.skipped": "Skipped",
   "settings.commands.import.failed": "Failed",
@@ -5446,7 +5326,7 @@ const enUS: Record<string, string> = {
   "settings.hooks.customJson": "Custom fields JSON",
   "settings.hooks.customJsonObjectError": "Custom fields must be a JSON object.",
   "settings.hooks.customJsonParseError": "Custom fields JSON parsing failed.",
-  "settings.plugins.zcodeOnly": "ZCode Agent only",
+  "settings.plugins.zcodeOnly": "VCode Agent only",
   "settingsSync.dialog.title": "Import Settings",
   "settingsSync.dialog.description":
     "Only missing items will be imported. Existing settings will be skipped automatically.",
@@ -5455,8 +5335,8 @@ const enUS: Record<string, string> = {
   "settingsSync.action.rescanning": "Scanning...",
   "settingsSync.action.importSelected": "Import selected",
   "settingsSync.action.importing": "Importing...",
-  "settingsSync.action.finish": "Start using ZCode",
-  "settingsSync.agent.zcode": "ZCode Agent",
+  "settingsSync.action.finish": "Start using VCode",
+  "settingsSync.agent.zcode": "VCode Agent",
   "settingsSync.agent.claudeCode": "Claude Code",
   "settingsSync.agent.codexCli": "Codex CLI",
   "settingsSync.agent.openCode": "OpenCode",
@@ -5505,17 +5385,17 @@ const enUS: Record<string, string> = {
   "settingsSync.discovery.description":
     "Importable agent settings are no longer scanned automatically.",
   "settingsSync.discovery.helper":
-    "Only missing items will be imported and your current ZCode settings will not be overwritten.",
+    "Only missing items will be imported and your current VCode settings will not be overwritten.",
   "settingsSync.discovery.agentCount": "Agents found: {count}",
   "settingsSync.discovery.categoryCount": "Categories found: {count}",
   "settingsSync.discovery.error": "Scan failed: {error}",
   "settingsSync.discovery.continue": "Continue",
-  "onboarding.dialog.title": "Welcome to ZCode",
+  "onboarding.dialog.title": "Welcome to VCode",
   "onboarding.dialog.description": "Choose how to start your first session.",
   "onboarding.wizard.label": "Migration guide",
   "onboarding.welcome.eyebrow": "First run setup",
-  "onboarding.welcome.title": "Welcome to ZCode",
-  "onboarding.welcome.start": "Start ZCode",
+  "onboarding.welcome.title": "Welcome to VCode",
+  "onboarding.welcome.start": "Start VCode",
   "onboarding.welcome.migrate": "Migration Guide",
   "onboarding.welcome.helper":
     "Import existing tool settings now, or skip and continue later from Settings.",
@@ -5539,7 +5419,7 @@ const enUS: Record<string, string> = {
     "Import selected commands from external agents before the final migration.",
   "onboarding.stepDescription.agentSettings": "Choose which agents' providers to bring in.",
   "onboarding.stepDescription.migration":
-    "Start migration and wait while ZCode imports your selections.",
+    "Start migration and wait while VCode imports your selections.",
   "onboarding.sessions.empty":
     "No workspaces yet. Scan local history, then pick workspaces to migrate.",
   "onboarding.sessions.count": "{count} sessions",
@@ -5558,7 +5438,7 @@ const enUS: Record<string, string> = {
   "onboarding.agentsFile.error": "Could not check AGENTS.md migration status: {error}",
   "onboarding.agentsFile.confirmTitle": "Overwrite default AGENTS.md?",
   "onboarding.agentsFile.confirmDescription":
-    "ZCode will copy {source} to {target}.\nIf the target file already exists, the ZCode default AGENTS configuration will be overwritten.",
+    "VCode will copy {source} to {target}.\nIf the target file already exists, the VCode default AGENTS configuration will be overwritten.",
   "onboarding.agentsFile.confirmAction": "Overwrite and migrate",
   "onboarding.finish.summary.label.imported": "Imported",
   "onboarding.finish.summary.label.skipped": "Skipped",
@@ -5646,8 +5526,8 @@ const enUS: Record<string, string> = {
   "chat.emptyResult.description":
     "This task finished without any chat content. It may have been stopped before the model produced a response.",
   "chat.placeholder.newTask":
-    "Ask ZCode anything, @ to add context, / for commands or capabilities",
-  "chat.placeholder.newTaskMobile": "Ask ZCode anything…",
+    "Ask VCode anything, @ to add context, / for commands or capabilities",
+  "chat.placeholder.newTaskMobile": "Ask VCode anything…",
   "chat.placeholder.followUpAsk": "Ask for follow-up changes",
   "chat.placeholder.followUpQueue": "Keep typing to queue follow-up changes",
   "chat.placeholder.loading": "Initializing task...",
@@ -5923,7 +5803,7 @@ const enUS: Record<string, string> = {
   "chat.compact.duplicateBlocked": "A compaction is already running or queued.",
   "chat.modelSwitch.contextWindowGuard.title": "Compress context before switching models",
   "chat.modelSwitch.contextWindowGuard.description":
-    "This conversation has used {used} tokens, which exceeds {modelName}'s available context of {target} tokens after reserving maximum output.\nCompress the current conversation with the current model first. If the compressed context fits, ZCode will continue switching models.",
+    "This conversation has used {used} tokens, which exceeds {modelName}'s available context of {target} tokens after reserving maximum output.\nCompress the current conversation with the current model first. If the compressed context fits, VCode will continue switching models.",
   "chat.modelSwitch.contextWindowGuard.compress": "Compress",
   "chat.modelSwitch.contextWindowGuard.runningBlocked":
     "This conversation has used more context than the target model's available context after reserving maximum output. The conversation must be compressed before switching models, but the current task is still running and context compression cannot run now. Wait for the task to finish, then switch models again.",
@@ -5936,11 +5816,11 @@ const enUS: Record<string, string> = {
     "Computer Use is idle — it will start automatically on first use",
   "chat.toolbar.computerUse.tooltip.starting": "Enabling Computer Use plugin…",
   "chat.toolbar.computerUse.tooltip.ready":
-    "Computer Use ready — just describe what you want ZCode to do",
+    "Computer Use ready — just describe what you want VCode to do",
   "chat.toolbar.computerUse.tooltip.permissionRequired":
     "Missing macOS permissions — click to grant",
   "chat.toolbar.computerUse.tooltip.error":
-    "Computer Use enablement failed. Please restart ZCode app and retry, or ask ZCode to investigate the logs",
+    "Computer Use enablement failed. Please restart VCode app and retry, or ask VCode to investigate the logs",
   "chat.toolbar.computerUse.tooltip.sessionBusy":
     "A conversation is running. Computer Use can't be toggled right now — try again after it finishes.",
   "chat.toolbar.mode.description":
@@ -6292,7 +6172,7 @@ const enUS: Record<string, string> = {
     "Could not reach the local agent; global workflows are unavailable.",
   "workflows.hub.empty.title": "No saved workflows in your open projects yet",
   "workflows.hub.empty.hint":
-    "Design a workflow with ZCode in chat, then have it save the workflow to a project once it works. Projects that aren't open don't appear here.",
+    "Design a workflow with VCode in chat, then have it save the workflow to a project once it works. Projects that aren't open don't appear here.",
   "workflows.hub.noWorkspace": "Open a workspace to see its workflows.",
   "workflows.hub.loadError": "Could not read workflows: {error}",
   "workflows.hub.invalid": "{count} files could not be read",
@@ -6355,7 +6235,7 @@ const enUS: Record<string, string> = {
   "workflows.hub.detail.description": "Description",
   "workflows.hub.detail.whenToUse": "When to use",
   "workflows.hub.detail.whenToUse.help":
-    "A routing hint for ZCode: when this workflow is the right pick.",
+    "A routing hint for VCode: when this workflow is the right pick.",
   "workflows.hub.detail.args": "Arguments",
   "workflows.hub.detail.args.name": "Name",
   "workflows.hub.detail.args.type": "Type",
@@ -6376,7 +6256,7 @@ const enUS: Record<string, string> = {
   "workflows.hub.detail.meta.descriptionRequired": "Description is required",
   "workflows.hub.detail.script": "Script",
   "workflows.hub.detail.script.note":
-    "The script is read-only. To change it, revise it with ZCode in chat and save a new version.",
+    "The script is read-only. To change it, revise it with VCode in chat and save a new version.",
   "workflows.hub.detail.script.copy": "Copy script",
   "workflows.hub.detail.loadError": "Could not read this workflow: {reason}",
   "workflows.hub.detail.notFound": "This workflow is no longer in the project.",
@@ -6564,7 +6444,7 @@ const enUS: Record<string, string> = {
   // 「配置」弹层（docs/dynamic-workflow/presentation.md「The settings popover」）：改子代理模型与最大并发数，
   // 应用即一次 GUI 修订（新 run 接着跑，旧 run 停下，已完成的步骤作缓存带过去）。
   // 完成卡与 run 侧板上的「保存 / 再次运行」（docs/dynamic-workflow/transcript-and-notifications.md
-  // 「Saving the run, and running it again」）。两条路：交给 ZCode 提炼，或按原样直接写下去。
+  // 「Saving the run, and running it again」）。两条路：交给 VCode 提炼，或按原样直接写下去。
   "chat.toolCall.workflow.saveRun.action": "Save",
   "chat.toolCall.workflow.saveRun.runAgain": "Run again",
   "chat.toolCall.workflow.saveRun.starting": "Starting…",
@@ -6573,10 +6453,10 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.saveRun.announce.project": "Saved to the project",
   "chat.toolCall.workflow.saveRun.announce.global": "Saved as a global workflow",
   "chat.toolCall.workflow.saveRun.title": "Save workflow",
-  "chat.toolCall.workflow.saveRun.lead": "Let ZCode refine and save it",
+  "chat.toolCall.workflow.saveRun.lead": "Let VCode refine and save it",
   "chat.toolCall.workflow.saveRun.lead.hint":
-    "ZCode distills a reusable workflow for you, then asks you to confirm.",
-  "chat.toolCall.workflow.saveRun.lead.sending": "Handed to ZCode…",
+    "VCode distills a reusable workflow for you, then asks you to confirm.",
+  "chat.toolCall.workflow.saveRun.lead.sending": "Handed to VCode…",
   "chat.toolCall.workflow.saveRun.lead.unsupported": "This agent cannot save directly.",
   "chat.toolCall.workflow.saveRun.or": "or save it as is",
   "chat.toolCall.workflow.saveRun.name": "Name",
@@ -6939,7 +6819,7 @@ const enUS: Record<string, string> = {
   "chat.slash.subagents.title": "Agents",
   "chat.slash.subagents.empty": "No matching agents",
   "chat.slash.emptyUnavailable":
-    "No slash commands have been broadcast for the current ZCode Agent session",
+    "No slash commands have been broadcast for the current VCode Agent session",
   "chat.slash.emptyResults": "No matching slash commands",
   // Errors
   "chat.error.connectionLost": "Connection to agent lost",
@@ -6984,9 +6864,9 @@ const enUS: Record<string, string> = {
   "chat.quota.startPlan.concurrentLimit.switchModel":
     "The current model request concurrency limit has been reached. Switch models to continue your current task.",
   "chat.quota.mcp.quotaExhausted":
-    'ZCode MCP "{server}" has used up today\'s quota. It resets tomorrow.',
+    'VCode MCP "{server}" has used up today\'s quota. It resets tomorrow.',
   "chat.quota.mcp.codingPlanRequired":
-    'No ZCode MCP "{server}" quota. Sign in or get a Coding Plan to use it.',
+    'No VCode MCP "{server}" quota. Sign in or get a Coding Plan to use it.',
   "chat.quota.providerLimited":
     "The current account quota or plan limit has been reached. Upgrade or adjust the plan to continue.",
   "chat.quota.action.upgrade": "Upgrade",
@@ -7166,7 +7046,7 @@ const enUS: Record<string, string> = {
   "planTool.guidance.enterMode": "Entered plan mode",
   "chat.permission.switchMode.placeholder": "Implementation plan",
 
-  // ZCode Agent
+  // VCode Agent
   "zcode.unavailable": "AI agent not available",
   "zcode.initFailed": "Failed to start AI agent",
   "zcode.error.TASK_OWNED_BY_OTHER_HOST": "This task is already running in another connected view.",
@@ -7238,7 +7118,7 @@ const enUS: Record<string, string> = {
   "resourceManager.network.empty": "Waiting for new network requests…",
   "resourceManager.network.noMatches": "No matching requests",
   "resourceManager.storage": "Storage",
-  "resourceManager.appUsage": "ZCode",
+  "resourceManager.appUsage": "VCode",
   "resourceManager.systemUsage": "System",
   "resourceManager.category.base": "Base services",
   "resourceManager.category.builtinPlugin": "Built-in plugins",
@@ -7482,7 +7362,7 @@ const enUS: Record<string, string> = {
   "feedback.submit.template.section.errorSummaryLine": "Error Summary: {message}",
   "feedback.submit.template.section.errorDetail": "Error Details",
   "feedback.submit.template.section.errorTraceId": "TraceID: {traceId}",
-  "feedback.submit.template.section.copyErrorHeading": "ZCode Error Info",
+  "feedback.submit.template.section.copyErrorHeading": "VCode Error Info",
   "feedback.submit.template.section.notProvided": "Not provided",
   "feedback.submit.template.section.remoteLogEmpty": "No connection logs captured",
   "feedback.submit.template.section.taskFeedbackTitle": "Feedback about task: {title}",
@@ -7642,7 +7522,7 @@ const enUS: Record<string, string> = {
   "automations.statusFilter.completed": "Completed",
   "automations.statusFilter.failed": "Failed",
   "automations.statusFilter.empty": "No tasks match this filter",
-  "offPeak.keepAwakeBanner": "Keep your computer awake while ZCode is running a chat.",
+  "offPeak.keepAwakeBanner": "Keep your computer awake while VCode is running a chat.",
   "offPeak.sectionTitle": "Idle-time tasks",
   "offPeak.createButton": "Create idle-time task",
   "offPeak.templates.sectionTitle": "Idle-time task template",
@@ -7699,7 +7579,7 @@ const enUS: Record<string, string> = {
   "offPeak.form.titlePlaceholder": "e.g. Nightly refactor",
   "offPeak.form.instructionsLabel": "Instructions",
   "offPeak.form.instructionsPlaceholder":
-    "Describe a task ZCode can work on in the background, including the expected result and any constraints…",
+    "Describe a task VCode can work on in the background, including the expected result and any constraints…",
   "offPeak.form.permissionWarning":
     "Idle-time runs are unattended. Actions that need confirmation will pause the task until you respond.",
   "offPeak.form.modelLabel": "Model",
@@ -7894,9 +7774,9 @@ const enUS: Record<string, string> = {
   "automations.runs.nextPage": "Next",
   // CUA (Computer Use)
   "chat.cuaReadiness.toolsNotLoaded":
-    "ZCode Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
+    "VCode Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
   "chat.cuaReadiness.toolsPreparing":
-    "ZCode Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
+    "VCode Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
   "chat.toolCall.cua.requestAccess": "Check Computer Use access",
   "chat.toolCall.cua.appName": "Computer Use",
   "chat.toolCall.cua.group.completedLabel": "Computer Use",
@@ -8024,9 +7904,9 @@ const enUS: Record<string, string> = {
   "cuaPermission.modal.restartButton": "Restart Helper",
   "cuaPermission.modal.restarting": "Restarting Helper…",
   "cuaPermission.modal.restartFailed": "Couldn't restart Helper: {error}",
-  "cuaPermission.modal.relaunchAppButton": "Restart ZCode",
+  "cuaPermission.modal.relaunchAppButton": "Restart VCode",
   "cuaPermission.modal.relaunchAppHint":
-    "Still not working after restarting Helper? Restart ZCode to fully reload the Helper process.",
+    "Still not working after restarting Helper? Restart VCode to fully reload the Helper process.",
   "cuaPermission.status.granted": "Granted",
   "cuaPermission.status.missing": "Missing",
   "cuaPermission.status.unknown": "Unknown",
@@ -8040,7 +7920,7 @@ const enUS: Record<string, string> = {
   "cuaPermission.tools.agentUpdateRequired":
     "The connected Agent is too old for a safe readiness check. Update or restart it, then check again.",
   "cuaPermission.tools.untrustedRuntime":
-    "Computer Use tools were found, but they did not come from the verified ZCode plugin. Review the plugin installation, then check again.",
+    "Computer Use tools were found, but they did not come from the verified VCode plugin. Review the plugin installation, then check again.",
   "cuaPermission.perm.accessibility": "Accessibility",
   "cuaPermission.perm.accessibility.purpose": "Read/drive UI elements + synthesize input",
   "cuaPermission.perm.screenRecording": "Screen Recording",
@@ -8051,7 +7931,7 @@ const enUS: Record<string, string> = {
     "Please upgrade macOS before using it. Permission setup cannot be completed on older versions.",
   "cuaPermission.ready": "Permissions ready",
   "cuaPermission.ready.sessionValidationHint":
-    "ZCode will verify the Computer Use tools against the exact session when your first session starts.",
+    "VCode will verify the Computer Use tools against the exact session when your first session starts.",
   "settings.computerUse.title": "Computer Use",
   "settings.computerUse.toggleLabel": "Enable Computer Use",
   "settings.computerUse.toggleDescription":
@@ -8102,13 +7982,13 @@ const enUS: Record<string, string> = {
   "globalNotice.highspeed.textCopied": "Share text copied",
   "globalNotice.highspeed.textCopyFailed": "Could not copy share text. Try again.",
   "globalNotice.highspeed.copyImage": "Copy image",
-  "globalNotice.highspeed.badge": "ZCode & Coding Plan Exclusive Benefits",
+  "globalNotice.highspeed.badge": "VCode & Coding Plan Exclusive Benefits",
   "globalNotice.highspeed.standardTaskSpeed": "Standard generation speed",
   "globalNotice.highspeed.relativeTaskDuration": "Relative generation time",
   "globalNotice.highspeed.speedSummary": "HighSpeed · {duration}",
   "globalNotice.highspeed.lessWaiting": "{percent}% less waiting",
   "globalNotice.highspeed.copySummary":
-    "I used the ZCode Highspeed card and saved {duration}s. Give it a try. Download ZCode https://zcode.z.ai",
+    "I used the VCode Highspeed card and saved {duration}s. Give it a try. Download VCode https://zcode.z.ai",
   "globalNotice.highspeed.imageSummary": "{tokens} tokens · {duration}s saved",
   "globalNotice.highspeed.close": "Close Highspeed share card",
   ...requestSecurityMessagesEnUS,

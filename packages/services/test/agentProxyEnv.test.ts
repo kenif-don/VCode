@@ -152,7 +152,7 @@ describe("buildAgentWorkspaceIdentityEnv", () => {
   });
 });
 
-describe("official MCP trust: host and agent must agree on the ZCode API origin", () => {
+describe("official MCP trust: host and agent must agree on the VCode API origin", () => {
   // 设置页自定义端点：任何不同于 env base URL 的 origin 都成立；用中性域名，避免开源导出把
   // 测试环境域名改写成正式域名后与生产 base URL 重合。
   const SETTINGS_ORIGIN = "https://custom-endpoint.example";

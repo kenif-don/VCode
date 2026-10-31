@@ -42,7 +42,7 @@ tests/run/test-server.mjs       # 集成测试(node:test,真实 JSON-RPC)
   之上是配置列表 + 表单、运行/停止、输出控制台(自动滚动/清空/复制)、
   任务历史表、预览按钮。
 
-## 工具清单(9 个,visibility: model + app)
+## 工具清单(10 个,visibility: model + app)
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
@@ -50,6 +50,7 @@ tests/run/test-server.mjs       # 集成测试(node:test,真实 JSON-RPC)
 | `run_config_save` | `id?`, `name`, `command`, `cwd?`, `env?`, `previewUrl?` | 新建/更新配置(带 id 为更新) |
 | `run_config_delete` | `configId` | 删除配置(历史保留) |
 | `run_config_duplicate` | `configId`, `name?` | 复制配置(新 id,默认名追加 " (copy)") |
+| `run_config_reorder` | `configIds` | 调整配置顺序(传全部 id 的新顺序,首项在列表最上) |
 | `run_start` | `configId` | 启动运行,返回 `runId`(含 pid/startedAt) |
 | `run_stop` | `runId`, `timeoutMs?`(默认 2000) | 优雅停止,超时后强杀整棵进程树 |
 | `run_status` | `runId?` | 单个或全部运行状态快照 |

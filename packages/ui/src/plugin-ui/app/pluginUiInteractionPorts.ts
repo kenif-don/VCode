@@ -6,7 +6,11 @@ import type {
   PluginSandboxHandle,
   PluginSandboxPlatformPort,
 } from "@zcode/shared/mcp-apps";
-import { MCP_APPS_SET_WIDGET_STATE_METHOD, concatMcpAppsTextContent } from "@zcode/shared/mcp-apps";
+import {
+  MCP_APPS_INSERT_INPUT_TEXT_METHOD,
+  MCP_APPS_SET_WIDGET_STATE_METHOD,
+  concatMcpAppsTextContent,
+} from "@zcode/shared/mcp-apps";
 import { z } from "zod";
 import type { PluginUiHostBridge } from "./pluginUiHostBridge.js";
 
@@ -25,6 +29,8 @@ export interface PluginUiInteractionCallbacks {
     content: Array<Record<string, unknown>>;
     structuredContent?: unknown;
   }): Promise<void>;
+  /** 页面 `ui/insert-input-text { text }`:文本追加到当前会话输入框末尾;没有 composer 接住回 -32601。 */
+  onInsertInputText?(payload: { text: string }): Promise<void>;
   /** 页面 `ui/set-widget-state { widgetState }`；宿主同步写内存 store 后回包。 */
   onUpdateWidgetState?(widgetState: unknown): Promise<void>;
   /** `ui/download-file`；逐项保存，取消 / 失败回 `{ isError: true }`。 */
@@ -43,6 +49,7 @@ const pluginUiMessageParamsSchema = z
   })
   .loose();
 const pluginUiSetWidgetStateParamsSchema = z.object({ widgetState: z.unknown() }).loose();
+const pluginUiInsertInputTextParamsSchema = z.object({ text: z.string() }).loose();
 
 /** 回调抛出的带 `code` 的错误（-32601 / -32000 / -32602）翻译成 JSON-RPC 错误，其余按内部错误处理。 */
 function toProtocolError(error: unknown): unknown {
@@ -56,8 +63,9 @@ const unsupported = (method: string) =>
   new ProtocolError(METHOD_NOT_FOUND, `${method} is not available for this app`);
 
 /**
- * 会话交互（ui/message、ui/update-model-context、ui/download-file、ZCode 扩展 ui/set-widget-state）接到官方
- * AppBridge：缺省回调回 -32601；ui/message 的手势 token 由 main 在 guest input-event 记录、一次性消费，没有句柄视为无手势。
+ * 会话交互（ui/message、ui/update-model-context、ui/download-file、VCode 扩展 ui/set-widget-state、
+ * ui/insert-input-text）接到官方 AppBridge：缺省回调回 -32601；ui/message 的手势 token 由 main 在
+ * guest input-event 记录、一次性消费，没有句柄视为无手势。
  */
 export function wirePluginUiInteractions(
   bridge: PluginUiHostBridge,
@@ -113,6 +121,21 @@ export function wirePluginUiInteractions(
     }
     return {};
   };
+  bridge.setRequestHandler(
+    MCP_APPS_INSERT_INPUT_TEXT_METHOD,
+    { params: pluginUiInsertInputTextParamsSchema, result: EmptyResultSchema },
+    async (rawParams) => {
+      if (!currentHandle()) throw new Error("MCP App instance was closed");
+      if (!deps.onInsertInputText) throw unsupported(MCP_APPS_INSERT_INPUT_TEXT_METHOD);
+      const params = rawParams as z.infer<typeof pluginUiInsertInputTextParamsSchema>;
+      try {
+        await deps.onInsertInputText({ text: params.text });
+      } catch (error) {
+        throw toProtocolError(error);
+      }
+      return {};
+    },
+  );
   bridge.ondownloadfile = async (params) => {
     if (!deps.onDownloadFile) throw unsupported("ui/download-file");
     try {

@@ -293,7 +293,7 @@ describe("appARMSBootstrap beforeReport", () => {
     expect(result.events[0].properties).toBeUndefined();
   });
 
-  it("drops crashReporter dumps that do not contain the ZCode product binary", async () => {
+  it("drops crashReporter dumps that do not contain the VCode product binary", async () => {
     const beforeReport = await getBeforeReport();
     const externalCrash = {
       event_type: "exception",
@@ -497,12 +497,12 @@ describe("appARMSBootstrap beforeReport", () => {
   it.each([
     {
       runtime: "Linux Preview",
-      applicationName: "ZCode Preview",
+      applicationName: "VCode Preview",
       executableName: "zcode-preview",
     },
     {
       runtime: "local development",
-      applicationName: "ZCode Dev",
+      applicationName: "VCode Dev",
       executableName: "Electron",
     },
   ])(

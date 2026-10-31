@@ -619,7 +619,7 @@ async function dispatchOffPeakRun(request: OffPeakRunDispatchRequest): Promise<{
   const zcodeTaskService = activeServices?.getOptional(IZCodeTaskService);
   const zcodeAgentService = activeServices?.getOptional(IZCodeAgentService);
   if (!zcodeTaskService || !zcodeAgentService) {
-    throw new Error("ZCode task service is not initialized.");
+    throw new Error("VCode task service is not initialized.");
   }
   const runtime = await ensureOffPeakRuntime();
   if (!runtime) {
@@ -999,7 +999,7 @@ async function dispatchCronRun(request: CronRunDispatchRequest): Promise<{
   const targetServices = resolveAutomationTargetServices(request);
   const zcodeTaskService = targetServices.getOptional(IZCodeTaskService);
   if (!zcodeTaskService) {
-    throw new Error("ZCode task service is not initialized.");
+    throw new Error("VCode task service is not initialized.");
   }
   const modelSelectionService = targetServices.getOptional(IModelSelectionService);
   if (!modelSelectionService) {
@@ -1504,12 +1504,12 @@ function createReportingRemoteZCodeTaskService<T extends object>(
     const onDynamicTaskReady = Reflect.get(target, "onDynamicTaskReady");
     if (typeof onDynamicTaskReady !== "function") {
       workspaceTaskTracker.finish(taskId, meta);
-      throw new Error("remote ZCode task service does not expose onDynamicTaskReady");
+      throw new Error("remote VCode task service does not expose onDynamicTaskReady");
     }
     const subscribe = onDynamicTaskReady.call(target, taskId);
     if (typeof subscribe !== "function") {
       workspaceTaskTracker.finish(taskId, meta);
-      throw new Error("remote ZCode task ready event is not subscribable");
+      throw new Error("remote VCode task ready event is not subscribable");
     }
     workspaceProxyState.trackTaskReady(
       taskId,
@@ -1520,7 +1520,7 @@ function createReportingRemoteZCodeTaskService<T extends object>(
     return true;
   }
 
-  // remote workspace 的 ZCode Agent manager 跑在远端 server，desktop main 不能直接看到
+  // remote workspace 的 VCode Agent manager 跑在远端 server，desktop main 不能直接看到
   // `handles` 状态。sendPrompt Promise 只是远端 ACK，必须等待 task ready 才能允许回收 workspace。
   return new Proxy(service, {
     get(target, property, receiver) {
@@ -1663,12 +1663,12 @@ function warmUpZCodeAgent(
       if (!result.available) {
         if (result.reasonCode === "provider_not_ready") {
           logger.info(
-            `ZCode agent warmup waiting for provider/model (${reason}) workspace=${workspacePath}`,
+            `VCode agent warmup waiting for provider/model (${reason}) workspace=${workspacePath}`,
           );
           return;
         }
         logger.warn(
-          `ZCode agent warmup unavailable (${reason}) workspace=${workspacePath} reason=${result.reason ?? "unknown"}`,
+          `VCode agent warmup unavailable (${reason}) workspace=${workspacePath} reason=${result.reason ?? "unknown"}`,
         );
         return;
       }
@@ -1676,11 +1676,11 @@ function warmUpZCodeAgent(
       // presentation 只剩 mode 与 slash commands。预热不能为读取 presentation 额外创建
       // Agent App，否则其 MCP close 会占住协议通道并阻塞真正的 Session 初始化。
       logger.info(
-        `ZCode agent warmup ready (${reason}) workspace=${workspacePath} transport=${result.transportKind ?? "unknown"}`,
+        `VCode agent warmup ready (${reason}) workspace=${workspacePath} transport=${result.transportKind ?? "unknown"}`,
       );
     })
     .catch((error) => {
-      logger.warn(`ZCode agent warmup failed (${reason}) workspace=${workspacePath}:`, error);
+      logger.warn(`VCode agent warmup failed (${reason}) workspace=${workspacePath}:`, error);
     });
 }
 
@@ -1737,7 +1737,7 @@ let databaseStartup: ReturnType<typeof createHostDatabaseStartup> | undefined;
 const pendingStartupAttachments = new Map<string, () => void>();
 let activeServices: ServiceCollection | null = null;
 /**
- * Main 推送的实时界面语言，供 ZCode endpoint 请求的 X-Client-Language。
+ * Main 推送的实时界面语言，供 VCode endpoint 请求的 X-Client-Language。
  * 过去 Host 用进程 Intl locale（Dock 启动无 LANG 会回退 en-US）；setting.json 写入可能滞后或失败，
  * 也不能代表当前界面，所以只认 Main 的 InitLocal 初值与 application-locale-changed 变更。
  */
@@ -3205,7 +3205,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
       parentPort.postMessage({
         type: HostResponseTypes.SessionMessageDeliverResult,
         result: {
-          error: "ZCode task service is not initialized.",
+          error: "VCode task service is not initialized.",
           messageId: msg.request.messageId,
           requestId: msg.request.requestId,
           sessionId: msg.request.fromSessionId,
@@ -3241,7 +3241,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
   if (msg.type === HostMessageTypes.SessionMessageDeliveryResult) {
     const zcodeTaskService = activeServices?.getOptional(IZCodeTaskService);
     if (!zcodeTaskService) {
-      logger.warn("session message delivery result received before ZCode task service initialized");
+      logger.warn("session message delivery result received before VCode task service initialized");
       return;
     }
     void zcodeTaskService.sendSessionMessageDeliveryResult(msg.result).catch((error) => {

@@ -205,7 +205,7 @@ describe("official mcp auth fetch", () => {
       status: 200,
     },
   ])(
-    "classifies trusted ZCode response diagnostics as $failureKind",
+    "classifies trusted VCode response diagnostics as $failureKind",
     async ({ body, failureKind, status }) => {
       respond = () => ({
         body,

@@ -8,9 +8,6 @@ import {
   TID_CHAT_STOP_BUTTON,
   TID_CHAT_USER_MESSAGE,
   TID_CHAT_VIEW,
-  TID_LOGIN_API_KEY_CONTINUE_BUTTON,
-  TID_LOGIN_API_KEY_INPUT,
-  TID_LOGIN_USE_API_KEY_BUTTON,
   TID_TASK_ITEM,
   TID_TASK_NEW_BUTTON,
   TID_V4_COMPOSER_INPUT,
@@ -49,7 +46,6 @@ type LexicalInputE2EElement = HTMLElement & {
 };
 
 export const E2E_REPLY_TOKEN = "upstream-e2e-ok";
-export const LOGIN_API_KEY = "e2e-login-api-key";
 
 export {
   E2E_READONLY_TOOL_FILE_CONTENT,
@@ -178,46 +174,8 @@ export async function prepareConversationE2E(
 }
 
 async function ensureConversationShellReady() {
-  try {
-    await waitForDefaultWorkspaceReady(30000);
-    return;
-  } catch (error) {
-    if (!(await hasApiKeyLoginButton())) {
-      throw error;
-    }
-
-    // 修复原因：renderer target 切换失败时曾被登录兜底吞掉，误报成
-    // “欢迎页没有出现 API Key 登录入口”。只有确认当前页面真是欢迎页时才回退登录。
-    await loginWithApiKey();
-    await waitForDefaultWorkspaceReady(30000);
-  }
-}
-
-async function hasApiKeyLoginButton() {
-  const exists = await browser
-    .execute(
-      (currentTestId) =>
-        Boolean(document.querySelector(`[data-testid="${currentTestId}"]`)),
-      TID_LOGIN_USE_API_KEY_BUTTON,
-    )
-    .catch(() => false);
-  return Boolean(exists);
-}
-
-export async function loginWithApiKey() {
-  await clickTestIdByDom(TID_LOGIN_USE_API_KEY_BUTTON, {
-    timeout: 30000,
-    timeoutMsg: "欢迎页没有出现 API Key 登录入口",
-  });
-  await setInputValueByTestIdDom(TID_LOGIN_API_KEY_INPUT, LOGIN_API_KEY, {
-    timeout: 15000,
-    timeoutMsg: "API Key 登录输入框没有出现",
-  });
-  await waitForApiKeyContinueEnabled();
-  await clickTestIdByDom(TID_LOGIN_API_KEY_CONTINUE_BUTTON, {
-    timeout: 15000,
-    timeoutMsg: "API Key 登录继续按钮没有出现或不可点击",
-  });
+  // VCode 无登录入口：启动后直接等待默认 workspace 就绪，不再回退 API Key 登录页。
+  await waitForDefaultWorkspaceReady(30000);
 }
 
 export async function startNewTask() {
@@ -954,18 +912,3 @@ export function getMessages(
   );
 }
 
-async function waitForApiKeyContinueEnabled() {
-  await browser.waitUntil(
-    async () =>
-      browser.execute((continueButtonTestId) => {
-        const button = document.querySelector<HTMLElement>(
-          `[data-testid="${continueButtonTestId}"]`,
-        );
-        return button instanceof HTMLButtonElement && !button.disabled;
-      }, TID_LOGIN_API_KEY_CONTINUE_BUTTON),
-    {
-      timeout: 15000,
-      timeoutMsg: "API Key 登录继续按钮没有变为可用",
-    },
-  );
-}

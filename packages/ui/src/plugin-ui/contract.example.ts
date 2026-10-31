@@ -13,14 +13,14 @@ export const examplePresentation: PluginUiPresentation = {
   prefersBorder: true,
 };
 
-/** 内联卡片 / 面板入口请求打开侧栏时的载荷，以及据此创建的 tab。 */
+/** 内联卡片 / 面板入口请求打开侧栏时的载荷，以及据此创建的 tab（会话必须已解析，见 OpenScopedPluginUiSideTabRequest）。 */
 export function exampleOpenSideTab(request: OpenPluginUiSideTabRequest): PluginUiSidePaneTab {
   const scope = readPluginUiScopeRef(request);
   if (!scope) throw new Error("request needs toolCallId or surfaceId");
   return {
     id: buildPluginUiSidePaneTabId(request),
     type: "plugin-ui",
-    parentSessionId: request.parentSessionId,
+    parentSessionId: request.parentSessionId ?? "",
     ...(request.toolCallId ? { toolCallId: request.toolCallId } : {}),
     ...(request.surfaceId ? { surfaceId: request.surfaceId } : {}),
     ...(request.serverName ? { serverName: request.serverName } : {}),

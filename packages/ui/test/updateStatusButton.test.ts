@@ -287,22 +287,22 @@ describe("UpdateStatusButton release notes", () => {
       markdown: "- 默认说明",
       releaseNotesByLocale: {
         "zh-CN": {
-          title: "ZCode v3.1.3",
+          title: "VCode v3.1.3",
           markdown: "- 中文说明",
         },
         "en-US": {
-          title: "ZCode v3.1.3",
+          title: "VCode v3.1.3",
           markdown: "- English notes",
         },
       },
     };
 
     expect(getLocalizedUpdateReleaseNotes(payload, "en-US")).toEqual({
-      title: "ZCode v3.1.3",
+      title: "VCode v3.1.3",
       markdown: "- English notes",
     });
     expect(getLocalizedUpdateReleaseNotes(payload, "zh-CN")).toEqual({
-      title: "ZCode v3.1.3",
+      title: "VCode v3.1.3",
       markdown: "- 中文说明",
     });
   });

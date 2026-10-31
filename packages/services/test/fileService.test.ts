@@ -1150,4 +1150,123 @@ describe("fileService", () => {
       });
     });
   });
+
+  // ── deletePath / renamePath ─────────────────────────────────────
+
+  describe("deletePath", () => {
+    it("deletes a file and reports missing target as failure", async () => {
+      const rootPath = makeTempDir("zcode-delete-file-");
+      const filePath = join(rootPath, "a.txt");
+      writeFileSync(filePath, "hello");
+
+      const service = createFileService();
+      await service.deletePath({ path: filePath });
+      expect(existsSync(filePath)).toBe(false);
+
+      // 目标已不存在时如实抛错，上层据此提示而不是静默成功。
+      await expect(service.deletePath({ path: filePath })).rejects.toThrow();
+    });
+
+    it("refuses non-empty directory delete without recursive", async () => {
+      const rootPath = makeTempDir("zcode-delete-dir-");
+      const emptyDir = join(rootPath, "empty");
+      const fullDir = join(rootPath, "full");
+      mkdirSync(emptyDir);
+      mkdirSync(fullDir);
+      writeFileSync(join(fullDir, "a.txt"), "hello");
+
+      const service = createFileService();
+      await service.deletePath({ path: emptyDir });
+      expect(existsSync(emptyDir)).toBe(false);
+
+      await expect(service.deletePath({ path: fullDir })).rejects.toThrow(/recursive/);
+      expect(existsSync(fullDir)).toBe(true);
+    });
+
+    it("deletes a non-empty directory when recursive is set", async () => {
+      const rootPath = makeTempDir("zcode-delete-recursive-");
+      const fullDir = join(rootPath, "full");
+      mkdirSync(join(fullDir, "nested"), { recursive: true });
+      writeFileSync(join(fullDir, "nested", "a.txt"), "hello");
+
+      const service = createFileService();
+      await service.deletePath({ path: fullDir, recursive: true });
+      expect(existsSync(fullDir)).toBe(false);
+    });
+
+    it("rejects empty path", async () => {
+      const service = createFileService();
+      await expect(service.deletePath({ path: "  " })).rejects.toThrow();
+    });
+  });
+
+  describe("renamePath", () => {
+    it("renames a file in place and returns the new path", async () => {
+      const rootPath = makeTempDir("zcode-rename-file-");
+      const filePath = join(rootPath, "old.txt");
+      writeFileSync(filePath, "hello");
+
+      const service = createFileService();
+      const { newPath } = await service.renamePath({ path: filePath, newName: "new.txt" });
+      expect(newPath).toBe(join(rootPath, "new.txt"));
+      expect(existsSync(filePath)).toBe(false);
+      expect(readFileSync(newPath, "utf-8")).toBe("hello");
+    });
+
+    it("renames a directory including its content", async () => {
+      const rootPath = makeTempDir("zcode-rename-dir-");
+      const dirPath = join(rootPath, "old-dir");
+      mkdirSync(dirPath);
+      writeFileSync(join(dirPath, "a.txt"), "hello");
+
+      const service = createFileService();
+      const { newPath } = await service.renamePath({ path: dirPath, newName: "new-dir" });
+      expect(newPath).toBe(join(rootPath, "new-dir"));
+      expect(readFileSync(join(newPath, "a.txt"), "utf-8")).toBe("hello");
+    });
+
+    it("allows case-only rename of the same file", async () => {
+      const rootPath = makeTempDir("zcode-rename-case-");
+      const filePath = join(rootPath, "a.txt");
+      writeFileSync(filePath, "hello");
+
+      const service = createFileService();
+      const { newPath } = await service.renamePath({ path: filePath, newName: "A.txt" });
+      expect(newPath).toBe(join(rootPath, "A.txt"));
+      expect(readFileSync(newPath, "utf-8")).toBe("hello");
+    });
+
+    it("refuses to overwrite an existing target", async () => {
+      const rootPath = makeTempDir("zcode-rename-overwrite-");
+      writeFileSync(join(rootPath, "a.txt"), "a");
+      writeFileSync(join(rootPath, "b.txt"), "b");
+
+      const service = createFileService();
+      await expect(
+        service.renamePath({ path: join(rootPath, "a.txt"), newName: "b.txt" }),
+      ).rejects.toThrow(/already exists/);
+      // 两个文件都必须原样保留。
+      expect(readFileSync(join(rootPath, "a.txt"), "utf-8")).toBe("a");
+      expect(readFileSync(join(rootPath, "b.txt"), "utf-8")).toBe("b");
+    });
+
+    it("rejects names containing path separators or dot segments", async () => {
+      const rootPath = makeTempDir("zcode-rename-invalid-");
+      const filePath = join(rootPath, "a.txt");
+      writeFileSync(filePath, "hello");
+
+      const service = createFileService();
+      await expect(service.renamePath({ path: filePath, newName: "sub/b.txt" })).rejects.toThrow(
+        /Invalid/,
+      );
+      await expect(service.renamePath({ path: filePath, newName: "sub\\b.txt" })).rejects.toThrow(
+        /Invalid/,
+      );
+      await expect(service.renamePath({ path: filePath, newName: ".." })).rejects.toThrow(
+        /Invalid/,
+      );
+      await expect(service.renamePath({ path: filePath, newName: "  " })).rejects.toThrow();
+      expect(existsSync(filePath)).toBe(true);
+    });
+  });
 });

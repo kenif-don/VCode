@@ -120,7 +120,6 @@ export interface ProjectSidebarProps {
   onCancelRemoteProject: (sessionId: string) => Promise<void>;
   onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onLogout?: () => void;
-  onLogin?: () => void;
   user?: UserInfo | null;
   reconnectingRemoteWorkspaceKeys: string[];
   remoteWorkspaceRecoveryByWorkspaceKey?: Record<string, RemoteWorkspaceRecoveryStatus>;
@@ -132,12 +131,6 @@ export interface ProjectSidebarProps {
   isSidebarVisible?: boolean;
   onToggleSidebar?: () => void;
   toggleSidebarShortcutLabel?: string;
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  onGoBack?: () => void;
-  onGoForward?: () => void;
-  goBackShortcutLabel?: string;
-  goForwardShortcutLabel?: string;
   onOpenCommandCenter: () => void;
   onOpenRepoWiki?: () => void;
   repoWikiActive?: boolean;

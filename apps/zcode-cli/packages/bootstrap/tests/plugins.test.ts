@@ -111,7 +111,7 @@ const BUNDLED_ANDROID_PLUGIN_DIST_PATH = fileURLToPath(
   new URL("../../android-emulator-plugin/dist/mcp/server.js", import.meta.url),
 );
 
-describe("ZCode plugins", () => {
+describe("VCode plugins", () => {
   it("starts cached Claude icon migration without blocking overview callers", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-bootstrap-icon-migration-"));
     const pluginStorageRoot = join(root, "plugins");
@@ -596,7 +596,7 @@ describe("ZCode plugins", () => {
     }
   });
 
-  it("includes the merged ZCode official marketplace and Claude marketplace for empty storage", async () => {
+  it("includes the merged VCode official marketplace and Claude marketplace for empty storage", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-bootstrap-default-marketplace-"));
 
     try {

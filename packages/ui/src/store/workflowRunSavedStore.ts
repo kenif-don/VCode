@@ -14,7 +14,7 @@ import { logger } from "@/logger.js";
 
 /**
  * `unsupported` 是**能力**而不是错误：老 agent 根本没有这个方法（JSON-RPC -32601），
- * 卡片据此只留「让 ZCode 帮我提炼保存」那条路。其余失败都按 `error` 处理——查不出来不等于没保存，
+ * 卡片据此只留「让 VCode 帮我提炼保存」那条路。其余失败都按 `error` 处理——查不出来不等于没保存，
  * 所以卡片此时既不画芯片也不画「再次运行」，但「保存」照常可点。
  */
 export type WorkflowRunSavedStatus = "loading" | "ready" | "unsupported" | "error";

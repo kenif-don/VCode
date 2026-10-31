@@ -31,6 +31,9 @@ interface UseGitBranchSwitcherOptions {
   currentBranchName: string | null;
   headRefType: GitRepositorySummary["headRefType"];
   onRefreshGit: () => void;
+  // 弹层内切仓时 workspacePath 会换成新仓的作用路径；置 true 表示这种切换
+  // 不强制关闭弹层（分支列表清空后按新路径重拉），默认保持旧行为直接关闭。
+  keepOpenOnWorkspacePathChange?: boolean;
 }
 
 export function useGitBranchSwitcher({
@@ -38,6 +41,7 @@ export function useGitBranchSwitcher({
   currentBranchName,
   headRefType,
   onRefreshGit,
+  keepOpenOnWorkspacePathChange = false,
 }: UseGitBranchSwitcherOptions) {
   const { gitService } = useServices();
   const { intl, locale } = useZCodeIntl();
@@ -85,12 +89,16 @@ export function useGitBranchSwitcher({
   }, [gitService, intl, workspacePath]);
 
   useEffect(() => {
-    setOpen(false);
+    if (!keepOpenOnWorkspacePathChange) {
+      setOpen(false);
+    }
     setCreateDialogOpen(false);
     setCreateBranchName("");
+    // 分支列表随 workspacePath 失效；弹层开着时 loadBranches 的 identity 变化会
+    // 触发展开拉取 effect 重拉新仓分支（此时 open 仍为 true）。
     setBranchesResult(null);
     resetSwitchAssistState();
-  }, [resetSwitchAssistState, workspacePath]);
+  }, [keepOpenOnWorkspacePathChange, resetSwitchAssistState, workspacePath]);
 
   const openRef = useRef(open);
   openRef.current = open;

@@ -109,7 +109,7 @@ describe("slashCommandHelpers", () => {
     expect(result.map((item) => item.value)).toEqual(["review", "compact"]);
   });
 
-  it("buildSlashSuggestions 会规范化已带 / 的 ZCode Agent 命令名", () => {
+  it("buildSlashSuggestions 会规范化已带 / 的 VCode Agent 命令名", () => {
     const result = buildSlashSuggestions([
       {
         name: "/compact",

@@ -142,7 +142,7 @@ export function collectE2EProcessTreePids(
       ) {
         break;
       }
-      // Bug 根因：macOS 会把 Electron main 的命令行收敛成 `ZCode E2E`，
+      // Bug 根因：macOS 会把 Electron main 的命令行收敛成 `VCode E2E`，
       // ChromeDriver 也不携带 appArgs；只有 renderer/utility 还保留当前 run 的
       // profile/HOME。精确命中后代后必须反向补齐父链，否则只能杀 renderer，
       // markerless main/ChromeDriver 会跨 worker 存活并持续重建窗口。

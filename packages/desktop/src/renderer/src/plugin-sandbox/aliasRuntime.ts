@@ -46,7 +46,7 @@ export interface AliasAppLike {
   }): Promise<CallToolResult>;
   readServerResource(params: { uri: string }): Promise<ReadResourceResult>;
   listServerResources(params?: { cursor?: string }): Promise<ListResourcesResult>;
-  /** 规范方法（resources/templates/list、resources/subscribe…）与 ZCode 扩展方法走基类 request。 */
+  /** 规范方法（resources/templates/list、resources/subscribe…）与 VCode 扩展方法走基类 request。 */
   request(
     request: { method: string; params?: Record<string, unknown> },
     resultSchema: unknown,

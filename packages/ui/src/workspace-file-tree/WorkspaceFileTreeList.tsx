@@ -71,6 +71,8 @@ export function WorkspaceFileTreeList({
   onToggleDirectory,
   onOpenPreview,
   onOpenBrowserUrl,
+  onRename,
+  onDelete,
   onKeyDown,
 }: {
   rootError: Error | null;
@@ -94,6 +96,8 @@ export function WorkspaceFileTreeList({
   onToggleDirectory: (row: WorkspaceFileTreeRow) => void;
   onOpenPreview: (row: WorkspaceFileTreeRow) => void;
   onOpenBrowserUrl?: (url: string) => void;
+  onRename?: (row: WorkspaceFileTreeRow) => void;
+  onDelete?: (row: WorkspaceFileTreeRow) => void;
   onKeyDown: (
     event: KeyboardEvent<HTMLDivElement>,
     row: WorkspaceFileTreeRow,
@@ -155,6 +159,8 @@ export function WorkspaceFileTreeList({
       onToggleDirectory={onToggleDirectory}
       onOpenPreview={onOpenPreview}
       onOpenBrowserUrl={onOpenBrowserUrl}
+      onRename={onRename}
+      onDelete={onDelete}
       onKeyDown={onKeyDown}
     />
   );

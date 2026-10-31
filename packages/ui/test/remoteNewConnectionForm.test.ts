@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
 import { createElement, type ComponentProps } from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   DockerContainerInfo,
@@ -27,6 +36,8 @@ const ports = vi.hoisted(() => ({
     onDidChangeDirectory: () => ({ dispose() {} }),
     updateSource: vi.fn(),
     confirmIdentityChange: vi.fn(),
+    renameSource: vi.fn(),
+    renameProfile: vi.fn(),
   },
   platform: {
     isLocalDevelopmentRuntime: false,
@@ -66,6 +77,7 @@ vi.mock("@/hooks/usePlatform.js", () => ({
 vi.mock("@/hooks/useConfirmDialog.js", () => ({ useConfirmDialog: () => ports.confirm }));
 
 import { RemoteConnectionDialog } from "@/SSHDialog.js";
+import { useRemoteConnectionFlow } from "@/remote-connection-flow/index.js";
 import { useRemoteWorkspaceSessionStore } from "@/store/remoteWorkspaceSessionStore.js";
 
 type DialogProps = ComponentProps<typeof RemoteConnectionDialog>;
@@ -307,5 +319,104 @@ describe("项目/聊天入口的新建 SSH 连接表单", () => {
     const back = screen.getByRole("button", { name: zhCN["remote.selection.back"] });
     const footer = back.parentElement!;
     expect(footer.lastElementChild!.textContent).toBe(zhCN["remote.startConnection"]);
+  });
+});
+
+describe("自定义名称（添加时一次命名设备与连接）", () => {
+  function namedSnapshot(deviceName: string, lineName: string): SourceServerManagementSnapshot {
+    return {
+      generation: 2,
+      servers: [{ sourceServerId: "source-1", displayName: deviceName } as never],
+      profiles: [
+        {
+          profileId: "profile-1",
+          sourceServerId: "source-1",
+          lifecycleState: "active",
+          displayName: lineName,
+          transport: "ssh",
+          target: { kind: "ssh", host: "device.example.com", username: "dev" },
+        } as never],
+      states: [],
+      workspaceHistory: [],
+      failedPathCount: 0,
+      abandonedPathCount: 0,
+      migrationCounts: [],
+    };
+  }
+
+  function mountFlow() {
+    const onConnect = vi.fn(async () => {
+      useRemoteWorkspaceSessionStore.setState({
+        sessionsById: {
+          "session-a": { sessionId: "session-a", sourceServerId: "source-1" } as never,
+        },
+      });
+      return "session-a";
+    });
+    const hook = renderHook(() =>
+      useRemoteConnectionFlow({
+        open: true,
+        completion: "device-management",
+        onConnect,
+        onSelectProject: vi.fn(async () => undefined),
+        onCancelSession: vi.fn(async () => undefined),
+      }),
+    );
+    return { ...hook, onConnect };
+  }
+
+  it("新建表单显示自定义名称输入，随输入受控更新", async () => {
+    mountSettingsEntry();
+    const input = (await screen.findByTestId("remote-custom-name-input")) as HTMLInputElement;
+    expect(screen.getByText(zhCN["remote.customNameHint"])).toBeTruthy();
+    fireEvent.change(input, { target: { value: "测试服务器" } });
+    expect(input.value).toBe("测试服务器");
+  });
+
+  it("连接成功后一次写入设备名与本次线路名并清空输入", async () => {
+    ports.snapshot = namedSnapshot("auto-device", "auto-line");
+    ports.management.renameSource.mockImplementation(async (_id: string, name: string) =>
+      namedSnapshot(name, "auto-line"),
+    );
+    ports.management.renameProfile.mockImplementation(async (_id: string, name: string) =>
+      namedSnapshot(name, name),
+    );
+    const { result, onConnect } = mountFlow();
+    await act(async () => {});
+    act(() => {
+      result.current.settingsStep.onHostChange("10.0.0.5");
+      result.current.settingsStep.onUsernameChange("root");
+      result.current.settingsStep.onPasswordChange("pw");
+      result.current.settingsStep.onCustomNameChange?.("测试服务器");
+    });
+    await act(async () => result.current.settingsStep.onConnect());
+    await waitFor(() => expect(onConnect).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(ports.management.renameSource).toHaveBeenCalledWith("source-1", "测试服务器"),
+    );
+    await waitFor(() =>
+      expect(ports.management.renameProfile).toHaveBeenCalledWith("profile-1", "测试服务器"),
+    );
+    await waitFor(() => expect(result.current.settingsStep.customName).toBe(""));
+  });
+
+  it("名称留空时连接不做任何改名", async () => {
+    ports.snapshot = namedSnapshot("auto-device", "auto-line");
+    ports.management.renameSource.mockImplementation(async () => ports.snapshot);
+    ports.management.renameProfile.mockImplementation(async () => ports.snapshot);
+    const { result, onConnect } = mountFlow();
+    await act(async () => {});
+    act(() => {
+      result.current.settingsStep.onHostChange("10.0.0.5");
+      result.current.settingsStep.onUsernameChange("root");
+      result.current.settingsStep.onPasswordChange("pw");
+    });
+    await act(async () => result.current.settingsStep.onConnect());
+    await waitFor(() => expect(onConnect).toHaveBeenCalledOnce());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(ports.management.renameSource).not.toHaveBeenCalled();
+    expect(ports.management.renameProfile).not.toHaveBeenCalled();
   });
 });

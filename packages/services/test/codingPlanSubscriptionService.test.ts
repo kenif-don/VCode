@@ -644,7 +644,7 @@ describe("BigModelCodingPlanSubscriptionProvider", () => {
     );
   });
 
-  it("getStaticProducts 从 ZCode client config 读取套餐配置且不需要 OAuth", async () => {
+  it("getStaticProducts 从 VCode client config 读取套餐配置且不需要 OAuth", async () => {
     const apiClient: ApiClient = {
       request: vi.fn(async () =>
         createJsonResponse({
@@ -850,7 +850,7 @@ describe("BigModelCodingPlanSubscriptionProvider", () => {
     ).toBe("https://runtime.example.com/api/v1/client/configs");
   });
 
-  it("getForceUpdateConfig 从 ZCode client config 读取强制升级配置", async () => {
+  it("getForceUpdateConfig 从 VCode client config 读取强制升级配置", async () => {
     const apiClient: ApiClient = {
       request: vi.fn(async () =>
         createJsonResponse({
@@ -932,7 +932,7 @@ describe("BigModelCodingPlanSubscriptionProvider", () => {
     await expect(provider.getForceUpdateConfig()).resolves.toBeNull();
   });
 
-  it("getStartPlanPreview 从 ZCode client config 读取未登录 Start Plan 预览", async () => {
+  it("getStartPlanPreview 从 VCode client config 读取未登录 Start Plan 预览", async () => {
     const apiClient: ApiClient = {
       request: vi.fn(async () =>
         createJsonResponse({
@@ -942,7 +942,7 @@ describe("BigModelCodingPlanSubscriptionProvider", () => {
             configs: {
               startPlanPreview: {
                 planId: "zcode-v3-start-plan",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 entitlements: [
                   {
                     grantUnits: 10_000_000,
@@ -969,7 +969,7 @@ describe("BigModelCodingPlanSubscriptionProvider", () => {
 
     expect(result).toEqual({
       planId: "zcode-v3-start-plan",
-      name: "ZCode V3 Start Plan",
+      name: "VCode V3 Start Plan",
       entitlements: [
         {
           grantUnits: 10_000_000,
@@ -1084,7 +1084,7 @@ describe("BigModelCodingPlanSubscriptionProvider", () => {
           configs: {
             startPlanPreview: {
               planId: "zcode-v3-start-plan",
-              name: "ZCode V3 Start Plan",
+              name: "VCode V3 Start Plan",
               entitlements: [
                 {
                   grantUnits: 10_000_000,

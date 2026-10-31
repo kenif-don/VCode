@@ -17,7 +17,6 @@ function createHandlers() {
     openFeedback: vi.fn(),
     openCommunity: vi.fn(),
     openProductDocs: vi.fn(),
-    login: vi.fn(),
     logout: vi.fn(),
     toggleSidebar: vi.fn(),
     toggleTerminal: vi.fn(),
@@ -85,7 +84,6 @@ describe("createQuickPickCommands", () => {
       "feedback",
       "community",
       "product-docs",
-      "login",
     ]);
     expect(commands.find((command) => command.id === "open-workspace")).toMatchObject({
       sectionId: "suggested",
@@ -260,7 +258,7 @@ describe("createQuickPickCommands", () => {
     }
   });
 
-  it("uses logout instead of login for authenticated users", () => {
+  it("uses logout for authenticated users", () => {
     const commands = createQuickPickCommands({
       allowOpenWorkspace: true,
       canOpenCommunity: false,
@@ -271,7 +269,6 @@ describe("createQuickPickCommands", () => {
       handlers: createHandlers(),
     });
 
-    expect(commands.some((command) => command.id === "login")).toBe(false);
     expect(commands.find((command) => command.id === "logout")).toMatchObject({
       sectionId: "app",
       titleId: "quickPick.command.logout",

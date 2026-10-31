@@ -68,15 +68,11 @@ function Fixture() {
         />
         <CodingPlanStatusPanel
           providerId={family.startPlanProviderId}
-          providerName={family.id}
           status={status}
           statusLabelId={
             state === "expired" ? "settings.modelProvider.startPlan.status.loginExpired" : undefined
           }
-          loginActionVisible
-          loginActionPlacement="trailing"
-          onLogin={() => setActions((x) => x + 1)}
-          onRetry={state === "unavailable" ? () => setActions((x) => x + 1) : undefined}
+          onRetry={() => setActions((x) => x + 1)}
           startPlanPreviewVisible={false}
           planLevel="Start"
           subscriptionDetails={

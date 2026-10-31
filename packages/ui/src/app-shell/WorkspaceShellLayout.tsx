@@ -291,7 +291,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   onCancelRemoteProject,
   onReconnectRemoteWorkspace,
   onLogout,
-  onLogin,
   user,
   reconnectingRemoteWorkspaceKeys,
   remoteWorkspaceRecoveryByWorkspaceKey = EMPTY_REMOTE_WORKSPACE_RECOVERY_BY_WORKSPACE_KEY,
@@ -328,14 +327,8 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   sidebarContainerRef,
   toggleSidebarShortcutLabel,
   newTaskShortcutLabel,
-  goBackShortcutLabel,
-  goForwardShortcutLabel,
   toggleSidePaneShortcutLabel,
   toggleSidePaneFullViewShortcutLabel,
-  canGoBack,
-  canGoForward,
-  canTaskNavBack,
-  canTaskNavForward,
   isTerminalOpen,
   isSidebarVisible,
   isSidePaneOpen,
@@ -358,6 +351,9 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   activeTaskChangeSummary,
   gitWorktreeReviewSourceId,
   gitWorktreeChangeSummary,
+  gitRepositories,
+  activeGitRepositoryKey,
+  onSelectGitRepository,
   activeGitSourceId,
   gitState,
   browserNavigationRequest,
@@ -381,8 +377,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   reloadSessionPending,
   handleReloadSession,
   handleSelectTask,
-  handleTaskNavBack,
-  handleTaskNavForward,
   handleStartDraftInWorkspace,
   handleOpenCommandCenter,
   handleRefreshGit,
@@ -1198,9 +1192,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   const showChatMainView = useCallback(() => {
     onWorkspaceMainViewChange("chat");
   }, [onWorkspaceMainViewChange]);
-  const primaryNavigationBack =
-    workspaceMainView === "plugin-store" ? showChatMainView : handleTaskNavBack;
-  const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
   useEffect(() => {
     if (
       isWebRemoteControlShell &&
@@ -1962,7 +1953,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
       remoteWorkspaceRecoveryByWorkspaceKey={remoteWorkspaceRecoveryByWorkspaceKey}
       remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
       onLogout={onLogout}
-      onLogin={onLogin}
       user={user}
       isDesktop={isDesktop}
       isWebRemoteControl={isWebRemoteControlShell}
@@ -1971,12 +1961,6 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
       isSidebarVisible={isSidebarVisible}
       onToggleSidebar={handleToggleSidebar}
       toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
-      canGoBack={canPrimaryNavigationBack}
-      canGoForward={canTaskNavForward}
-      onGoBack={primaryNavigationBack}
-      onGoForward={handleTaskNavForward}
-      goBackShortcutLabel={goBackShortcutLabel}
-      goForwardShortcutLabel={goForwardShortcutLabel}
       onOpenCommandCenter={handleOpenCommandCenter}
       onOpenAutomations={handleOpenAutomations}
       automationsActive={workspaceMainView === "automations"}
@@ -2198,6 +2182,9 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
                   gitDirtyFileCount={gitDirtyFileCount}
                   gitWorktreeReviewSourceId={gitWorktreeReviewSourceId}
                   gitWorktreeChangeSummary={gitWorktreeChangeSummary}
+                  gitRepositories={gitRepositories}
+                  activeGitRepositoryKey={activeGitRepositoryKey}
+                  onSelectGitRepository={onSelectGitRepository}
                   activeTaskChangeSummary={activeTaskChangeSummary}
                   summaryPanelVariantOverride={summaryPanelVariantOverride}
                   onSummaryPanelVariantOverrideChange={onSummaryPanelVariantOverrideChange}
@@ -2649,6 +2636,9 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
                                 activeTaskChangeSummary={activeTaskChangeSummary}
                                 gitWorktreeReviewSourceId={gitWorktreeReviewSourceId}
                                 gitWorktreeChangeSummary={gitWorktreeChangeSummary}
+                                gitRepositories={gitRepositories}
+                                activeGitRepositoryKey={activeGitRepositoryKey}
+                                onSelectGitRepository={onSelectGitRepository}
                                 summaryPanelVariantOverride={summaryPanelVariantOverride}
                                 onSummaryPanelVariantOverrideChange={
                                   onSummaryPanelVariantOverrideChange
@@ -2749,20 +2739,11 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
             updateState={updateState}
             toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
             newTaskShortcutLabel={newTaskShortcutLabel}
-            goBackShortcutLabel={goBackShortcutLabel}
-            goForwardShortcutLabel={goForwardShortcutLabel}
-            canTaskNavBack={canPrimaryNavigationBack}
-            canTaskNavForward={canTaskNavForward}
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
             showNewTaskButton={showTopOverlayNewTaskButton}
             appLogoUrl={appLogoUrl}
             platform={platform}
             onToggleSidebar={handleToggleSidebar}
             onCreateTask={handleCreateTaskInChat}
-            onGoBack={primaryNavigationBack}
-            onGoForward={handleTaskNavForward}
-            hideTaskNavigationButtons={simplifyHeaderForNarrowRemote}
           />
         </ScopedErrorBoundary>
 
@@ -2785,7 +2766,7 @@ const WorkspaceShellLayoutContent = memo(function WorkspaceShellLayoutComponent(
   );
   return (
     <DesktopWindowFrame
-      title={`ZCode / ${getPathLeaf(workspaceAbsPath)}`}
+      title={`VCode / ${getPathLeaf(workspaceAbsPath)}`}
       showHeader
       isDesktop={isDesktop}
       isMacDesktop={isMacDesktop}

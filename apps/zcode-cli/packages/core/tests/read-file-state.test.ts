@@ -51,7 +51,7 @@ describe("read file state path keys", () => {
   });
 
   it("does not case-fold non-Windows paths", () => {
-    expect(createReadFileStatePathKey("/tmp/ZCode/File.txt", "linux")).not.toBe(
+    expect(createReadFileStatePathKey("/tmp/VCode/File.txt", "linux")).not.toBe(
       createReadFileStatePathKey("/tmp/zcode/file.txt", "linux"),
     );
   });

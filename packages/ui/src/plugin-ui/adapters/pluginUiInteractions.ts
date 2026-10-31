@@ -8,6 +8,7 @@ import {
   buildPluginUiFollowUpPrompt,
 } from "../domain/pluginUiFollowUp.js";
 import { readPluginUiImageBlocks } from "../domain/pluginUiImageBlocks.js";
+import { dispatchPluginUiInsertInputText } from "../domain/pluginUiInsertInputText.js";
 import { dispatchPluginUiModelContextAdd } from "./pluginUiModelContextEvents.js";
 
 import { type PluginUiSessionScope } from "@/plugin-ui/contract.js";
@@ -49,11 +50,15 @@ function scopeMarker(scope: PluginUiScopeRef): string {
  * - sendFollowUpMessage：有用户手势直接以用户身份发送；无手势弹可编辑确认框，取消回 -32000。
  *   ：structuredContent 以 ```json 块拼在文本后面；来源只进 metadata `source`。
  * - updateModelContext：投递到当前会话 composer 的插件上下文块；没有 composer 接住回 -32601。
+ * - insertInputText：文本追加到当前会话输入框末尾（不发送、不弹框）；没有 composer 接住回 -32601。
  * widgetState 由窗口页面管理器唯一写入。
  */
 export function createPluginUiInteractions(
   input: PluginUiInteractionScope,
-): Pick<PluginUiHostControllerDeps, "onSendFollowUpMessage" | "onUpdateModelContext"> {
+): Pick<
+  PluginUiHostControllerDeps,
+  "onSendFollowUpMessage" | "onUpdateModelContext" | "onInsertInputText"
+> {
   const marker = scopeMarker(input.scope);
   const source = { kind: "pluginUi" as const, pluginId: input.pluginId, toolCallId: marker };
   return {
@@ -106,6 +111,14 @@ export function createPluginUiInteractions(
       });
       if (!delivered)
         throw rpcError(JSON_RPC_UNAVAILABLE, "No composer is listening for model context");
+    },
+    async onInsertInputText(payload) {
+      const delivered = dispatchPluginUiInsertInputText({
+        sessionId: input.sessionId,
+        text: payload.text,
+      });
+      if (!delivered)
+        throw rpcError(JSON_RPC_UNAVAILABLE, "No composer is listening for input text");
     },
   };
 }

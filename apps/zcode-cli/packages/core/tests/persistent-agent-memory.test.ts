@@ -26,7 +26,7 @@ const scopeGuidance = JSON.parse(
 ) as Record<"user" | "project" | "local", string>;
 
 describe("persistent custom-agent memory", () => {
-  it("uses the exact agent key replacement and three ZCode scope roots", () => {
+  it("uses the exact agent key replacement and three VCode scope roots", () => {
     expect(sanitizePersistentAgentMemoryKey("reviewer/a b")).toBe("reviewer-a-b");
     expect(sanitizePersistentAgentMemoryKey("review😀agent")).toBe("review--agent");
     expect(sanitizePersistentAgentMemoryKey("!!!")).toBe("---");

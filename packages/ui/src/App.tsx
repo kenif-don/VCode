@@ -9,6 +9,8 @@ import { useTaskQueryCacheStore } from "@/store/taskQueryCacheStore.js";
 import { useAppPanels } from "@/hooks/useAppPanels.js";
 import { useGitAutoRefresh } from "@/hooks/useGitAutoRefresh.js";
 import { useGitRepository } from "@/hooks/useGitRepository.js";
+import { useGitRepositories } from "@/hooks/useGitRepositories.js";
+import type { ConversationStatusPanelGitRepository } from "@/v4/conversationStatusPanelModel.js";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard.js";
 import { useSidePaneFullView } from "@/side-pane-full-view/index.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
@@ -50,7 +52,7 @@ import {
 } from "@/lib/settingsNavigation.js";
 import { runWorkspaceVisibleCommand } from "@/lib/workspaceVisibleCommand.js";
 import { ZCODE_PRODUCT_DOCS_URL } from "@/lib/productDocs.js";
-import appLogoUrl from "@/assets/provider-icons/logo-zai.svg";
+import appLogoUrl from "@/assets/brand-icon.png";
 import { resolveTheme } from "@/useTheme.js";
 import { WorkspaceShellLayout } from "@/app-shell/WorkspaceShellLayout.js";
 import { useAppChromeState } from "@/app-shell/useAppChromeState.js";
@@ -101,7 +103,6 @@ export function App({
   onCancelRemoteProject,
   onReconnectRemoteWorkspace,
   onLogout,
-  onLogin,
   user,
   reconnectingRemoteWorkspaceKeys,
   remoteWorkspaceRecoveryByWorkspaceKey = EMPTY_REMOTE_WORKSPACE_RECOVERY_BY_WORKSPACE_KEY,
@@ -135,8 +136,6 @@ export function App({
   // 展示 label 统一从快捷键生效表取（用户改键后 tooltip 同步更新），不再硬编码键位。
   const toggleSidebarShortcutLabel = useShortcutCommandLabel("toggleSidebar");
   const newTaskShortcutLabel = useShortcutCommandLabel("newTask");
-  const goBackShortcutLabel = useShortcutCommandLabel("navigateBack");
-  const goForwardShortcutLabel = useShortcutCommandLabel("navigateForward");
   const toggleTerminalShortcutLabel = useShortcutCommandLabel("toggleTerminal");
   const toggleSidePaneShortcutLabel = useShortcutCommandLabel("toggleSidePane");
   const toggleSidePaneFullViewShortcutLabel = useShortcutCommandLabel("toggleSidePaneFullView");
@@ -437,8 +436,18 @@ export function App({
     setGitRefreshVersion((value) => value + 1);
   }, []);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
+  const gitRepositoriesState = useGitRepositories({
+    workspacePath: workspaceAbsPath,
+    refreshToken: gitRefreshVersion,
+    remoteSessionId: workspaceRpcTarget.remoteSessionId ?? null,
+    remoteTarget: workspaceRpcTarget.remoteTarget,
+    workspaceIdentity,
+  });
   const gitState = useGitRepository({
     workspacePath: workspaceAbsPath,
+    // 多仓选择器的选中仓即 Git 操作目标（嵌套仓传 repoRoot，根仓传 workspacePath
+    // 保留 monorepo 子目录裁剪语义）；未发现仓库时回退 workspacePath。
+    repositoryPath: gitRepositoriesState.selectedEntry?.requestPath ?? null,
     activeTaskId,
     includeExtendedData: hasGitTab,
     // 关键逻辑：真实 Git 只在 workspace 变化、Git pane 打开、或用户显式点刷新时重拉。
@@ -452,7 +461,12 @@ export function App({
     workspacePath: workspaceAbsPath,
     workspaceIdentity,
     remoteSessionId: workspaceRpcTarget.remoteSessionId ?? null,
-    gitSummary: gitState.summary,
+    // 并集监听全部发现仓的元数据路径；gitState.summary 恒为选中仓最新值，
+    // 与发现链路的摘要同源，去重由 unionGitAutoRefreshWatchPaths 承担。
+    gitSummaries: [
+      gitState.summary,
+      ...gitRepositoriesState.repositories.map((entry) => entry.summary),
+    ],
     gitSummaryWorkspaceKey: gitState.workspaceKey,
     enabled: isWorkspaceVisible,
     onRefreshGit: handleRefreshGit,
@@ -495,6 +509,34 @@ export function App({
       removed: unstaged.removed + staged.removed,
     };
   }, [gitChangeSummaryBySourceId]);
+  const gitRepositories = useMemo<ConversationStatusPanelGitRepository[]>(
+    () =>
+      gitRepositoriesState.repositories.map((entry) => {
+        const summary = entry.summary;
+        // 与单仓 isClean 同口径：干净 = 无脏文件、无行级变化、无领先提交。
+        const isClean =
+          !summary?.isDirty &&
+          entry.dirtyFileCount === 0 &&
+          entry.added === 0 &&
+          entry.removed === 0 &&
+          (summary?.ahead ?? 0) === 0;
+        return {
+          key: entry.key,
+          requestPath: entry.requestPath,
+          label: entry.label,
+          branchName: summary?.branchName ?? null,
+          headRefType: summary?.headRefType ?? "branch",
+          dirtyFileCount: entry.dirtyFileCount,
+          added: entry.added,
+          removed: entry.removed,
+          ahead: summary?.ahead ?? 0,
+          behind: summary?.behind ?? 0,
+          isClean,
+          loading: entry.loading,
+        };
+      }),
+    [gitRepositoriesState.repositories],
+  );
   const gitWorktreeReviewSourceId = useMemo<GitChangeSourceId | null>(() => {
     const unstaged = gitChangeSummaryBySourceId.unstaged ?? {
       added: 0,
@@ -894,8 +936,6 @@ export function App({
     handleOpenPluginStore,
     handleTaskNavBack,
     handleTaskNavForward,
-    canGoBack,
-    canGoForward,
     canTaskNavBack,
     canTaskNavForward,
   } = useWorkspaceTaskNavigation({
@@ -1074,7 +1114,6 @@ export function App({
           openFeedback: handleOpenFeedback,
           openCommunity: handleOpenCommunity,
           openProductDocs: handleOpenProductDocs,
-          login: onLogin,
           logout: onLogout,
           toggleSidebar: () => runVisibleWorkspaceCommand(handleToggleSidebar),
           toggleTerminal: () => runVisibleWorkspaceCommand(handleToggleTerminalIfWritable),
@@ -1103,7 +1142,6 @@ export function App({
       isSidebarVisible,
       newTaskShortcutLabel,
       handleCreateTaskIfWritable,
-      onLogin,
       onLogout,
       onOpenWorkspace,
       runVisibleWorkspaceCommand,
@@ -1190,7 +1228,6 @@ export function App({
           onCancelRemoteProject={onCancelRemoteProject}
           onReconnectRemoteWorkspace={onReconnectRemoteWorkspace}
           onLogout={onLogout}
-          onLogin={onLogin}
           user={user}
           reconnectingRemoteWorkspaceKeys={reconnectingRemoteWorkspaceKeys}
           remoteWorkspaceErrorByWorkspaceKey={remoteWorkspaceErrorByWorkspaceKey}
@@ -1230,14 +1267,8 @@ export function App({
           sidebarContainerRef={sidebarContainerRef}
           toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
           newTaskShortcutLabel={newTaskShortcutLabel}
-          goBackShortcutLabel={goBackShortcutLabel}
-          goForwardShortcutLabel={goForwardShortcutLabel}
           toggleSidePaneShortcutLabel={toggleSidePaneShortcutLabel}
           toggleSidePaneFullViewShortcutLabel={toggleSidePaneFullViewShortcutLabel}
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          canTaskNavBack={canTaskNavBack}
-          canTaskNavForward={canTaskNavForward}
           isTerminalOpen={isTerminalOpen}
           isSidebarVisible={isSidebarVisible}
           isBrowserOpen={isBrowserOpen}
@@ -1262,6 +1293,9 @@ export function App({
           activeTaskChangeSummary={activeTaskChangeSummary}
           gitWorktreeReviewSourceId={gitWorktreeReviewSourceId}
           gitWorktreeChangeSummary={gitWorktreeChangeSummary}
+          gitRepositories={gitRepositories}
+          activeGitRepositoryKey={gitRepositoriesState.selectedRepoKey}
+          onSelectGitRepository={gitRepositoriesState.selectRepository}
           activeGitSourceId={activeGitSourceId}
           gitState={gitState}
           browserNavigationRequest={browserNavigationRequest}
@@ -1285,8 +1319,6 @@ export function App({
           reloadSessionPending={reloadSessionPending}
           handleReloadSession={handleReloadSession}
           handleSelectTask={handleSelectTask}
-          handleTaskNavBack={handleTaskNavBack}
-          handleTaskNavForward={handleTaskNavForward}
           handleStartDraftInWorkspace={handleStartDraftInWorkspace}
           handleOpenCommandCenter={handleOpenQuickPick}
           handleRefreshGit={handleRefreshGit}

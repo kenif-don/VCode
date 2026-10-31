@@ -488,7 +488,7 @@ export function App() {
                 <Network className="size-4 text-brand" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-ui-lg font-medium">ZCode Developer Docs</h1>
+                <h1 className="text-ui-lg font-medium">VCode Developer Docs</h1>
                 <p className="text-ui-sm text-foreground-subtle">{viewDescription}</p>
               </div>
             </div>
@@ -619,7 +619,7 @@ export function App() {
                 <SummaryCard
                   icon={<Hash className="size-4" />}
                   title="sessionId"
-                  body="会话主键，server 生成。UI/task 进入 ZCode Protocol 前必须拿到它。"
+                  body="会话主键，server 生成。UI/task 进入 VCode Protocol 前必须拿到它。"
                   conceptId="sessionId"
                   onSelect={setActiveConceptId}
                 />

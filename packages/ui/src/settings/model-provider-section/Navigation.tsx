@@ -383,14 +383,16 @@ export function ModelProviderSectionNavigation({
   );
 
   return (
-    <aside className="px-1.5 py-3 md:py-2 md:px-2">
+    <aside className="px-1.5 pt-1.5 pb-3 md:pt-1 md:pb-2 md:px-2">
       <div className="flex min-h-0 flex-col gap-3 max-md:gap-1">
         {navigationGroups
           .filter((group) => group.id !== "custom" || group.items.length > 0)
           .map((group) => (
-            <div key={group.id} className="flex flex-col gap-2 max-md:gap-1">
-              <div className="flex h-7 items-center justify-between px-2 py-1 max-md:hidden">
-                <h3 className="text-ui-sm font-semibold text-foreground-subtlest">{group.title}</h3>
+            <div key={group.id} className="flex flex-col gap-1">
+              <div className="flex h-6 items-center justify-between px-2 py-1 max-md:hidden">
+                {group.title ? (
+                  <h3 className="text-ui-sm font-semibold text-foreground-subtlest">{group.title}</h3>
+                ) : null}
                 {shouldShowModelProviderGroupLoadingIndicator({
                   groupId: group.id,
                   presetLoading,

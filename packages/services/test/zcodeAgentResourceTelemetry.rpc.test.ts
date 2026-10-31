@@ -3,7 +3,7 @@ import type { AgentLaneResourceSample } from "@zcode/shared";
 import { describe, expect, it } from "vitest";
 import { IZCodeAgentService } from "#src/zcode-agent/zcodeAgent.js";
 
-describe("ZCode Agent resource telemetry RPC", () => {
+describe("VCode Agent resource telemetry RPC", () => {
   it("uses an explicit dynamic event across remote RPC without conversation state", async () => {
     const emitter = new Emitter<AgentLaneResourceSample>();
     const [serverProtocol, clientProtocol] = createQueuePair();

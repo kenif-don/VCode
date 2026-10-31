@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 describe("MCP Source Descriptors", () => {
-  it("只为 ZCode Agent 提供描述符", () => {
+  it("只为 VCode Agent 提供描述符", () => {
     expect(MCP_SOURCE_DESCRIPTORS.map((descriptor) => descriptor.source)).toEqual([
       "zcodeagentmcp",
     ]);

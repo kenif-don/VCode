@@ -84,6 +84,8 @@ export function createPage(
   let lastFeed = "";
   let lastContext = "";
   let appIdentity: string | undefined;
+  // 当前租约/订阅锚定的会话（HBA fr19）；update 交付不同锚点时整体重绑。
+  let boundSessionId: string | null = null;
   const notify = () => {
     for (const listener of listeners) listener();
   };
@@ -177,6 +179,7 @@ export function createPage(
       );
       releaseLease = () => connection.release();
       const lease = connection.layer.acquire(latest.current.scope.sessionId);
+      boundSessionId = latest.current.scope.sessionId;
       const runtimeStopped = () => {
         void page.suspend(true);
         patch({ phase: "error", error: "MCP App runtime is no longer available" });
@@ -252,6 +255,7 @@ export function createPage(
         buildPluginUiHostCapabilities({
           canSendFollowUpMessage: Boolean(latest.current.interactions?.onSendFollowUpMessage),
           canUpdateModelContext: Boolean(latest.current.interactions?.onUpdateModelContext),
+          canInsertInputText: Boolean(latest.current.interactions?.onInsertInputText),
           canSetWidgetState: true,
           canSample: Boolean(services?.pluginUiSamplingService && getPluginUiSessionActions(scope)),
           canSubscribeResources: true,
@@ -269,6 +273,10 @@ export function createPage(
       onUpdateModelContext: (payload) =>
         latest.current.interactions?.onUpdateModelContext
           ? latest.current.interactions.onUpdateModelContext(payload)
+          : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
+      onInsertInputText: (payload) =>
+        latest.current.interactions?.onInsertInputText
+          ? latest.current.interactions.onInsertInputText(payload)
           : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
       onUpdateWidgetState: async (widgetState) => {
         setPluginUiWidgetState(surfaceKey, widgetState);
@@ -325,22 +333,30 @@ export function createPage(
     reportUsage("ui_open_request");
     controller.start();
   }
-  const task = buildPluginUiSessionKey(input.scope);
   const workspaceEvents = services.zcodeTaskService.onDynamicWorkspaceEvent({
     workspacePath: input.scope.workspacePath,
     workspaceIdentity: input.scope.workspaceIdentity,
   })((event) => {
     if (
-      event.type === "workspace_task_list_changed" &&
-      event.reason === "task_deleted" &&
-      event.taskId === input.scope.sessionId
+      event.type !== "workspace_task_list_changed" ||
+      event.reason !== "task_deleted" ||
+      event.taskId !== latest.current.scope.sessionId
     )
-      pluginUiPages.removeTask(task);
+      return;
+    // HBA fr19：面板（surface）跟随项目，锚点会话被删除不销毁页面，只通知换锚重绑；
+    // 工具卡片归对话，任务删除仍按 task 回收页面。
+    if (latest.current.scope.scope.kind === "surface") {
+      latest.current.onSessionLost?.();
+      return;
+    }
+    pluginUiPages.removeTask(buildPluginUiSessionKey(latest.current.scope));
   });
   const page: Page = {
     kind: "mcp",
     key,
-    task,
+    get task() {
+      return buildPluginUiSessionKey(latest.current.scope);
+    },
     visible: false,
     snapshot: () => snapshot,
     start: () => void ensure(),
@@ -364,6 +380,14 @@ export function createPage(
     update(next) {
       // 背景内联锚点不能覆盖侧栏当前的交互上下文。
       if (next.enabled === false) return;
+      // 换锚重绑（HBA fr19）：锚点会话消亡后调用方换到存活会话，这里整体重启页面
+      // （新租约/新订阅/新 AppBridge 归属）；widgetState / surfaceFeed / surfaceStateKey
+      // 因 key 的会话位是 `*` 而保持连续，guest 内存不受影响。
+      if (boundSessionId !== null && next.scope.sessionId !== boundSessionId) {
+        latest.current = next;
+        void page.suspend(true).then(() => ensure());
+        return;
+      }
       latest.current = next;
       const nextContextInputs = JSON.stringify([
         next.theme,
@@ -429,6 +453,7 @@ export function createPage(
         offLease = releaseLease;
       releaseFeed = undefined;
       releaseLease = undefined;
+      boundSessionId = null;
       patch({ phase: "idle", handle: null, appCapabilities: undefined });
       // 先前释放未完成时不能重新预备；反复重试也只等待同一个释放链。
       // Main 主动导航到 about:blank 会触发 navigation；先解除旧代际观察，避免回收被误报为崩溃。

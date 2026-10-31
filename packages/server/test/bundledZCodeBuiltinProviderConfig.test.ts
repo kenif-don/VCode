@@ -11,7 +11,7 @@ describe("materializeBundledZCodeBuiltinProviderConfig", () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it("在环境固定路径物化 ZCode Built-in Provider Config，并复用相同内容", async () => {
+  it("在环境固定路径物化 VCode Built-in Provider Config，并复用相同内容", async () => {
     const runtimeRoot = await mkdtemp(join(tmpdir(), "zcode-remote-provider-config-"));
     tempDirs.push(runtimeRoot);
     const content = emptyRelease(1);

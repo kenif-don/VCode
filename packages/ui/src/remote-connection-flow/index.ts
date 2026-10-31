@@ -20,6 +20,7 @@ import {
   ZCODE_VERSION,
   type ConnectionProfile,
   type SourceServerRunningTask,
+  type SourceServerManagementSnapshot,
   type RemoteTarget,
 } from "@zcode/shared";
 import { useCancelPendingRemoteConnection } from "@/hooks/useCancelPendingRemoteConnection.js";
@@ -205,6 +206,9 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
   );
   const [recognizedDeviceName, setRecognizedDeviceName] = useState<string | undefined>();
   const [recognizedSourceServerId, setRecognizedSourceServerId] = useState<string | undefined>();
+  /** 新建连接表单的自定义名称；连接成功后一次写入设备名与本次线路名，省得事后再去设置里改。 */
+  const [customName, setCustomName] = useState("");
+  const customNameRef = useRef("");
   const [
     remoteConversationWorkspaceBySourceServerId,
     setRemoteConversationWorkspaceBySourceServerId,
@@ -648,6 +652,46 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
     [applySourceManagementSnapshot, confirmDialog, intl, sourceManagement, upgradeLoading],
   );
 
+  /**
+   * 自定义名称一次写入：设备名（renameSource，侧栏/设备下拉展示的就是它）与
+   * 本次连接的线路名（renameProfile，设置·远程设备里那条连接的名字）都设为该名称，
+   * 免得添加完还要去 设置·远程设备 手动改一次。名称留空时不做任何事。
+   */
+  const applyCustomName = async (
+    sourceServerId: string,
+    target: RemoteTarget,
+    snapshot: SourceServerManagementSnapshot,
+    requested: string,
+    isCurrent: () => boolean,
+  ) => {
+    if (!sourceManagement) return;
+    let next = snapshot;
+    const server = next.servers.find((candidate) => candidate.sourceServerId === sourceServerId);
+    if (server && server.displayName !== requested) {
+      next = await sourceManagement.renameSource(sourceServerId, requested);
+      if (!isCurrent()) return;
+    }
+    const profile =
+      (target.kind !== "server"
+        ? next.profiles.find(
+            (candidate) =>
+              candidate.lifecycleState !== "retired" &&
+              profileMatchesRemoteTarget(candidate, target),
+          )
+        : undefined) ?? findPreferredSourceConnectionProfile(next, sourceServerId);
+    if (profile && (profile.displayName ?? profile.transport) !== requested) {
+      next = await sourceManagement.renameProfile(profile.profileId, requested);
+      if (!isCurrent()) return;
+    }
+    applySourceManagementSnapshot(next);
+    setRecognizedDeviceName(
+      next.servers.find((candidate) => candidate.sourceServerId === sourceServerId)?.displayName,
+    );
+    // 名称已被本次连接消费；清空避免下一次连接沿用同一名称。
+    customNameRef.current = "";
+    setCustomName("");
+  };
+
   const startRemoteConnection = async (
     target: RemoteTarget,
     confirmSourceServerInstall = false,
@@ -749,6 +793,23 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
                 (server) => server.sourceServerId === connectedSourceServerId,
               )?.displayName,
             );
+            // 自定义名称在添加时一次写好（设备名 + 本次线路名）；失败只记日志不打断连接，
+            // 输入框保留内容，目录步/设置·远程设备 的改名入口仍可兜底。
+            const requestedName = customNameRef.current.trim();
+            if (requestedName && sourceManagement) {
+              try {
+                await applyCustomName(
+                  connectedSourceServerId,
+                  nextTarget,
+                  nextSnapshot,
+                  requestedName,
+                  () => activeRequestIdRef.current === requestId,
+                );
+              } catch (cause) {
+                logger.warn("[RemoteConnectionFlow] 自定义名称写入失败", cause);
+              }
+              if (discardStaleResult()) return;
+            }
           }
         } catch {
           // 设备名仅用于展示；快照读取失败时保留连接结果，不打断流程。
@@ -1903,6 +1964,11 @@ export function useRemoteConnectionFlow(options: RemoteConnectionFlowOptions) {
         completion === "device-management"
           ? intl.formatMessage({ id: "remote.addAndConnect" })
           : undefined,
+      customName: customName,
+      onCustomNameChange: (value: string) => {
+        customNameRef.current = value;
+        setCustomName(value);
+      },
       kind: kind,
       host: host,
       port: port,

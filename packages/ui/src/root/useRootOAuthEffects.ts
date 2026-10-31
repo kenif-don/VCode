@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- OAuth lifecycle effects intentionally share one coordination point. */
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type {
   IPlatformService,
   OAuthProviderId,
@@ -11,20 +11,17 @@ import {
   ZCODE_JWT_INVALID_BROADCAST_CHANNEL,
 } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
-import { useAlertDialog } from "@/hooks/useAlertDialog.js";
-import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { reportAppTelemetryEvent, resolveProviderTelemetryLabel } from "@/lib/appTelemetry.js";
 import { logger } from "@/logger.js";
-import { setProviderFamilyDomain } from "@/lib/providerFamilyDomainSettings.js";
+import {
+  clearProviderFamilyDomain,
+  setProviderFamilyDomain,
+} from "@/lib/providerFamilyDomainSettings.js";
 import type { ModelProviderFamilyConnectionSelection } from "@/lib/modelProviderFamilyConnectionSelection.js";
 import {
   refreshLatestModelProviderFamilySelectionAfterLogin,
   refreshRestoredOAuthProviderFamilyAfterStartup,
 } from "@/root/oauthProviderFamilySelectionRefresh.js";
-import {
-  applyCachedOAuthSessionRestoreResult,
-  requestOAuthReauthentication,
-} from "@/root/oauthCachedSessionRestore.js";
 import { shouldApplyOAuthPollingFailure } from "@/root/oauthLoginAttemptGuard.js";
 import { useAccountConnectionLossNotification } from "@/root/useAccountConnectionLossNotification.js";
 
@@ -117,7 +114,6 @@ export function useRootOAuthEffects({
   oauthPollingActive,
   setOAuthPollingActive,
   markOAuthSuccess,
-  onReauthenticationRequired,
 }: {
   accountIntentKey: string;
   platform: IPlatformService;
@@ -130,14 +126,18 @@ export function useRootOAuthEffects({
   oauthPollingActive: boolean;
   setOAuthPollingActive: (active: boolean) => void;
   markOAuthSuccess: (provider?: OAuthProviderId) => void;
-  onReauthenticationRequired: () => void;
 }) {
   useAccountConnectionLossNotification(services, accountIntentKey, refreshAppSettings);
-  const requestAlert = useAlertDialog();
-  const { intl } = useZCodeIntl();
   const oauthLoginSucceededRef = useRef(false);
   const oauthLoginSuccessInFlightRef = useRef(false);
   const oauthLoginSuccessOwnerRef = useRef<"polling" | "deep-link" | null>(null);
+
+  // VCode 无登录入口：session 失效只做本地清理（清 user 与 providerFamilyDomain），
+  // 不再弹“重新登录”提示或打开登录页。
+  const applySessionExpiredFallback = useCallback(async () => {
+    setUser(null);
+    await clearProviderFamilyDomain(services.settingService);
+  }, [services.settingService, setUser]);
 
   useEffect(() => {
     let disposed = false;
@@ -145,7 +145,7 @@ export function useRootOAuthEffects({
       logger.info("[Root] 后台启动 OAuth 本地会话恢复");
       let hasRestoredUser = false;
       try {
-        // 启动只读缓存及本地有效期；业务 token 已明确过期时直接重新登录，
+        // 启动只读缓存及本地有效期；业务 token 已明确过期时不再引导重新登录，
         // 不把无 exp 的历史凭据或暂时断网误判成退出。
         const result = await services.oauthService.restoreCachedSessionState();
 
@@ -153,19 +153,14 @@ export function useRootOAuthEffects({
           return;
         }
 
-        hasRestoredUser = await applyCachedOAuthSessionRestoreResult({
-          result,
-          setUser,
-          requestAlert,
-          onReauthenticationRequired,
-          shouldReauthenticate: async () =>
-            !disposed && (await services.oauthService.getActiveProvider()) === null,
-          copy: {
-            title: intl.formatMessage({ id: "login.expired.title" }),
-            description: intl.formatMessage({ id: "login.expired.description" }),
-            actionLabel: intl.formatMessage({ id: "login.expired.action" }),
-          },
-        });
+        if (result.status === "authenticated") {
+          setUser(result.userInfo);
+          hasRestoredUser = true;
+        } else if (result.status === "reauthentication-required") {
+          // 认证事实已经失效，立刻清 UI 登录态与账号域。
+          logger.warn("[Root] 本地 OAuth session 已失效，已清理登录态");
+          await applySessionExpiredFallback();
+        }
       } catch (error) {
         logger.error("[Root] 恢复 OAuth 本地登录态失败:", error);
         if (disposed) {
@@ -205,11 +200,9 @@ export function useRootOAuthEffects({
       disposed = true;
     };
   }, [
-    intl,
-    onReauthenticationRequired,
+    applySessionExpiredFallback,
     refreshAppSettings,
     refreshProviderState,
-    requestAlert,
     services,
     setIsRestoringOAuthSession,
     setUser,
@@ -223,31 +216,26 @@ export function useRootOAuthEffects({
         return;
       }
       promptPending = true;
-      // 业务 token 撤销后仍显示头像并要求重启会阻断恢复；与启动过期共用 Welcome 登录入口。
-      void requestOAuthReauthentication({
-        setUser,
-        requestAlert,
-        onReauthenticationRequired: () => {
-          if (!disposed) onReauthenticationRequired();
-        },
-        shouldReauthenticate: async () =>
-          !disposed && (await services.oauthService.getActiveProvider()) === null,
-        copy: {
-          title: intl.formatMessage({ id: "login.expired.title" }),
-          description: intl.formatMessage({ id: "login.expired.description" }),
-          actionLabel: intl.formatMessage({ id: "login.expired.action" }),
-        },
-      })
-        .catch((error) => logger.error("[Root] 登录失效恢复提示失败", { error }))
-        .finally(() => {
+      // 业务 token 撤销后只做本地清理；VCode 无登录入口，不再提示重新登录。
+      // 只消费 owner 仍处于退出状态的旧过期事件。
+      void (async () => {
+        try {
+          if (disposed || (await services.oauthService.getActiveProvider()) !== null) {
+            return;
+          }
+          await applySessionExpiredFallback();
+        } catch (error) {
+          logger.error("[Root] 登录失效清理失败", { error });
+        } finally {
           promptPending = false;
-        });
+        }
+      })();
     });
     return () => {
       disposed = true;
       disposable.dispose();
     };
-  }, [intl, onReauthenticationRequired, requestAlert, services.broadcastService, setUser]);
+  }, [applySessionExpiredFallback, services.broadcastService, services.oauthService]);
 
   useEffect(() => {
     if (!oauthPollingActive) {
@@ -308,9 +296,7 @@ export function useRootOAuthEffects({
             successInFlight: oauthLoginSuccessInFlightRef.current,
             shouldApplyFailure,
           });
-          if (shouldApplyFailure) {
-            setOAuthError(intl.formatMessage({ id: "login.oauth.loginFailure" }));
-          }
+          // VCode 无登录入口：失败只记录判定结果，不再写回登录页展示的 oauthError。
           logger.error("[Root] OAuth 轮询处理失败:", error);
         })
         .finally(() => {
@@ -322,7 +308,6 @@ export function useRootOAuthEffects({
       window.clearInterval(pollTimer);
     };
   }, [
-    intl,
     markOAuthSuccess,
     oauthPollingActive,
     platform,
@@ -400,9 +385,7 @@ export function useRootOAuthEffects({
           pollingActive: oauthPollingActive,
           shouldApplyFailure,
         });
-        if (shouldApplyFailure) {
-          setOAuthError(intl.formatMessage({ id: "login.oauth.loginFailure" }));
-        }
+        // VCode 无登录入口：失败只记录判定结果，不再写回登录页展示的 oauthError。
         logger.error("[Root] OAuth 回调处理失败:", err);
       }
     });
@@ -411,7 +394,6 @@ export function useRootOAuthEffects({
       disposeOAuth();
     };
   }, [
-    intl,
     platform,
     refreshAppSettings,
     refreshProviderState,

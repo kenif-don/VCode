@@ -47,7 +47,7 @@ class FakeZCodeTransport implements ZCodeProtocolTransport {
 }
 
 const snapshot = {
-  protocol: { name: "ZCode Protocol", version: 1 },
+  protocol: { name: "VCode Protocol", version: 1 },
   session: {
     sessionId: "sess_1",
     workspace: {

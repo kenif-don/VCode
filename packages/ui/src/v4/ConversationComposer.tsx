@@ -171,7 +171,9 @@ import {
 import { useCodeCommentContexts } from "@/v4/composer/useCodeCommentContexts.js";
 import { useWebElementContexts } from "@/v4/composer/useWebElementContexts.js";
 import {
+  PLUGIN_UI_INSERT_INPUT_TEXT_EVENT,
   PluginUiModelContextChip,
+  isPluginUiInsertInputTextEvent,
   usePluginUiContextImages,
   usePluginUiModelContexts,
 } from "@/plugin-ui/index.js";
@@ -1867,6 +1869,34 @@ function ConversationComposerImpl({
       window.removeEventListener(WORKSPACE_FILE_ADD_TO_CHAT_EVENT, handleWorkspaceFileAddToChat);
     };
   }, [listenAddToChatEvents, updateText, workspaceIdentity, workspacePath]);
+
+  // ── 插件 UI「添加到对话」(ui/insert-input-text) → 文本追加到输入框末尾 ──
+  // 与 workspaceFileDrag 的「加入对话」同构:preventDefault 表示已接住。只接住自己会话的
+  // 请求;输入框未挂载时不接住,宿主回 -32601 由调用方等待重试,避免文本被静默吞掉。
+  useEffect(() => {
+    if (!listenAddToChatEvents || typeof window === "undefined") {
+      return;
+    }
+    const handlePluginUiInsertInputText = (event: Event) => {
+      if (!isPluginUiInsertInputTextEvent(event)) {
+        return;
+      }
+      if (!sessionId || event.detail.sessionId !== sessionId) {
+        return;
+      }
+      const api = inputApiRef.current;
+      if (!api) {
+        return;
+      }
+      event.preventDefault();
+      api.appendText(event.detail.text);
+      api.focus();
+    };
+    window.addEventListener(PLUGIN_UI_INSERT_INPUT_TEXT_EVENT, handlePluginUiInsertInputText);
+    return () => {
+      window.removeEventListener(PLUGIN_UI_INSERT_INPUT_TEXT_EVENT, handlePluginUiInsertInputText);
+    };
+  }, [listenAddToChatEvents, sessionId]);
 
   // 动态 placeholder（旧 chatViewPlaceholder 语义）：无历史 → newTask；
   // 有历史空闲 → followUpAsk；有历史处理中 → followUpQueue；

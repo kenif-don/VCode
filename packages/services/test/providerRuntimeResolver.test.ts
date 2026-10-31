@@ -144,7 +144,7 @@ describe("providerRuntimeResolver workspace config dir identity", () => {
     }
   });
 
-  it("GLM 配置目录由 ZCode Agent home 统一承载，不再按 workspaceIdentity 计算", () => {
+  it("GLM 配置目录由 VCode Agent home 统一承载，不再按 workspaceIdentity 计算", () => {
     const home = mkdtempSync(join(tmpdir(), "zcode-agent-resolver-home-"));
     createdDirs.push(home);
     process.env.HOME = home;

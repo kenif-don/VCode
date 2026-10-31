@@ -36,11 +36,20 @@ const devices: ProjectDevice[] = [
   { id: "remote:failed", label: "Failed box", status: "failed" },
 ];
 
-function editor(defaultDeviceId = "remote:offline") {
+function editor(defaultDeviceId = "remote:offline", { edit = true }: { edit?: boolean } = {}) {
   const onBrowseExisting = vi.fn(async () => true);
   render(
     createElement(ProjectEditor, {
-      project: null,
+      // 创建弹框无名字输入（服务按目录自动命名）；名字输入只属于编辑/远程固定目录契约。
+      // 设备选择与「已有项目」入口在创建态仍然保留。
+      project: edit
+        ? ({
+            id: "p",
+            name: "Demo",
+            hostId: defaultDeviceId,
+            roots: [],
+          } as never)
+        : null,
       projects: [],
       devices,
       defaultDeviceId,
@@ -59,11 +68,19 @@ const before = (a: Element, b: Element) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 it("orders fields as name, device, then folders", () => {
-  editor();
+  editor("local");
   const device = screen.getByTestId("virtual-project-device");
   const name = screen.getByTestId("virtual-project-name");
   const browse = screen.getByTestId("virtual-project-browse");
   expect(before(name, device)).toBe(true);
+  expect(before(device, browse)).toBe(true);
+});
+
+it("create form orders device before folders and has no name field", () => {
+  editor("local", { edit: false });
+  expect(screen.queryByTestId("virtual-project-name")).toBeNull();
+  const device = screen.getByTestId("virtual-project-device");
+  const browse = screen.getByTestId("virtual-project-browse");
   expect(before(device, browse)).toBe(true);
 });
 
@@ -94,12 +111,11 @@ it("shows a status dot for every remote device and text only when it is not onli
 });
 
 it("remote existing-project entry returns focus after browsing", async () => {
-  const { onBrowseExisting } = editor();
+  const { onBrowseExisting } = editor("remote:offline", { edit: false });
   const entry = screen.getByTestId("virtual-project-existing");
   expect(entry.textContent).toBe("添加到侧栏");
   expect(entry.closest("p")?.textContent).toContain("这台设备上已有项目？");
   expect(before(screen.getByTestId("virtual-project-device"), entry)).toBe(true);
-  expect(before(screen.getByTestId("virtual-project-name"), entry)).toBe(true);
   expect(before(entry, screen.getByTestId("virtual-project-browse"))).toBe(true);
 
   fireEvent.click(entry);
@@ -119,15 +135,15 @@ it("hides the existing-project entry for this computer", () => {
 });
 
 it("explains connection for a device that is not online", () => {
-  editor();
+  editor("remote:offline", { edit: false });
   const browse = screen.getByTestId("virtual-project-browse");
   expect(browse.getAttribute("aria-label")).toBe("连接并选择文件夹");
   expect(browse.textContent).toContain("设备当前离线，点击后先连接");
 });
 
 it("uses the choose-folder empty state for an online device", () => {
-  editor("remote:online");
+  editor("remote:online", { edit: false });
   const browse = screen.getByTestId("virtual-project-browse");
   expect(browse.getAttribute("aria-label")).toBe("选择文件夹");
-  expect(browse.textContent).toContain("ZCode 可读取和编辑这些文件夹");
+  expect(browse.textContent).toContain("VCode 可读取和编辑这些文件夹");
 });

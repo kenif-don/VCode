@@ -20,7 +20,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { readPluginName } from "./plugin-name.mjs";
 
 /**
- * Real bundled server + official AppBridge host + the panel in an iframe that carries the ZCode
+ * Real bundled server + official AppBridge host + the panel in an iframe that carries the VCode
  * sandbox CSP (no network, wasm only by declaration). The script plays the agent: it calls the
  * server's model tools, forwards results to the page and calls the page's capture_view tool.
  * This does not exercise the Electron sandbox itself.
@@ -555,7 +555,7 @@ try {
   );
   await dark.outer.screenshot({ path: join(artifacts, "zh-dark-inline.png") });
 
-  // 8. Dark side panel opened by the agent while ZCode animates the pane's width: the mark must
+  // 8. Dark side panel opened by the agent while VCode animates the pane's width: the mark must
   // end up on the live text layer, not on one a resize replaced.
   const darkPanel = has("pdf") ? await open("?theme=dark", { width: 300, height: 760 }) : null;
   if (darkPanel) {

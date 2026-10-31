@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- ZCode task wrapper service 接口集中承载 app/runtime API，拆散会让替换阶段更难追踪。 */
+/* eslint-disable max-lines -- VCode task wrapper service 接口集中承载 app/runtime API，拆散会让替换阶段更难追踪。 */
 import type { Event } from "@zcode/rpc";
 import { ServiceChannels } from "@zcode/shared";
 import type { CommandPayloadMap } from "@zcode/shared/zcode-protocol-v4";
@@ -142,7 +142,7 @@ export interface ZCodeModelTrajectoryRecord {
 /** 某个 task/session 的完整模型调用轨迹。 */
 export interface ZCodeModelTrajectory {
   taskId: string;
-  /** runtime 是否支持读取 model-io 轨迹（仅 ZCode Agent 落盘 model-io）。 */
+  /** runtime 是否支持读取 model-io 轨迹（仅 VCode Agent 落盘 model-io）。 */
   available: boolean;
   records: ZCodeModelTrajectoryRecord[];
   /** 命中的源文件绝对路径，便于排查。 */
@@ -177,10 +177,10 @@ export interface ZCodeTaskReadyOutcome {
 }
 
 /**
- * IZCodeTaskService — ZCode task wrapper API 服务接口
+ * IZCodeTaskService — VCode task wrapper API 服务接口
  *
  * UI、remote controller 通过这层访问 task wrapper 状态；核心 session 状态由
- * ZCode Agent server 维护，新功能应优先走 IZCodeSessionService。
+ * VCode Agent server 维护，新功能应优先走 IZCodeSessionService。
  */
 export interface IZCodeTaskService {
   // ---- 生命周期 ----
@@ -200,7 +200,7 @@ export interface IZCodeTaskService {
 
   // ---- Task/Session 管理 ----
 
-  /** 创建 ZCode session 并同步 task 索引。 */
+  /** 创建 VCode session 并同步 task 索引。 */
   createTask(params: {
     projectId?: string | null;
     additionalDirectories?: string[];
@@ -633,7 +633,7 @@ export interface IZCodeTaskService {
 
   /**
    * 读取 task 对应的模型调用轨迹（来自 ~/.zcode/cli/{debug,rollout} 的 model-io JSONL）。
-   * taskId 即 ZCode Agent 的 sessionId，按 sessionId 匹配 model-io 记录。
+   * taskId 即 VCode Agent 的 sessionId，按 sessionId 匹配 model-io 记录。
    */
   getModelTrajectory(params: {
     taskId: string;
@@ -659,7 +659,7 @@ export interface IZCodeTaskService {
   }>;
 
   /**
-   * 重启指定 workspace 的 ZCode Agent 共享进程。
+   * 重启指定 workspace 的 VCode Agent 共享进程。
    * 配置变更需要重新读取进程环境时使用。
    * 可选传入 resumeTaskId 在重启后立即续接当前聊天会话。
    */

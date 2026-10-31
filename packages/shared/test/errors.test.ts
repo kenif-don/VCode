@@ -38,11 +38,11 @@ describe("normalizeUnknownError", () => {
 describe("isOpenCodeRuntimeCrashError", () => {
   it("matches Bun crash signatures", () => {
     expect(isOpenCodeRuntimeCrashError("oh no: Bun has crashed. Segmentation fault")).toBe(true);
-    expect(isOpenCodeRuntimeCrashError("[ZCode Agent] opencode runtime 崩溃 (code=3221226505)")).toBe(true);
+    expect(isOpenCodeRuntimeCrashError("[VCode Agent] opencode runtime 崩溃 (code=3221226505)")).toBe(true);
   });
 
   it("does not match generic connection failures", () => {
-    expect(isOpenCodeRuntimeCrashError("ZCode Agent connection closed")).toBe(false);
+    expect(isOpenCodeRuntimeCrashError("VCode Agent connection closed")).toBe(false);
   });
 });
 

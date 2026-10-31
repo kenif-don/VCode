@@ -11,6 +11,7 @@ import type {
 } from "@zcode/shared";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import type { AssistantPreviewCardsAutoOpenRequest } from "@/lib/assistantPreviewCards.js";
+import type { ConversationStatusPanelGitRepository } from "@/v4/conversationStatusPanelModel.js";
 import type { OpenAutomationsMain } from "@/lib/taskNavigationHistory.js";
 import type { MessageFileLinkTarget } from "@/components/ai-elements/message.js";
 import type {
@@ -56,6 +57,10 @@ export interface V4ChatPaneProps {
   gitDirtyFileCount?: number;
   gitWorktreeReviewSourceId?: GitChangeSourceId | null;
   gitWorktreeChangeSummary?: { added: number; removed: number } | null;
+  /** 子目录仓库发现结果（多仓选择器）；缺省退化为单仓。 */
+  gitRepositories?: readonly ConversationStatusPanelGitRepository[] | null;
+  activeGitRepositoryKey?: string | null;
+  onSelectGitRepository?: (repoKey: string) => void;
   activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;
   summaryPanelVariantOverride?: ChatViewSummaryPanelVariant | null;
   onSummaryPanelVariantOverrideChange?: (variant: ChatViewSummaryPanelVariant | null) => void;
@@ -105,6 +110,9 @@ export function V4ChatPane({
   gitDirtyFileCount,
   gitWorktreeReviewSourceId,
   gitWorktreeChangeSummary,
+  gitRepositories,
+  activeGitRepositoryKey,
+  onSelectGitRepository,
   activeTaskChangeSummary,
   summaryPanelVariantOverride,
   onSummaryPanelVariantOverrideChange,
@@ -170,6 +178,9 @@ export function V4ChatPane({
         gitDirtyFileCount={gitDirtyFileCount}
         gitWorktreeReviewSourceId={gitWorktreeReviewSourceId}
         gitWorktreeChangeSummary={gitWorktreeChangeSummary}
+        gitRepositories={gitRepositories}
+        activeGitRepositoryKey={activeGitRepositoryKey}
+        onSelectGitRepository={onSelectGitRepository}
         activeTaskChangeSummary={activeTaskChangeSummary}
         summaryPanelVariantOverride={summaryPanelVariantOverride}
         onSummaryPanelVariantOverrideChange={onSummaryPanelVariantOverrideChange}

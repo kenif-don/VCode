@@ -19,7 +19,7 @@ test(
       .contexts()[0]
       .pages()
       .find((candidate) => /localhost:517/.test(candidate.url()));
-    assert.ok(page, "需要运行中的 ZCode Dev App");
+    assert.ok(page, "需要运行中的 VCode Dev App");
     const artifacts =
       process.env.ZCODE_E2E_ARTIFACT_DIR ??
       fileURLToPath(

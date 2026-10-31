@@ -366,7 +366,7 @@ function collectExpectedProcessPids(
   for (const logPath of listFiles(runtimeLogsDir, (path) => path.endsWith(".log"))) {
     const content = readFileSync(logPath, "utf-8");
     for (const line of content.split("\n")) {
-      if (!line.includes("ZCode agent process exited")) continue;
+      if (!line.includes("VCode agent process exited")) continue;
       const match = /"pid":(\d+),"runtimeIdentity"/u.exec(line);
       if (match?.[1]) pids.add(Number(match[1]));
     }

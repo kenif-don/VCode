@@ -26,7 +26,7 @@ function printUsage() {
 Options:
   --legacy-dir <path>   Legacy snapshot root. Default: ${defaultLegacyDir}
   --task-index <path>   Task index sqlite path. Default: ${defaultTaskIndexPath}
-  --cli-db <path>       New ZCode session sqlite path. Default: ${defaultCliDbPath}
+  --cli-db <path>       New VCode session sqlite path. Default: ${defaultCliDbPath}
   --agent <provider>    Filter by provider, such as glm, claude, codex, opencode.
   --workspace <path>    Filter by exact workspace path.
   --query <text>        Filter conversations by title, ids, or visible message text.

@@ -166,7 +166,7 @@ class ZCodeMcpAuthorizationCodeProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      client_name: this.config.clientName ?? `ZCode ${this.serverName}`,
+      client_name: this.config.clientName ?? `VCode ${this.serverName}`,
       grant_types: ["authorization_code", "refresh_token"],
       redirect_uris: [this.redirectUrl],
       response_types: ["code"],
@@ -311,7 +311,7 @@ class ZCodeMcpAuthorizationCodeProvider implements OAuthClientProvider {
   }
 
   async invalidateCredentials(scope: "all" | "client" | "tokens" | "verifier" | "discovery") {
-    // 修复原因：过去 refresh 失败只在 SDK 内部分类，ZCode 侧不留任何痕迹，事后无法区分
+    // 修复原因：过去 refresh 失败只在 SDK 内部分类，VCode 侧不留任何痕迹，事后无法区分
     // token 过期、被撤销、client mismatch 和服务端临时错误（见 docs/analysis 的可观测性缺口）。
     // SDK 不把 OAuth error code 传给 provider，但 invalidation scope 与之一一对应：
     // tokens ← invalid_grant；client/all ← invalid_client / unauthorized_client。

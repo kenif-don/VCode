@@ -71,7 +71,7 @@ describe("stdio Desktop presentation surface", () => {
     tempHomes.push(home);
     process.env.HOME = home;
     setDataBaseDir(home);
-    // Bugfix: 开发机可能导出 ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED=0（如本机 ZCode 安装的 shell 集成），
+    // Bugfix: 开发机可能导出 ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED=0（如本机 VCode 安装的 shell 集成），
     // 会把 desktop-attached-remote 推导出的 presentationSurface 灭成 undefined，
     // 让「surface 贯穿装配」断言变成环境敏感；显式置 1 恢复用例封闭性。
     process.env[ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV] = "1";
@@ -212,7 +212,7 @@ describe("stdio Desktop presentation surface", () => {
         }),
       ).resolves.toMatchObject({
         available: false,
-        reason: expect.stringContaining("ZCode agent server command is not configured"),
+        reason: expect.stringContaining("VCode agent server command is not configured"),
       });
 
       expect(bootstrap.authorityModeParseResult.mode).toBe("desktop-attached-remote");

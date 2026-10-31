@@ -97,7 +97,7 @@ describe("resolveGitSnapshot command semantics", () => {
     setGitResponse(["show-ref", "--verify", "--quiet", "refs/remotes/origin/main"], {
       code: 0,
     });
-    setGitResponse(["config", "user.name"], { code: 0, stdout: "ZCode Tester\n" });
+    setGitResponse(["config", "user.name"], { code: 0, stdout: "VCode Tester\n" });
     setGitResponse(["--no-optional-locks", "status", "--short"], {
       code: 0,
       stdout: " M tracked.txt\n",

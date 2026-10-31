@@ -15,6 +15,9 @@ import type {
   GitLocalBranch,
   GitLocalBranchListResult,
   GitWorkspaceRepositoryInfo,
+  GitPullIssueCode,
+  GitPullOutcome,
+  GitPullResult,
   GitPushResult,
 } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
@@ -31,6 +34,7 @@ import {
 } from "../config.js";
 import {
   createGitCommandProvider,
+  type GitCommandExecutionResult,
   type GitCommandProvider,
 } from "../providers/gitCommandProvider.js";
 import {
@@ -502,6 +506,43 @@ function parseTrackingRemoteName(trackingBranchName: string | null): string | nu
   return remoteName.length > 0 ? remoteName : null;
 }
 
+type GitPullFailureKind = "local-changes" | "no-upstream" | "conflict" | "diverged" | "unknown";
+
+function classifyGitPullFailure(result: GitCommandExecutionResult): GitPullFailureKind {
+  const text = `${result.stderr}\n${result.stdout}`;
+  if (/would be overwritten|please commit your changes|stash them before/i.test(text)) {
+    return "local-changes";
+  }
+  if (/no tracking information|no upstream/i.test(text)) {
+    return "no-upstream";
+  }
+  if (/automatic merge failed|unmerged files|\bCONFLICT\b/i.test(text)) {
+    return "conflict";
+  }
+  if (/fast-forward|divergent/i.test(text)) {
+    return "diverged";
+  }
+  return "unknown";
+}
+
+function resolveGitPullIssue(
+  result: GitCommandExecutionResult,
+  label: string,
+): { issue: GitPullIssueCode; message: string } {
+  const detail =
+    result.stderr.trim() || `${label} failed with exit code ${result.exitCode ?? "unknown"}`;
+  switch (classifyGitPullFailure(result)) {
+    case "local-changes":
+      return { issue: "local-changes-blocked", message: detail };
+    case "no-upstream":
+      return { issue: "no-upstream", message: detail };
+    case "conflict":
+      return { issue: "merge-conflict", message: detail };
+    default:
+      return { issue: "error", message: detail };
+  }
+}
+
 function parseRemoteList(stdout: string): string[] {
   return stdout
     .replace(/\r\n/g, "\n")
@@ -670,6 +711,16 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
     });
     ensureGitCommandSucceeded("git remote", result);
     return parseRemoteList(result.stdout);
+  }
+
+  async function readHeadCommit(resolution: GitResolvedRepository): Promise<string | null> {
+    const result = await commandProvider.run({
+      cwd: resolution.repoRoot,
+      args: ["rev-parse", "HEAD"],
+      timeoutMs: DEFAULT_GIT_COMMAND_TIMEOUT_MS,
+      maxOutputBytes: DEFAULT_GIT_OUTPUT_BYTES,
+    });
+    return result.exitCode === 0 ? result.stdout.trim() : null;
   }
 
   async function resolvePushRemote(status: GitStatusSnapshot): Promise<string> {
@@ -1791,6 +1842,100 @@ export function createGitCliRepo(options?: { commandProvider?: GitCommandProvide
         trackingBranchName: nextStatus.summary.trackingBranchName,
         remoteName: remoteName ?? parseTrackingRemoteName(nextStatus.summary.trackingBranchName),
         setUpstream: !hasTrackingBranch,
+        summary: nextStatus.summary,
+      };
+    },
+
+    async pull(workspacePath: string): Promise<GitPullResult> {
+      const status = await this.getStatus(workspacePath);
+      const resolution = ensureRepositoryAvailable(status.resolution, "pull updates");
+      const branchName = status.summary.branchName?.trim() ?? "";
+      const trackingBranchName = status.summary.trackingBranchName?.trim() ?? null;
+      const remoteName = parseTrackingRemoteName(status.summary.trackingBranchName);
+      const base = {
+        branchName: status.summary.branchName,
+        trackingBranchName: status.summary.trackingBranchName,
+        remoteName,
+      };
+
+      if (status.summary.headRefType !== "branch" || branchName.length === 0) {
+        return {
+          ok: false,
+          outcome: null,
+          issue: "detached-head",
+          message: "Cannot pull while HEAD is detached.",
+          ...base,
+          summary: status.summary,
+        };
+      }
+
+      if (!trackingBranchName) {
+        return {
+          ok: false,
+          outcome: null,
+          issue: "no-upstream",
+          message: `Branch '${branchName}' has no upstream/tracking branch to pull from.`,
+          ...base,
+          summary: status.summary,
+        };
+      }
+
+      const headBefore = await readHeadCommit(resolution);
+      let outcome: GitPullOutcome | null = null;
+      let issue: GitPullIssueCode | null = null;
+      let message: string | null = null;
+
+      const ffResult = await commandProvider.run({
+        cwd: resolution.repoRoot,
+        args: ["pull", "--ff-only"],
+        // 关键业务逻辑：pull 走网络且可能触发 hook，与 push 同档使用更长超时与输出上限。
+        timeoutMs: DEFAULT_GIT_PUSH_TIMEOUT_MS,
+        maxOutputBytes: DEFAULT_GIT_PUSH_OUTPUT_BYTES,
+      });
+
+      if (ffResult.timedOut) {
+        issue = "error";
+        message = `git pull timed out after ${ffResult.timeoutMs ?? ffResult.durationMs}ms`;
+      } else if (ffResult.exitCode === 0) {
+        outcome = "fast-forwarded";
+      } else if (classifyGitPullFailure(ffResult) === "diverged") {
+        // 关键业务逻辑：无法快进（本地与远程分叉）时不硬失败，退化为合并拉取，
+        // 与 HBA web 的拉取语义保持一致；合并仍冲突时由 merge-conflict 结果上报。
+        const mergeResult = await commandProvider.run({
+          cwd: resolution.repoRoot,
+          args: ["pull", "--no-rebase", "--no-edit"],
+          timeoutMs: DEFAULT_GIT_PUSH_TIMEOUT_MS,
+          maxOutputBytes: DEFAULT_GIT_PUSH_OUTPUT_BYTES,
+        });
+        if (mergeResult.timedOut) {
+          issue = "error";
+          message = `git pull timed out after ${mergeResult.timeoutMs ?? mergeResult.durationMs}ms`;
+        } else if (mergeResult.exitCode === 0) {
+          outcome = "merged";
+        } else {
+          ({ issue, message } = resolveGitPullIssue(mergeResult, "git pull --no-rebase"));
+        }
+      } else {
+        ({ issue, message } = resolveGitPullIssue(ffResult, "git pull --ff-only"));
+      }
+
+      if (outcome === "fast-forwarded") {
+        const headAfter = await readHeadCommit(resolution);
+        if (headBefore && headAfter && headBefore === headAfter) {
+          outcome = "up-to-date";
+        }
+      }
+
+      invalidate(workspacePath);
+      const nextStatus = await this.getStatus(workspacePath);
+      return {
+        ok: outcome !== null,
+        outcome,
+        issue,
+        message,
+        branchName,
+        trackingBranchName: nextStatus.summary.trackingBranchName,
+        remoteName: remoteName ?? parseTrackingRemoteName(nextStatus.summary.trackingBranchName),
         summary: nextStatus.summary,
       };
     },

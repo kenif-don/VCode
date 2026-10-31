@@ -185,7 +185,7 @@ describe("coalesceConsecutiveZCodeAssistants", () => {
     });
   });
 
-  it("is a no-op on strictly alternating legacy ZCode Agent data", () => {
+  it("is a no-op on strictly alternating legacy VCode Agent data", () => {
     const input = [
       userMessage({ timestamp: 0, turnIndex: 0 }),
       assistantMessage({

@@ -106,7 +106,7 @@ function readQuestions(input: unknown): unknown[] {
   if (Array.isArray(questions)) {
     return questions;
   }
-  // Bugfix: ZCode Agent 的 AskUserQuestion 工具输入是单题结构：
+  // Bugfix: VCode Agent 的 AskUserQuestion 工具输入是单题结构：
   // { header, question, options }，不是多题结构 { questions: [...] }。
   // 这里把单题结构归一化成同一条 questions 管线，避免消息流工具块显示“没有可回答的问题”。
   return typeof input.question === "string" && Array.isArray(input.options)

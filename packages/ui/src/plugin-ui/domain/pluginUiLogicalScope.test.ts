@@ -15,7 +15,7 @@ describe("logical MCP App identity", () => {
       ),
     );
   });
-  it("isolates same-named surfaces by server, resource, workspace and session", () => {
+  it("isolates same-named surfaces by server, resource and workspace; session is shared (HBA fr8/fr19)", () => {
     const scope = { kind: "surface" as const, surfaceId: "panel" };
     const base = {
       workspacePath: "/w",
@@ -29,8 +29,9 @@ describe("logical MCP App identity", () => {
       { serverName: "other" },
       { resourceUri: "ui://other" },
       { workspaceIdentity: "other" },
-      { sessionId: "other" },
     ])
       expect(buildPluginUiSurfaceKey({ ...base, ...changed }, scope)).not.toBe(key);
+    // 面板跟随项目、跨会话共用：会话位不参与 key（换锚重绑保持 widgetState 连续）。
+    expect(buildPluginUiSurfaceKey({ ...base, sessionId: "other" }, scope)).toBe(key);
   });
 });

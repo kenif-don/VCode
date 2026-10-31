@@ -37,6 +37,8 @@ export interface WorkspaceFileTreeContextMenuLabels {
   openFailed: string;
   openWith: string;
   reveal: string;
+  rename: string;
+  delete: string;
 }
 
 export interface WorkspaceFileTreeEditorState {

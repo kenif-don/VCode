@@ -79,6 +79,19 @@ it("未安装和禁用仍展示，复用 user 安装与 workspace 启用，不�
   );
   expect(result.current.entries[0]!.item.info?.enabled).toBe(true);
 });
+it("HBA fr12：草稿态（sessionId=null）同样列出条目，安装/启用可用", async () => {
+  const service = setup();
+  const { result } = renderHook(() =>
+    useRecommendedUiPlugins({ workspacePath: "/workspace/a", sessionId: null }),
+  );
+  await waitFor(() => expect(result.current.entries).toHaveLength(1));
+  expect(result.current.loading).toBe(false);
+  expect(result.current.entries[0]!.item.installed).toBe(false);
+  await act(async () => result.current.prepare(result.current.entries[0]!.item));
+  expect(service.installPlugin).toHaveBeenCalledTimes(1);
+  expect(result.current.entries[0]!.item.installed).toBe(true);
+});
+
 it("重复点击只写一次；失败保留推荐并可重试", async () => {
   const service = setup();
   const pending = Promise.withResolvers<{ diagnostics: { severity: string; message: string }[] }>();

@@ -121,7 +121,7 @@ realBrowserTest(
           "await tab.setViewportSize({ width: 375, height: 667 });",
           "const before = await tab.playwright.domSnapshot();",
           "const nameInput = tab.playwright.getByLabel('Name');",
-          "await nameInput.fill('ZCode');",
+          "await nameInput.fill('VCode');",
           "await tab.playwright.getByRole('button', { name: 'Submit' }).click();",
           "({",
           "  beforeHasForm: before.includes('Name') && before.includes('Submit'),",
@@ -139,8 +139,8 @@ realBrowserTest(
     const output = textContent(interaction);
     expect(interaction.isError).not.toBe(true);
     expect(output).toContain('"beforeHasForm": true');
-    expect(output).toContain('"inputValue": "ZCode"');
-    expect(output).toContain('"status": "Submitted ZCode"');
+    expect(output).toContain('"inputValue": "VCode"');
+    expect(output).toContain('"status": "Submitted VCode"');
     expect(output).toMatch(/"viewport":\s*\{\s*"width": 375,\s*"height": 667/u);
     expect(output).toMatch(/"actualViewport":\s*\{\s*"width": 375,\s*"height": 667/u);
     expect(output).toMatch(/"tabs":\s*\[[\s\S]*"viewport":\s*\{\s*"width": 375,\s*"height": 667/u);

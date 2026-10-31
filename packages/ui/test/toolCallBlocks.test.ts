@@ -659,7 +659,7 @@ describe("readRawToolCallFileSummaries", () => {
     expect(summaries).toEqual([]);
   });
 
-  it("reads multi-file ZCode tool display summaries", () => {
+  it("reads multi-file VCode tool display summaries", () => {
     const summaries = readRawToolCallFileSummaries(
       {
         display: {
@@ -783,7 +783,7 @@ describe("readRawToolCallFileSummaries", () => {
     expect(summaries[0]?.patch).toContain("+++ b/demo.ts");
   });
 
-  it("builds write summaries from ZCode protocol input payloads", () => {
+  it("builds write summaries from VCode protocol input payloads", () => {
     const summaries = readRawToolCallFileSummaries(
       {
         toolName: "Write",
@@ -811,7 +811,7 @@ describe("readRawToolCallFileSummaries", () => {
     expect(summaries[0]?.changeStat).toEqual({ added: 1, removed: 0 });
   });
 
-  it("builds edit summaries from ZCode protocol input payloads", () => {
+  it("builds edit summaries from VCode protocol input payloads", () => {
     const summaries = readRawToolCallFileSummaries(
       {
         toolName: "Edit",

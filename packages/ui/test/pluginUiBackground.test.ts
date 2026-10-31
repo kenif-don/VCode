@@ -69,14 +69,14 @@ describe("窗口级后台插件创建", () => {
     host.off();
     expect(host.dispose).toHaveBeenCalledOnce();
   });
-  it("同插件不同会话隔离", async () => {
+  it("同插件不同会话共享同一面板（HBA fr8/fr19：surface 跟随项目）", async () => {
     const host = setup();
     host.send();
     host.send({ ...result, sessionId: "other" });
-    await vi.waitFor(() => expect(createPage).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(createPage).mock.calls[0]![0]).not.toBe(
-      vi.mocked(createPage).mock.calls[1]![0],
-    );
+    await vi.waitFor(() => expect(createPage).toHaveBeenCalledTimes(1));
+    const page = vi.mocked(createPage).mock.results[0]!.value;
+    // 两次结果都投喂同一个 guest，不再按会话拆页。
+    await vi.waitFor(() => expect(page.updateToolFeed).toHaveBeenCalledTimes(2));
     host.off();
   });
   it("Web 不订阅也不创建沙箱", () => {

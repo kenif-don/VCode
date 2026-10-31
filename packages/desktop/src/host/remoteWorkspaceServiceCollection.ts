@@ -183,7 +183,7 @@ export function createServerRemoteWorkspaceServiceCollection(params: {
   sourceServices?: ServiceCollection;
 }): ServiceCollection {
   assertRemoteWorkspaceRpcContract(params.connectionServices);
-  // Server remote 连接的是一个已经运行的完整 ZCode server。
+  // Server remote 连接的是一个已经运行的完整 VCode server。
   // Host 只做 RPC 转接，不替 server 决定 workspace/runtime/provider 归属；
   // Provider 配置只经 Host 私有的 Provisioning executor 从本机单向下发到远端。
   const remoteProviderProvisioningExecutor =

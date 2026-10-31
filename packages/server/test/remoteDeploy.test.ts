@@ -38,7 +38,7 @@ import {
 
 const retiredProtocolPrefix = `${"a"}${"cp"}`;
 const retiredProxyRuntimeId = `${retiredProtocolPrefix}-proxy-runtime`;
-// 远端 ZCode Agent bundle 文件名（与 REMOTE_AGENT_BUNDLE_NAME 保持一致）。
+// 远端 VCode Agent bundle 文件名（与 REMOTE_AGENT_BUNDLE_NAME 保持一致）。
 const REMOTE_AGENT_BUNDLE_FILE_NAME = "zcode.cjs";
 const REMOTE_AGENT_WRAPPER_FILE_NAME = "zcode-agent";
 const BROWSER_USE_REQUIRED_RELATIVE_PATHS = [
@@ -461,7 +461,7 @@ async function stageRemoteRuntimeRelease(
     const binaryDir = join(releaseDir, runtime.bundledResourceDir, platformKey);
     await mkdir(binaryDir, { recursive: true });
     await writeFile(join(binaryDir, binaryName), `${provider} binary`, "utf8");
-    // ZCode Agent（glm）远端不再发原生二进制，而是发编译产物 zcode.cjs，
+    // VCode Agent（glm）远端不再发原生二进制，而是发编译产物 zcode.cjs，
     // 由远端已部署的 node 通过 wrapper 执行，故 source release 需提供该 bundle。
     if (provider === "glm") {
       await writeFile(join(binaryDir, REMOTE_AGENT_BUNDLE_FILE_NAME), `${provider} bundle`, "utf8");
@@ -517,7 +517,7 @@ function createFullyDeployedRemoteFiles(platformKey: RemotePlatformKey): Record<
         ] = "claude native binary";
       }
     } else if (provider === "glm") {
-      // ZCode Agent 远端部署后：wrapper（zcode-agent）+ 编译产物 bundle（zcode.cjs）。
+      // VCode Agent 远端部署后：wrapper（zcode-agent）+ 编译产物 bundle（zcode.cjs）。
       const entrySegments = runtime.resolveEntrySegments(platform);
       const wrapperName = entrySegments[entrySegments.length - 1];
       if (wrapperName) {
@@ -1362,7 +1362,7 @@ describe("deployServer legacy agent node-script bundle deployment", () => {
     ).toBe(false);
   });
 
-  it("默认部署只处理 ZCode Agent，旧 node-script meta 不再阻断", async () => {
+  it("默认部署只处理 VCode Agent，旧 node-script meta 不再阻断", async () => {
     const backend = new FakeRemoteBackend();
     const installedFiles: string[] = [];
     const installedDirectories: Array<{
@@ -1417,7 +1417,7 @@ describe("deployServer legacy agent node-script bundle deployment", () => {
     ).toBe(false);
   });
 
-  it("强制部署 ZCode Agent 时应要求 installer 刷新 glm 缓存", async () => {
+  it("强制部署 VCode Agent 时应要求 installer 刷新 glm 缓存", async () => {
     const backend = new FakeRemoteBackend();
     const installRequests: Array<{
       componentId: string;
@@ -1451,7 +1451,7 @@ describe("deployServer legacy agent node-script bundle deployment", () => {
     ]);
   });
 
-  it("WSL 部署 ZCode Agent wrapper 时应走上传避免 shell 提前展开", async () => {
+  it("WSL 部署 VCode Agent wrapper 时应走上传避免 shell 提前展开", async () => {
     const backend = new FakeWslRemoteBackend();
     const installedFiles: string[] = [];
     const installedDirectories: string[] = [];
@@ -1522,7 +1522,7 @@ describe("deployServer legacy agent node-script bundle deployment", () => {
     expect(installedDirectories).toEqual(["glm:~/.zcode/server/agents/glm/packages"]);
   });
 
-  it("ZCode Agent 版本匹配但远端缺 builtin plugin 资产时应复用 cache 补部署 packages", async () => {
+  it("VCode Agent 版本匹配但远端缺 builtin plugin 资产时应复用 cache 补部署 packages", async () => {
     const remoteOfficialPluginDir = "~/.zcode/server/agents/glm/packages";
     const remoteFiles = createFullyDeployedRemoteFiles("linux-arm64");
     remoteFiles[remoteOfficialPluginDir] = "directory marker";
@@ -1705,7 +1705,7 @@ describe("deployServer legacy agent node-script bundle deployment", () => {
     ]);
   });
 
-  it("ZCode Agent 升级时权限修复失败仍应尝试替换 packages", async () => {
+  it("VCode Agent 升级时权限修复失败仍应尝试替换 packages", async () => {
     const remoteFiles = createFullyDeployedRemoteFiles("linux-arm64");
     remoteFiles["~/.zcode/server/agents/glm/.version"] = "3.3.3\n";
     const backend = new FakeRemoteBackend(remoteFiles, {
@@ -1748,7 +1748,7 @@ describe("deployServer legacy agent node-script bundle deployment", () => {
     ]);
   });
 
-  it("ZCode Agent 升级时 chmod 失败后 packages 替换失败不应继续更新 bundle", async () => {
+  it("VCode Agent 升级时 chmod 失败后 packages 替换失败不应继续更新 bundle", async () => {
     const remoteFiles = createFullyDeployedRemoteFiles("linux-arm64");
     remoteFiles["~/.zcode/server/agents/glm/.version"] = "3.3.3\n";
     const backend = new FakeRemoteBackend(remoteFiles, {

@@ -7,7 +7,7 @@ import {
 } from "../src/index.js";
 
 describe("Todo 21 source contracts", () => {
-  it("ZCode Built-in Provider 只接受 Account Family Provider", () => {
+  it("VCode Built-in Provider 只接受 Account Family Provider", () => {
     const providers = parseZCodeBuiltinProviderConfigMap([
       {
         providerId: "builtin",
@@ -101,7 +101,7 @@ describe("Todo 21 source contracts", () => {
           },
         ],
       }),
-    ).toThrow("固定 Account Provider 的 Access 只能由 ZCode Built-in Config 声明");
+    ).toThrow("固定 Account Provider 的 Access 只能由 VCode Built-in Config 声明");
   });
 
   it("Personal Provider 缺失 access 时保持不完整，不从 group 推断 Access", () => {

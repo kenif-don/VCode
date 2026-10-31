@@ -97,6 +97,35 @@ export interface GitRepositoryRequest {
   workspacePath: string;
 }
 
+export type GitDiscoveredRepositoryKind = "workspace-root" | "nested";
+
+/** 子目录仓库发现结果：workspace 根仓库 + 根下扫描出的嵌套仓库。 */
+export interface GitDiscoveredRepository {
+  /** 仓库根绝对路径。 */
+  repoRoot: string;
+  /** 相对 workspace 根的显示路径；workspace 根仓库为 "."。 */
+  workspaceRelativePath: string;
+  kind: GitDiscoveredRepositoryKind;
+  /**
+   * 发给 Git 服务的作用路径：workspace 根仓库沿用 workspacePath（保留 monorepo
+   * 子目录裁剪语义），嵌套仓库用 repoRoot（作用域即整仓）。
+   */
+  requestPath: string;
+}
+
+export interface GitDiscoverRepositoriesRequest {
+  workspacePath: string;
+  /** 扫描深度上限（相对 workspace 根的目录层数），默认 3。 */
+  maxDepth?: number;
+  /** 返回仓库数上限，默认 20；超出置 truncated。 */
+  maxRepositories?: number;
+}
+
+export interface GitDiscoverRepositoriesResult {
+  repositories: GitDiscoveredRepository[];
+  truncated: boolean;
+}
+
 export type GitCommitGraphRefKind = "branch" | "remote" | "tag" | "head";
 
 export interface GitCommitGraphRef {
@@ -281,6 +310,30 @@ export interface GitPushResult {
   trackingBranchName: string | null;
   remoteName: string | null;
   setUpstream: boolean;
+  summary: GitRepositorySummary;
+}
+
+/** pull 成功后的更新方式：无更新 / 快进(fast-forward) / 产生了合并提交。 */
+export type GitPullOutcome = "up-to-date" | "fast-forwarded" | "merged";
+
+export type GitPullIssueCode =
+  | "detached-head"
+  | "no-upstream"
+  | "local-changes-blocked"
+  | "merge-conflict"
+  | "error";
+
+export interface GitPullRequest extends GitRepositoryRequest {}
+
+export interface GitPullResult {
+  ok: boolean;
+  outcome: GitPullOutcome | null;
+  issue: GitPullIssueCode | null;
+  /** issue 为 merge-conflict / error 时的原始细节，供展示与排查。 */
+  message: string | null;
+  branchName: string | null;
+  trackingBranchName: string | null;
+  remoteName: string | null;
   summary: GitRepositorySummary;
 }
 

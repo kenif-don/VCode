@@ -56,44 +56,6 @@ describe("createZCodeStore global state", () => {
     expect(store.getState().isRestoringOAuthSession).toBe(true);
   });
 
-  it("支持请求统一登录入口直接进入指定 provider 的登录流程", () => {
-    const store = createZCodeStore(mockBroadcastService);
-
-    const requestId = store.getState().requestLoginEntry("zai");
-
-    const request = store.getState().loginEntryRequest;
-    expect(request?.providerId).toBe("zai");
-    expect(requestId).toBe(request?.id);
-    expect(store.getState().loginEntryAttempt).toEqual({
-      id: requestId,
-      providerId: "zai",
-      purpose: undefined,
-      status: "requested",
-    });
-
-    store.getState().markLoginEntryAttemptStatus(requestId, "waiting");
-    expect(store.getState().loginEntryAttempt?.status).toBe("waiting");
-
-    store.getState().clearLoginEntryRequest(request?.id);
-
-    expect(store.getState().loginEntryRequest).toBe(null);
-  });
-
-  it("登录尝试取消后不会被旧请求或后续新请求误更新", () => {
-    const store = createZCodeStore(mockBroadcastService);
-    const cancelledId = store.getState().requestLoginEntry("zai");
-    store.getState().markLoginEntryAttemptStatus(cancelledId, "cancelled");
-    const currentId = store.getState().requestLoginEntry("bigmodel");
-
-    store.getState().markLoginEntryAttemptStatus(cancelledId, "succeeded");
-
-    expect(store.getState().loginEntryAttempt).toMatchObject({
-      id: currentId,
-      providerId: "bigmodel",
-      status: "requested",
-    });
-  });
-
   it("只在用户从未登录进入登录态时推进鉴权会话序号", () => {
     const store = createZCodeStore(mockBroadcastService);
     const user = { id: "user-1", username: "tester", displayName: "Tester" };

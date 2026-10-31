@@ -66,6 +66,35 @@ export function matchesGitBranchSearch(branchName: string, searchText: string): 
   return branchName.trim().toLocaleLowerCase().includes(normalizedSearchText);
 }
 
+const GIT_REPOSITORY_PICKER_VALUE_PREFIX = "repository ";
+
+/**
+ * 弹层里仓库行的 cmdk value：`repository <key 长度>:<key> <label> <分支名>`。
+ * key（repoRoot）只为 value 唯一性服务，用长度前缀圈出来；搜索面只有
+ * label + 当前分支名，机器绝对路径不进搜索词。
+ */
+export function toGitRepositoryPickerValue(repository: {
+  key: string;
+  label: string;
+  branchName?: string | null;
+}): string {
+  return `${GIT_REPOSITORY_PICKER_VALUE_PREFIX}${repository.key.length}:${repository.key} ${repository.label} ${repository.branchName ?? ""}`;
+}
+
+export function matchesGitBranchPickerSearch(itemValue: string, searchText: string): boolean {
+  if (!itemValue.startsWith(GIT_REPOSITORY_PICKER_VALUE_PREFIX)) {
+    return matchesGitBranchSearch(itemValue, searchText);
+  }
+  // 仓库行按长度前缀跳过 repoRoot，只拿 label + 当前分支名当搜索面；
+  // 普通分支行的 value 就是分支名，直接走分支名匹配。
+  const encoded = itemValue.slice(GIT_REPOSITORY_PICKER_VALUE_PREFIX.length);
+  const keyLengthPrefix = /^(\d+):/.exec(encoded);
+  const searchable = keyLengthPrefix
+    ? encoded.slice(keyLengthPrefix[0].length + Number(keyLengthPrefix[1]) + 1)
+    : encoded;
+  return matchesGitBranchSearch(searchable, searchText);
+}
+
 export function getPrimaryGitBranchIssue(
   issues: readonly GitBranchMutationIssue[],
 ): GitBranchMutationIssue | null {

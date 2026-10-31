@@ -428,7 +428,7 @@ describe("createUsageStatsService", () => {
     ).toThrow("coding_plan_usage_custom_range_too_long");
   });
 
-  it("App Usage 经 ZCode Protocol 读取 agent 数据库统计", async () => {
+  it("App Usage 经 VCode Protocol 读取 agent 数据库统计", async () => {
     const getAppUsageStats = vi.fn(async () => createAppUsageSnapshot());
     const apiClient: ApiClient = {
       request: vi.fn(),

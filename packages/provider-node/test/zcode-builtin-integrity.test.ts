@@ -27,7 +27,7 @@ function reasoningPatch(map: string, reasoningLevel: string) {
   );
 }
 
-describe("ZCode Built-in Provider Config 完整性", () => {
+describe("VCode Built-in Provider Config 完整性", () => {
   it.each(["anthropic-messages", "openai-chat-completions", "openai-responses"] as const)(
     "未知模型在 %s 下拥有完整两档兜底并可进入 Registry",
     async (apiType) => {

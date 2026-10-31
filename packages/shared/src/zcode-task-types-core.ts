@@ -16,9 +16,9 @@ import type {
 import type { ErrorAttribution } from "./zcode-protocol-v4/snapshot.js";
 
 /**
- * ZCode task/session 投影共享类型定义
+ * VCode task/session 投影共享类型定义
  *
- * 跨 renderer、host process、ZCode agent service 使用的类型。
+ * 跨 renderer、host process、VCode agent service 使用的类型。
  */
 
 // ---- 可观测性 ----
@@ -29,9 +29,9 @@ export type TraceId = string;
 export type InputId = string;
 /** 每条真实用户 query 的语义归因 ID，用于模型请求 header 和用户问题级观测。 */
 export type QueryId = string;
-// ---- ZCode Provider ----
+// ---- VCode Provider ----
 
-/** 支持的 ZCode agent 提供方；当前仅保留 glm。 */
+/** 支持的 VCode agent 提供方；当前仅保留 glm。 */
 export type ZCodeProvider = "glm";
 export type ZCodeGlmAgentModelStateUpdateReason =
   | "session_initialized"
@@ -144,7 +144,7 @@ export interface ZCodeTaskGoalChangedPatch {
   target: ZCodeTaskGoal | null;
   previousTarget?: ZCodeTaskGoal | null;
 }
-// ---- ZCode task 模式 ----
+// ---- VCode task 模式 ----
 
 export type ZCodeTaskMode =
   | "default"
@@ -274,7 +274,7 @@ export interface ZCodeTaskPendingInteraction {
 }
 
 export interface ZCodeTaskMeta {
-  /** UI taskId 与 ZCode agent sessionId 保持一致，用于列表选择、日志关联和恢复会话。 */
+  /** UI taskId 与 VCode agent sessionId 保持一致，用于列表选择、日志关联和恢复会话。 */
   taskId: string;
   /** session/任务级观测 traceId，不用于区分单次用户输入 */
   traceId: TraceId;
@@ -386,9 +386,9 @@ export interface ZCodeTaskChangedFileSummary {
   /** 最后一次写入发生在第几轮，后续回滚按钮可直接复用 */
   lastTurnIndex: number;
 }
-// ---- ZCode 配置与命令类型 ----
+// ---- VCode 配置与命令类型 ----
 
-/** ZCode configOptions 的 UI 投影（从 session/new 响应中提取） */
+/** VCode configOptions 的 UI 投影（从 session/new 响应中提取） */
 export interface ZCodeConfigOption {
   id: string;
   name: string;
@@ -427,7 +427,7 @@ export interface ZCodeTaskModeInfo {
   name: string;
   description?: string;
 }
-// ---- ZCode 流式事件（Host → Renderer） ----
+// ---- VCode 流式事件（Host → Renderer） ----
 
 export type TaskStreamMirrorableEvent = (
   | ZCodeAgentMessageChunk
@@ -498,7 +498,7 @@ export interface ZCodeAgentMessageChunk {
   inputId?: InputId;
   /** 上级 toolCallId；null 表示主 agent 正文。 */
   parentToolUseId?: string | null;
-  /** agent messageId；ZCode synthetic timeline 消息用它做 upsert。 */
+  /** agent messageId；VCode synthetic timeline 消息用它做 upsert。 */
   messageId?: string;
   content: string;
   zcodeTimeline?: ZCodeTimelineMeta;
@@ -578,9 +578,9 @@ export interface ZCodeToolCall {
   /** 上级 toolCallId；null 表示主 agent 直接发起的工具调用。 */
   parentToolUseId?: string | null;
   input: unknown;
-  /** ZCode 固定工具名；新增字段用于把工具身份和历史 kind 分类拆开。 */
+  /** VCode 固定工具名；新增字段用于把工具身份和历史 kind 分类拆开。 */
   toolName?: string;
-  /** 兼容历史分类；当前 ZCode 流通常等于 toolName。 */
+  /** 兼容历史分类；当前 VCode 流通常等于 toolName。 */
   kind: string;
   /** agent ToolCall.title，描述当前工具动作的人类可读标题 */
   title: string;
@@ -608,9 +608,9 @@ export interface ZCodeToolCallUpdate {
    * agent ToolCallUpdate.title，可选；如果 Agent 没更新标题，这里可能为空。
    */
   title?: string;
-  /** ZCode 固定工具名；ToolCallResult 可能只带 toolId，服务层会从前序调用缓存补齐。 */
+  /** VCode 固定工具名；ToolCallResult 可能只带 toolId，服务层会从前序调用缓存补齐。 */
   toolName?: string;
-  /** 兼容历史分类；当前 ZCode 流通常等于 toolName。 */
+  /** 兼容历史分类；当前 VCode 流通常等于 toolName。 */
   kind?: string;
   input?: unknown;
   content?: unknown;
@@ -675,7 +675,7 @@ export interface ZCodePermissionOption {
   description?: string;
   response: ZCodePermissionResponse;
 }
-/** ZCode Elicitation 请求事件，用于 AskUserQuestion 等需要用户交互的工具 */
+/** VCode Elicitation 请求事件，用于 AskUserQuestion 等需要用户交互的工具 */
 export interface ZCodeElicitationRequest {
   type: "elicitation_request";
   taskId: string;
@@ -696,20 +696,20 @@ export interface ZCodeElicitationRequest {
   /** ElicitationSchema 原始 payload */
   schema?: unknown;
 }
-/** ZCode Elicitation 单个问题 */
+/** VCode Elicitation 单个问题 */
 export interface ZCodeElicitationQuestion {
   question: string;
   header: string;
   options: ZCodeElicitationOption[];
   multiSelect?: boolean;
 }
-/** ZCode Elicitation 选项 */
+/** VCode Elicitation 选项 */
 export interface ZCodeElicitationOption {
   value: string;
   label: string;
   description?: string;
 }
-/** ZCode Elicitation 响应事件 */
+/** VCode Elicitation 响应事件 */
 export interface ZCodeElicitationResponse {
   type: "elicitation_response";
   taskId: string;
@@ -802,7 +802,7 @@ export interface ZCodeTaskTokenUsageDelta {
   traceId: TraceId;
   inputId?: InputId;
   queryId?: QueryId;
-  /** 稳定去重键，通常来自 ZCode Protocol eventId。 */
+  /** 稳定去重键，通常来自 VCode Protocol eventId。 */
   eventKey: string;
   eventId?: string;
   querySource?: string;
@@ -1017,7 +1017,7 @@ export interface ZCodeSessionRuntimeSnapshot {
   activeTurnKind?: ZCodeSessionActiveTurnKind;
   /** Agent API 网络重试是运行态提示，只随 snapshot 恢复，不写入 session JSON。 */
   apiRetry?: ZCodeApiRetryStatus | null;
-  /** ZCode Protocol projection 中的上下文窗口用量，用于恢复旧 task UI 的右下角 context meter。 */
+  /** VCode Protocol projection 中的上下文窗口用量，用于恢复旧 task UI 的右下角 context meter。 */
   contextUsage?: {
     used: number;
     size: number;
@@ -1113,7 +1113,7 @@ export interface ZCodePersistedMessage {
   durationMs?: number;
   /** assistant 是否以用户主动停止或异常中断结束；用于抑制 latest 回复区的提升。 */
   interrupted?: boolean;
-  /** 用户对 assistant 回复的本地反馈；仅用于 ZCode 展示/统计，不注入 Agent 上下文。 */
+  /** 用户对 assistant 回复的本地反馈；仅用于 VCode 展示/统计，不注入 Agent 上下文。 */
   feedback?: ZCodeAssistantMessageFeedback;
   attachments?: ZCodePromptAttachment[];
   tools?: ZCodePersistedToolCall[];
@@ -1164,7 +1164,7 @@ export interface ZCodeTaskSnapshotToolSlice {
   endToolIndexExclusive: number;
 }
 export interface ZCodePersistedToolCall {
-  /** ZCode 固定工具名；旧快照里可能曾把 title 落在这里，读取侧需兼容。 */
+  /** VCode 固定工具名；旧快照里可能曾把 title 落在这里，读取侧需兼容。 */
   toolName?: string;
   title?: string;
   kind?: string;

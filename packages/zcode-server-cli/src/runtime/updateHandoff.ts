@@ -66,7 +66,7 @@ async function runDaemonLauncher(
       child.kill("SIGTERM");
       reject(
         new Error(
-          `Timed out starting ZCode Server daemon from ${release.releaseId ?? release.version}`,
+          `Timed out starting VCode Server daemon from ${release.releaseId ?? release.version}`,
         ),
       );
     }, DAEMON_START_TIMEOUT_MS);
@@ -106,7 +106,7 @@ async function startDaemon(layout: ServerLayout, release: ReleaseManifest): Prom
   const diagnostic = result.stderr.trim() || result.stdout.trim();
   throw new Error(
     diagnostic ||
-      `ZCode Server daemon launcher exited code=${result.exitCode ?? "null"} signal=${result.signal ?? "none"}`,
+      `VCode Server daemon launcher exited code=${result.exitCode ?? "null"} signal=${result.signal ?? "none"}`,
   );
 }
 

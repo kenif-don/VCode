@@ -2511,7 +2511,7 @@ describe("NodeExecutionAdapter", () => {
     expect(env.NODE_EXTRA_CA_CERTS).toBeUndefined();
   });
 
-  it("derives subprocess proxy and CA env from explicit ZCode runtime keys", () => {
+  it("derives subprocess proxy and CA env from explicit VCode runtime keys", () => {
     const env = buildExecutionEnv(
       {
         base: "empty",
@@ -3409,7 +3409,7 @@ describe("NodeExecutionAdapter", () => {
 
   it("delivers a large stdin payload when the child consumes it", async () => {
     const adapter = new NodeExecutionAdapter();
-    const stdin = "你好, ZCode!\n".repeat(100_000);
+    const stdin = "你好, VCode!\n".repeat(100_000);
 
     const result = await adapter.run({
       command: {
@@ -4615,7 +4615,7 @@ describe("NodeExecutionAdapter", () => {
     }
   });
 
-  it("uses the ZCode storage root for persisted output when no output root is injected", async () => {
+  it("uses the VCode storage root for persisted output when no output root is injected", async () => {
     const storageRoot = await mkdtemp(join(tmpdir(), "zcode-exec-storage-root-"));
     const adapter = new NodeExecutionAdapter({
       processEnv: {

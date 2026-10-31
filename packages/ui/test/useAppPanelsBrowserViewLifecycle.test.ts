@@ -29,6 +29,13 @@ vi.mock("@/logger.js", () => ({
   },
 }));
 
+vi.mock("@/i18n/IntlProvider.js", () => ({
+  useZCodeIntl: () => ({
+    intl: { formatMessage: ({ id }: { id: string }) => id },
+    locale: "zh-CN",
+  }),
+}));
+
 type ReadyHandler = Parameters<NonNullable<IPlatformService["onBrowserViewReady"]>>[0];
 type ReadyPayload = Parameters<ReadyHandler>[0];
 type VisibilityHandler = Parameters<NonNullable<IPlatformService["onBrowserViewVisibility"]>>[0];

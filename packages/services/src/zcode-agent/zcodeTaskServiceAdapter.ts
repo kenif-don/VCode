@@ -5,7 +5,7 @@ import {
   waitBotGroupExecutionEnd,
 } from "#src/zcode-agent/groupRuntimeSnapshot.js";
 import { uploadBotGroupAttachments } from "./groupAttachmentUpload.js";
-/* oxlint-disable eslint(max-lines) -- 迁移期需要在一个门面里集中维护旧 task projection 到 ZCode session 的协议适配。 */
+/* oxlint-disable eslint(max-lines) -- 迁移期需要在一个门面里集中维护旧 task projection 到 VCode session 的协议适配。 */
 import { createHash, randomUUID } from "node:crypto";
 import { createZCodeAgentConnectionScope } from "#src/zcode-agent/zcodeAgentConnectionScope.js";
 import { existsSync, readFileSync } from "node:fs";
@@ -299,7 +299,7 @@ export function createZCodeTaskServiceAdapter(
 
   function unsupported(name: string): never {
     throw Object.assign(
-      new Error(`ZCode task service adapter does not support IZCodeTaskService.${name} yet.`),
+      new Error(`VCode task service adapter does not support IZCodeTaskService.${name} yet.`),
       {
         code: "ZCODE_AGENT_UNSUPPORTED_LEGACY_TASK_METHOD",
       },
@@ -408,10 +408,10 @@ export function createZCodeTaskServiceAdapter(
     // 新输入开始时必须清掉上一轮 live-only 子工具，避免后续 snapshot 把旧工具补到新回复尾部。
     clearLiveToolProjection(target);
     clearStreamingToolInputCache(target);
-    // ZCode task wrapper 的字段仍叫 traceId，但这里语义已经是单次输入 inputId。
-    // 先记录 inputId，后续 ZCode session 事件回投 ZCode Agent 时才能让 UI 终态按输入轮次收口。
+    // VCode task wrapper 的字段仍叫 traceId，但这里语义已经是单次输入 inputId。
+    // 先记录 inputId，后续 VCode session 事件回投 VCode Agent 时才能让 UI 终态按输入轮次收口。
     activePromptInputIds.set(taskKey(target), params.traceId);
-    logger.info(params.traceId, "ZCode task facade sendPrompt 开始", {
+    logger.info(params.traceId, "VCode task facade sendPrompt 开始", {
       attachmentCount: params.attachments?.length ?? 0,
       queryId: params.queryId ?? null,
       reason: params.logReason ?? "direct",
@@ -477,7 +477,7 @@ export function createZCodeTaskServiceAdapter(
         });
         assertV4CommandAckOk("sendText", ack, `session=${target.taskId}`);
       }
-      logger.info(params.traceId, "ZCode task facade sendPrompt ACK", {
+      logger.info(params.traceId, "VCode task facade sendPrompt ACK", {
         durationMs: Date.now() - startedAt,
         queryId: params.queryId ?? null,
         reason: params.logReason ?? "direct",
@@ -488,7 +488,7 @@ export function createZCodeTaskServiceAdapter(
       });
     } catch (error) {
       activePromptInputIds.delete(taskKey(target));
-      logger.warn(params.traceId, "ZCode task facade sendPrompt 失败", {
+      logger.warn(params.traceId, "VCode task facade sendPrompt 失败", {
         durationMs: Date.now() - startedAt,
         error: error instanceof Error ? error.message : String(error),
         queryId: params.queryId ?? null,
@@ -591,7 +591,7 @@ export function createZCodeTaskServiceAdapter(
     // 手机 host command 在 sendPrompt ACK 后仍要保持 running，
     // 否则手机刷新拿不到“已开始发送”的 pendingCommands。只有真实终态到达后才能从 host 队列移除。
     removeRuntimeCommand(params, command.commandId);
-    logger.info(command.traceId, "ZCode task command 终态收口", {
+    logger.info(command.traceId, "VCode task command 终态收口", {
       commandId: command.commandId,
       terminalType,
       taskId: params.taskId,
@@ -626,7 +626,7 @@ export function createZCodeTaskServiceAdapter(
     }
 
     const runningCommand = markRuntimeCommandRunning(params, command);
-    logger.info(runningCommand.traceId, "ZCode task command drain 开始", {
+    logger.info(runningCommand.traceId, "VCode task command drain 开始", {
       commandId: runningCommand.commandId,
       queryId: runningCommand.queryId ?? null,
       reason,
@@ -651,7 +651,7 @@ export function createZCodeTaskServiceAdapter(
       });
     } catch (error) {
       markRuntimeCommandFailed(params, runningCommand, error);
-      logger.warn(runningCommand.traceId, "ZCode task command drain 失败", {
+      logger.warn(runningCommand.traceId, "VCode task command drain 失败", {
         commandId: runningCommand.commandId,
         error: error instanceof Error ? error.message : String(error),
         reason,
@@ -667,7 +667,7 @@ export function createZCodeTaskServiceAdapter(
     try {
       await drainRuntimeCommands(params, reason);
     } catch (error) {
-      logger.warn(undefined, "ZCode task command drain 调度失败", {
+      logger.warn(undefined, "VCode task command drain 调度失败", {
         error: error instanceof Error ? error.message : String(error),
         reason,
         taskId: params.taskId,
@@ -968,7 +968,7 @@ export function createZCodeTaskServiceAdapter(
     }
 
     if (changed) {
-      logger.debug(undefined, "ZCode snapshot 合并 live tool projection", {
+      logger.debug(undefined, "VCode snapshot 合并 live tool projection", {
         event: "zcode_task.snapshot.live_tool_projection.merged",
         liveToolCount: liveTools.length,
         mergedToolCount,
@@ -994,7 +994,7 @@ export function createZCodeTaskServiceAdapter(
   function getTaskTarget(taskId: string): TaskTarget {
     const target = taskTargets.get(taskId);
     if (!target) {
-      throw Object.assign(new Error(`ZCode session target is not loaded: ${taskId}`), {
+      throw Object.assign(new Error(`VCode session target is not loaded: ${taskId}`), {
         code: "ZCODE_SESSION_TARGET_NOT_FOUND",
       });
     }
@@ -1291,20 +1291,20 @@ export function createZCodeTaskServiceAdapter(
           await updateIndexedPresentation({ ...meta, migrationSource: "claudeCode" });
           logger.info(
             undefined,
-            `legacy Claude 导入 task 已升级为 ZCode session taskId=${params.taskId}`,
+            `legacy Claude 导入 task 已升级为 VCode session taskId=${params.taskId}`,
           );
           return { kind: "session", snapshot };
         } catch (upgradeError) {
           logger.warn(
             undefined,
-            `legacy Claude 导入 task 升级为 ZCode session 失败，继续只读恢复 taskId=${params.taskId}`,
+            `legacy Claude 导入 task 升级为 VCode session 失败，继续只读恢复 taskId=${params.taskId}`,
             upgradeError,
           );
         }
       }
       logger.warn(
         undefined,
-        `ZCode Protocol session 缺失，已按 legacy task snapshot 恢复 taskId=${params.taskId}`,
+        `VCode Protocol session 缺失，已按 legacy task snapshot 恢复 taskId=${params.taskId}`,
         error,
       );
       return { kind: "legacy", snapshot: legacySnapshot };
@@ -1384,7 +1384,7 @@ export function createZCodeTaskServiceAdapter(
     if (model || thoughtLevel) {
       // task-local thoughtLevel 和 model 一样属于历史 session 恢复 hint。
       // 不回填 thoughtLevel 时，同 workspace 的 draft 默认值会在 session/resume 后覆盖 active task。
-      logger.info(undefined, "从 task index 回填 ZCode session resume 配置", {
+      logger.info(undefined, "从 task index 回填 VCode session resume 配置", {
         model: model || null,
         thoughtLevel: thoughtLevel || null,
         reason,
@@ -1562,7 +1562,7 @@ export function createZCodeTaskServiceAdapter(
   function mapServiceEvent(params: TaskTarget, event: ZCodeAgentServiceEvent): void {
     if (event.type === "snapshot") {
       void syncTaskIndexSnapshot(event.snapshot).catch((error) => {
-        logger.warn(undefined, "同步 ZCode snapshot 到 task index 失败", error);
+        logger.warn(undefined, "同步 VCode snapshot 到 task index 失败", error);
       });
       const snapshotEvent: ZCodeStreamEvent = {
         type: "task_snapshot_updated",
@@ -2169,7 +2169,7 @@ export function createZCodeTaskServiceAdapter(
       const commands = runtimeCommands.get(key) ?? [];
       const command = commands.find((candidate) => candidate.commandId === params.commandId);
       if (!command) {
-        logger.info(undefined, "ZCode task command 取消时已不存在", {
+        logger.info(undefined, "VCode task command 取消时已不存在", {
           commandId: params.commandId,
           taskId: params.taskId,
           workspaceIdentity: params.workspaceIdentity ?? null,
@@ -2183,7 +2183,7 @@ export function createZCodeTaskServiceAdapter(
         };
       }
       if (command.status === "running") {
-        logger.info(command.traceId, "ZCode task command 已开始运行，跳过取消", {
+        logger.info(command.traceId, "VCode task command 已开始运行，跳过取消", {
           commandId: command.commandId,
           taskId: params.taskId,
           workspaceIdentity: params.workspaceIdentity ?? null,
@@ -2204,7 +2204,7 @@ export function createZCodeTaskServiceAdapter(
         commands.filter((item) => item.commandId !== command.commandId),
       );
       emitRuntimeCommandSnapshotUpdated(params, command.traceId);
-      logger.info(command.traceId, "ZCode task command 已取消", {
+      logger.info(command.traceId, "VCode task command 已取消", {
         commandId: command.commandId,
         status: command.status,
         taskId: params.taskId,
@@ -2228,7 +2228,7 @@ export function createZCodeTaskServiceAdapter(
             workspaceIdentity: params.workspaceIdentity,
           }
         : getTaskTarget(params.taskId);
-      logger.info(params.runId, "ZCode task facade stopGeneration 开始", {
+      logger.info(params.runId, "VCode task facade stopGeneration 开始", {
         hasRunId: Boolean(params.runId),
         taskId: params.taskId,
         workspaceIdentity: target.workspaceIdentity ?? null,
@@ -2249,7 +2249,7 @@ export function createZCodeTaskServiceAdapter(
         }),
       });
       assertV4CommandAckOk("stop", ack, `session=${params.taskId}`);
-      logger.info(params.runId, "ZCode task facade stopGeneration ACK", {
+      logger.info(params.runId, "VCode task facade stopGeneration ACK", {
         durationMs: Date.now() - startedAt,
         taskId: params.taskId,
         workspaceIdentity: target.workspaceIdentity ?? null,
@@ -2780,7 +2780,7 @@ export function createZCodeTaskServiceAdapter(
             },
           });
           const meta = await syncTaskIndexSnapshot(snapshot);
-          // 导入后的任务必须是真实 ZCode session，setModel/sendPrompt 才能继续命中 runtime。
+          // 导入后的任务必须是真实 VCode session，setModel/sendPrompt 才能继续命中 runtime。
           // 同时保留 migrationSource，避免任务列表把 Claude Code 迁移历史当成本地新会话。
           return updateIndexedPresentation({ ...meta, migrationSource: "claudeCode" });
         },
@@ -2921,12 +2921,12 @@ export function createZCodeTaskServiceAdapter(
 
     async getTaskNativeSessionLogFile() {
       const path = resolveZCodeAgentCurrentLogFilePath();
-      // 返回 ZCode Agent 的结构化日志 JSONL；日志行中的 sessionId 用于按当前任务排查。
+      // 返回 VCode Agent 的结构化日志 JSONL；日志行中的 sessionId 用于按当前任务排查。
       return { provider: GLM_PROVIDER, path, exists: existsSync(path) };
     },
 
     async getModelTrajectory(params) {
-      // ZCode Agent 把 taskId 当作 sessionId 落盘 model-io（见本文件其它 sessionId: params.taskId 用法），
+      // VCode Agent 把 taskId 当作 sessionId 落盘 model-io（见本文件其它 sessionId: params.taskId 用法），
       // 这里按 sessionId 还原该 task 的模型调用轨迹，供 UI 侧边栏可视化。
       const trajectory = await readModelTrajectory(params.taskId, params.limit);
       logger.info(
@@ -2937,7 +2937,7 @@ export function createZCodeTaskServiceAdapter(
 
     async getTaskTokenUsage(params): Promise<ZCodeTaskTokenUsageResult> {
       // 摘要面板需要展示 task 的累计模型消耗，不能复用 usage_update 的 context window。
-      // 这里通过 ZCode Protocol 读 agent SQLite 的 model_usage 聚合，保持桌面和远控同一事实源。
+      // 这里通过 VCode Protocol 读 agent SQLite 的 model_usage 聚合，保持桌面和远控同一事实源。
       return options.zcodeAgentService.getTaskTokenUsage({
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
@@ -3127,7 +3127,7 @@ export function createZCodeTaskServiceAdapter(
         const localDisposable = getTaskEmitter(target).event(listener);
         if (legacySnapshotTaskKeys.has(taskKey(target))) {
           // Bugfix: legacy ACP task 没有 zcode-cli sqlite session，恢复后只能作为只读历史。
-          // 若继续向 ZCode Protocol 建 desktop-continuous/replayable 订阅，会反复触发
+          // 若继续向 VCode Protocol 建 desktop-continuous/replayable 订阅，会反复触发
           // Session is not active 并刷爆日志；本地 emitter 已足够承接 rename/archive 等元数据事件。
           return localDisposable;
         }
@@ -3771,7 +3771,7 @@ function mapToolPart(
 ): ZCodePersistedToolCall {
   const state = part.state;
   const taskNotification = backgroundTaskNotifications?.get(part.callId);
-  // ZCode Protocol 的 part.callId 是实时流和终态 snapshot 共同的工具身份。
+  // VCode Protocol 的 part.callId 是实时流和终态 snapshot 共同的工具身份。
   // 以前只保存 metadata 会丢掉 toolCallId，手机 replayable 里 result-only 临时工具就无法被终态快照覆盖。
   const raw = attachZCodeBackgroundTaskNotificationToRaw(
     attachToolCallIdToRaw("metadata" in state ? (state.metadata ?? state) : state, part.callId),
@@ -3977,13 +3977,13 @@ function mapSessionEvent(
   const inputId = stringValue(payload.inputId);
   const queryId = stringValue(payload.queryId);
   // 兼容层对外的 traceId 语义是“一次用户输入到本轮回复结束”的轮次标识。
-  // ZCode Protocol runtime trace 只在事件没有 inputId 时兜底，避免同一轮 chunk/tool/complete 被拆成不同 trace。
+  // VCode Protocol runtime trace 只在事件没有 inputId 时兜底，避免同一轮 chunk/tool/complete 被拆成不同 trace。
   const eventInputId = inputId ?? activePromptInputId;
   const traceId = eventInputId ?? protocolTraceId;
   if (eventInputId && eventInputId !== protocolTraceId) {
     logger.debug(
       eventInputId,
-      `对齐 ZCode prompt inputId eventType=${event.type} protocolTrace=${protocolTraceId}`,
+      `对齐 VCode prompt inputId eventType=${event.type} protocolTrace=${protocolTraceId}`,
     );
   }
   const turnKey = `${resolveWorkspaceKey(params)}:${event.sessionId}:${event.turnId ?? eventInputId ?? traceId}`;
@@ -4188,7 +4188,7 @@ function mapSessionEvent(
           params.taskId,
           traceId,
           eventInputId,
-          stringValue(errorPayload.message) ?? "ZCode compact failed",
+          stringValue(errorPayload.message) ?? "VCode compact failed",
         ),
       ];
     }
@@ -4200,7 +4200,7 @@ function mapSessionEvent(
         taskId: params.taskId,
         traceId,
         ...(eventInputId ? { inputId: eventInputId } : {}),
-        error: stringValue(errorPayload.message) ?? "ZCode session failed",
+        error: stringValue(errorPayload.message) ?? "VCode session failed",
         // type 是外层错误分类，code 才是 provider/subagent 要展示的真实错误码。
         code: stringValue(errorPayload.code) ?? stringValue(errorPayload.type),
         detail: stringValue(errorPayload.detail),
@@ -4471,7 +4471,7 @@ function logStreamingToolInputProjection(
     toolName?: string;
   },
 ): void {
-  logger.debug(traceId, "ZCode streaming tool input projected", {
+  logger.debug(traceId, "VCode streaming tool input projected", {
     ...details,
     event: "zcode.task.streaming_tool_input.projected",
   });
@@ -4709,8 +4709,8 @@ function mapToolUpdated(
   }
   if ("result" in payload) {
     const result = asRecord(payload.result);
-    // ZCode Protocol 的 ToolCallResult 只有 toolCallId/result，不再重复带 toolName。
-    // 去掉 ZCode Agent 后如果不记住前序 ToolCallScheduled 的 TodoWrite 名称，result 里的 todos
+    // VCode Protocol 的 ToolCallResult 只有 toolCallId/result，不再重复带 toolName。
+    // 去掉 VCode Agent 后如果不记住前序 ToolCallScheduled 的 TodoWrite 名称，result 里的 todos
     // 就只能当普通字符串输出，无法继续投射成顶部 todo/plan 事件。
     const toolName = rememberedToolName;
     const content = normalizeToolResultContent(toolName, result);
@@ -4877,7 +4877,7 @@ function isSubagentDispatchToolName(toolName: string | undefined): boolean {
 }
 
 function parentToolUseIdFromToolPayload(payload: Record<string, unknown>): string | null {
-  // ZCode Protocol 发送的父级字段叫 parentToolCallId；
+  // VCode Protocol 发送的父级字段叫 parentToolCallId；
   // UI stream 模型统一消费 parentToolUseId，必须在服务投影层完成一次性归一。
   return (
     stringValue(payload.parentToolUseId) ??
@@ -5626,7 +5626,7 @@ function contextUsageFromPayload(payload: Record<string, unknown>): ContextUsage
   if (size === undefined || size <= 0) {
     return null;
   }
-  // ZCode Protocol 的 session.updated 里 contextUsed/contextWindow 是 projection 事实源；
+  // VCode Protocol 的 session.updated 里 contextUsed/contextWindow 是 projection 事实源；
   // 旧 task stream 只认识 usage_update，adapter 不转换就会让右下角 context meter 永远拿不到数据。
   // used=0 只表示初始化或异常兜底，不能渲染成可用的 context meter。
   if (used === undefined || used <= 0) {

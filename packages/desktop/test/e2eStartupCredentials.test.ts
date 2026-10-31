@@ -155,9 +155,6 @@ describe("desktop e2e startup credentials", () => {
     "conversation-session-project-settings-return.test.ts",
     "conversation-session-background-connection.test.ts",
     "conversation-session-remote-project-handoff.test.ts",
-    "conversation-session-web-remote-project-directory.test.ts",
-    "conversation-session-web-remote-unread.test.ts",
-
     "conversation-session-existing-remote-project.test.ts",
     "conversation-session-chat-device-return.test.ts",
   ])("本地交互 spec %s 不播种无关账号身份", (spec) => {

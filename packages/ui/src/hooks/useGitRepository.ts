@@ -35,6 +35,8 @@ const EMPTY_BRANCH_COMPARISON: GitBranchComparison = {
 
 interface GitLiveDataRefreshInput {
   workspacePath: string;
+  /** 多仓选择器选中的仓调用路径；单仓时与 workspacePath 相同。 */
+  repositoryPath: string;
   workspaceKey: string;
   includeExtendedData: boolean;
   refreshToken: string | number | boolean | null;
@@ -327,7 +329,7 @@ function buildLastTurnDataset(options: {
     id: "last-turn",
     readonly: true,
     turnIndex: options.turnIndex,
-    // 关键业务逻辑：上一轮更改继续优先复用 ZCode Agent 已持久化的单轮文件快照，
+    // 关键业务逻辑：上一轮更改继续优先复用 VCode Agent 已持久化的单轮文件快照，
     // 这样 Git pane 接入真实仓库数据后，agent 视角的只读审阅链路仍然保持独立稳定。
     sections: options.summary
       ? [
@@ -358,6 +360,11 @@ export function shouldRefreshLiveGitData(
     return true;
   }
 
+  // 多仓切换选中仓：调用路径变了必须重拉，否则面板会拿着上一个仓的状态不放。
+  if (previous.repositoryPath !== next.repositoryPath) {
+    return true;
+  }
+
   if (previous.workspaceKey !== next.workspaceKey) {
     return true;
   }
@@ -373,6 +380,8 @@ export function shouldRefreshLiveGitData(
 
 export function useGitRepository(options: {
   workspacePath: string;
+  /** 多仓选择器选中的仓调用路径（嵌套仓为 repoRoot）；缺省沿用 workspacePath。 */
+  repositoryPath?: string | null;
   activeTaskId: string | null;
   includeExtendedData?: boolean;
   refreshToken?: string | number | boolean | null;
@@ -382,12 +391,14 @@ export function useGitRepository(options: {
 }): GitPaneRepositoryState {
   const {
     workspacePath,
+    repositoryPath: repositoryPathOption = null,
     includeExtendedData = false,
     refreshToken = null,
     remoteSessionId: preferredRemoteSessionId = null,
     remoteTarget,
     workspaceIdentity = null,
   } = options;
+  const repositoryPath = repositoryPathOption ?? workspacePath;
   const { gitService } = useServices();
   const remoteSessionId = useResolvedRemoteWorkspaceSessionId(
     workspacePath,
@@ -405,7 +416,7 @@ export function useGitRepository(options: {
   // 的写入链路随旧 ChatView 流订阅删除，store 不再保存该派生态（删除前也恒为空）。
   // "last-turn" 数据集保留空态骨架，待 v4 投影的 per-turn 变更面接入后回填。
   const [repositoryState, setRepositoryState] = useState<GitPaneRepositoryState>(() =>
-    createInitialState(workspacePath, { workspaceKey }),
+    createInitialState(repositoryPath, { workspaceKey }),
   );
   const requestVersionRef = useRef(0);
   const lastLiveRefreshInputRef = useRef<GitLiveDataRefreshInput | null>(null);
@@ -415,6 +426,7 @@ export function useGitRepository(options: {
   useEffect(() => {
     const nextRefreshInput: GitLiveDataRefreshInput = {
       workspacePath,
+      repositoryPath,
       workspaceKey,
       includeExtendedData,
       refreshToken,
@@ -427,7 +439,7 @@ export function useGitRepository(options: {
       // 断连远端 workspace 可以展示 Git 面板空壳，但不能在 session 未恢复前
       // 主动查询远端 Git，否则会把断连代理错误放大成每次首屏挂载的日志噪音。
       setRepositoryState((current) =>
-        createInitialState(workspacePath, {
+        createInitialState(repositoryPath, {
           workspaceKey,
           loading: false,
           error: null,
@@ -457,14 +469,14 @@ export function useGitRepository(options: {
             loading: true,
             error: null,
           }
-        : createInitialState(workspacePath, { workspaceKey }),
+        : createInitialState(repositoryPath, { workspaceKey }),
     );
 
     // agent 写文件会触发 Git 自动刷新。这里不能拆成 summary/unstaged/staged
     // 三个 RPC，因为服务端每个 RPC 都会重新跑 git status，日志里会形成一轮一组三连。
     // 统一走 refresh，让一次状态快照产出 header 和 Git pane 需要的基础数据。
     const refreshPromise = gitService.refresh({
-      workspacePath,
+      workspacePath: repositoryPath,
       includeIdentity: includeExtendedData,
       includeBranchComparison: includeExtendedData,
     });
@@ -512,7 +524,7 @@ export function useGitRepository(options: {
           error: message,
         });
         setRepositoryState((current) => ({
-          ...createInitialState(workspacePath, {
+          ...createInitialState(repositoryPath, {
             workspaceKey,
             loading: false,
             error: message,
@@ -528,6 +540,7 @@ export function useGitRepository(options: {
     gitService,
     includeExtendedData,
     refreshToken,
+    repositoryPath,
     workspaceIdentity,
     workspaceKey,
     workspacePath,
@@ -540,7 +553,7 @@ export function useGitRepository(options: {
     const currentRepositoryState =
       repositoryState.workspaceKey === workspaceKey
         ? repositoryState
-        : createInitialState(workspacePath, { workspaceKey });
+        : createInitialState(repositoryPath, { workspaceKey });
     const datasets = {
       ...currentRepositoryState.datasets,
     };

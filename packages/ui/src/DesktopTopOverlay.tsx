@@ -1,17 +1,10 @@
 import { SidebarTooltipProvider } from "@/ControlHintTooltip.js";
 import type { IPlatformService, UpdateStatePayload } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  MessageCirclePlus,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { MessageCirclePlus, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { UpdateStatusButton } from "@/UpdateStatusButton.js";
 import { DesktopTopOverlayActionButton } from "@/DesktopTopOverlayActionButton.js";
-import { ZCodeStartupLogoBadge } from "@/root/RootStartupLoading.js";
 import {
   createWindowsCaptionControlsStyle,
   WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
@@ -30,20 +23,11 @@ interface DesktopTopOverlayProps {
   updateState: UpdateStatePayload | null;
   toggleSidebarShortcutLabel: string;
   newTaskShortcutLabel: string;
-  goBackShortcutLabel: string;
-  goForwardShortcutLabel: string;
-  canTaskNavBack: boolean;
-  canTaskNavForward: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
   showNewTaskButton?: boolean;
   appLogoUrl: string;
   platform: IPlatformService;
   onToggleSidebar: () => void;
   onCreateTask: () => void;
-  onGoBack: () => void;
-  onGoForward: () => void;
-  hideTaskNavigationButtons?: boolean;
   newTaskDisabledReason?: string;
 }
 
@@ -60,20 +44,11 @@ export function DesktopTopOverlay({
   updateState,
   toggleSidebarShortcutLabel,
   newTaskShortcutLabel,
-  goBackShortcutLabel,
-  goForwardShortcutLabel,
-  canTaskNavBack,
-  canTaskNavForward,
-  canGoBack: _canGoBack,
-  canGoForward: _canGoForward,
   showNewTaskButton,
   appLogoUrl: _appLogoUrl,
   platform,
   onToggleSidebar,
   onCreateTask,
-  onGoBack,
-  onGoForward,
-  hideTaskNavigationButtons = false,
   newTaskDisabledReason,
 }: DesktopTopOverlayProps) {
   const { intl } = useZCodeIntl();
@@ -84,8 +59,6 @@ export function DesktopTopOverlay({
     id: "workspaceSidebar.toggleSidebar",
   });
   const newTaskTitle = intl.formatMessage({ id: "sidebar.newTask" });
-  const taskBackTitle = intl.formatMessage({ id: "taskNav.back" });
-  const taskForwardTitle = intl.formatMessage({ id: "taskNav.forward" });
   const isNewTaskButtonVisible = showNewTaskButton ?? !isSidebarVisible;
   const macTopOverlayPaddingStyle =
     isMacDesktop && !isMacFullscreen && Number.isFinite(macWindowControlsLeftPaddingPx)
@@ -135,23 +108,17 @@ export function DesktopTopOverlay({
               "pointer-events-auto flex items-center gap-1 shrink-0 [app-region:no-drag]",
             )}
           >
+            {/* 白标：左上角不再放应用图标，侧栏切换直接以面板图标常驻。 */}
             {usesCustomCaptionArea && (
               <DesktopTopOverlayActionButton
                 title={toggleSidebarTitle}
                 shortcut={toggleSidebarShortcutLabel}
                 ariaLabel={toggleSidebarTitle}
                 testId="desktop-top-logo-sidebar-toggle"
-                buttonClassName="group relative overflow-hidden rounded-lg"
+                buttonClassName="rounded-lg"
                 onClick={onToggleSidebar}
               >
-                <span
-                  aria-hidden="true"
-                  data-desktop-logo-visual
-                  className="flex size-5 items-center justify-center transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
-                >
-                  <ZCodeStartupLogoBadge size="titlebar" animated={false} />
-                </span>
-                <SidebarToggleIcon className="absolute inset-0 m-auto size-4 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100" />
+                <SidebarToggleIcon className="size-4" />
               </DesktopTopOverlayActionButton>
             )}
 
@@ -164,31 +131,6 @@ export function DesktopTopOverlay({
               >
                 <SidebarToggleIcon className="size-4" />
               </DesktopTopOverlayActionButton>
-            )}
-
-            {/* 远程控制移动端左上角空间有限，任务前进/后退在这里会与主操作拥挤重叠。*/}
-            {hideTaskNavigationButtons ? null : (
-              <>
-                <DesktopTopOverlayActionButton
-                  title={taskBackTitle}
-                  shortcut={goBackShortcutLabel}
-                  ariaLabel={taskBackTitle}
-                  testId="desktop-top-nav-back"
-                  disabled={!canTaskNavBack}
-                  onClick={onGoBack}
-                >
-                  <ArrowLeftIcon className="size-4" />
-                </DesktopTopOverlayActionButton>
-                <DesktopTopOverlayActionButton
-                  title={taskForwardTitle}
-                  shortcut={goForwardShortcutLabel}
-                  ariaLabel={taskForwardTitle}
-                  disabled={!canTaskNavForward}
-                  onClick={onGoForward}
-                >
-                  <ArrowRightIcon className="size-4" />
-                </DesktopTopOverlayActionButton>
-              </>
             )}
 
             <div

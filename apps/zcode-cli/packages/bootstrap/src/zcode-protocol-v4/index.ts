@@ -1,4 +1,4 @@
-// ZCode Protocol v4 —— CLI 权威投影（M2）。
+// VCode Protocol v4 —— CLI 权威投影（M2）。
 // schema/纯函数在 @zcode/shared/zcode-protocol-v4；本目录是事件日志 → 投影的 reducer 宿主。
 export { ProductProjection } from "./product-projection.js";
 export type { SessionConfigSeed } from "./product-projection.js";

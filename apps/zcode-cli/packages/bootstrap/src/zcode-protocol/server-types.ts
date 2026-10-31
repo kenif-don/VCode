@@ -174,7 +174,7 @@ export interface ZCodeProtocolAgentServerContext {
 
 /** server → client 请求失败的协议错误码；server.ts 抛出，适配层按码翻译，不在业务逻辑中散落字面量。 */
 export const PROTOCOL_CLIENT_REQUEST_ERROR_CODES = {
-  /** 没有 ZCode Protocol client 挂载，无法投递请求。 */
+  /** 没有 VCode Protocol client 挂载，无法投递请求。 */
   noClientAttached: -32020,
   /** 请求在收到应答前被取消。 */
   cancelled: -32021,
@@ -333,7 +333,7 @@ export function requireSession(
   if (!record) {
     // 诊断：readSession 只读取活跃 runtime；记录缺失时要区分“冷会话尚未恢复”和“ID 已失效”，
     // 不能只留下相同的错误文本，否则无法判断 UI 是读早了还是 task index 带来了脏引用。
-    context.logger?.warn("ZCode Protocol session runtime missing", {
+    context.logger?.warn("VCode Protocol session runtime missing", {
       activeSessionCount: context.sessions.size,
       event: "zcode_protocol.session.require_missing",
       hasSessionStore: Boolean(context.deps.sessionStore),
@@ -348,6 +348,57 @@ export function requireSession(
     );
   }
   return record;
+}
+
+/**
+ * mcp/ui* 面板调用的会话解析（HBA fr19）：项目级面板（surface）跟随项目而非创建会话，
+ * 锚点会话被归档或删除后调用仍需送达。锚定会话缺失时回退到同一 CLI 内任一存活会话
+ * 记录——插件 server 声明 isolation=workspace（fr11），连接池工作区级共享，任一存活
+ * 记录的 app 都能到达同一 server。归属校验仍按请求自带的 sessionId/scopeId 在
+ * mcpUiInstances 内完成，不因回退而放松；会话隔离（isolation=session）的 server 在
+ * 锚点会话消失后本来就应失效，回退记录查不到其连接时照常拒绝。
+ * 全部会话都不存在时仍失败（面板在完全无会话的工作区退化为不可用）。
+ */
+export function requireSessionForMcpUi(
+  context: ZCodeProtocolAgentServerContext,
+  sessionId: string,
+  options: { deliveryKind?: ZCodeDeliveryKind; operation?: string } = {},
+): ZCodeProtocolSessionRecord {
+  const record = context.sessions.get(sessionId);
+  if (record) return record;
+  // Map 迭代序 = 插入序，取最近创建的存活记录作代理。
+  let fallback: ZCodeProtocolSessionRecord | undefined;
+  let fallbackSessionId = "";
+  for (const [id, candidate] of context.sessions) {
+    fallback = candidate;
+    fallbackSessionId = id;
+  }
+  if (fallback) {
+    context.logger?.warn("VCode Protocol mcp-ui session anchor missing, using live record", {
+      activeSessionCount: context.sessions.size,
+      event: "zcode_protocol.session.mcp_ui_fallback",
+      fallbackSessionId,
+      module: "bootstrap.zcode_protocol",
+      operation: options.operation ?? "unknown",
+      sessionId,
+    });
+    return fallback;
+  }
+  return requireSession(context, sessionId, options);
+}
+
+/** record 是否仍是当前有效实例：直连记录按同一性判断；回退代理记录只要仍在活跃表即有效。 */
+export function isSessionRecordLive(
+  context: ZCodeProtocolAgentServerContext,
+  sessionId: string,
+  record: ZCodeProtocolSessionRecord,
+): boolean {
+  const current = context.sessions.get(sessionId);
+  if (current !== undefined) return current === record;
+  for (const candidate of context.sessions.values()) {
+    if (candidate === record) return true;
+  }
+  return false;
 }
 
 export function createProtocolLogger(deps: ZCodeProtocolAgentDependencies): Logger | undefined {

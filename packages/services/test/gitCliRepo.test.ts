@@ -183,7 +183,7 @@ describe("gitCliRepo", () => {
     ]);
 
     expect(status.summary.repoRoot).toBe("/repo");
-    expect(identity.userName).toBe("ZCode Tester");
+    expect(identity.userName).toBe("VCode Tester");
     expect(
       run.mock.calls.filter(
         ([options]) =>

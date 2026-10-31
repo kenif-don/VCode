@@ -32,6 +32,7 @@ import {
   replaceDirectoryAtomically,
 } from "../src/plugins/atomic-directory.js";
 import { createArchiveFetchError } from "../src/plugins/source-errors.js";
+import { resolvePluginMcpServers } from "../src/plugins/mcp.js";
 import {
   buildGitHubArchiveUrl,
   parsePublicGitHubRepositoryUrl,
@@ -383,7 +384,7 @@ describe("NodePluginAdapter", () => {
     }
   });
 
-  it("injects explicit ZCode proxy env into marketplace Git commands", () => {
+  it("injects explicit VCode proxy env into marketplace Git commands", () => {
     const env = buildMarketplaceGitEnv({
       [ZCODE_AGENT_CA_CERT_ENV_KEY]: "/tmp/root-ca.pem",
       [ZCODE_HTTP_PROXY_ENV_KEY]: "127.0.0.1:7890",
@@ -660,7 +661,7 @@ describe("NodePluginAdapter", () => {
 
       const known = ensureDefaultPluginMarketplaces(storageRoot);
 
-      // 默认市场现在有两个：claude-plugins-official（已有记录不被覆盖）+ 唯一 ZCode
+      // 默认市场现在有两个：claude-plugins-official（已有记录不被覆盖）+ 唯一 VCode
       // 官方市场 zcode-plugins-official（缺失时补种）。
       expect(known).toHaveLength(2);
       const claude = known.find((record) => record.id === "claude-plugins-official");
@@ -985,6 +986,47 @@ describe("NodePluginAdapter", () => {
     } finally {
       await rm(dir, { force: true, recursive: true });
     }
+  });
+
+  it("passes plugin manifest isolation/protocolVersion through to runtime MCP config", () => {
+    // fr11-02: isolation 是连接池语义开关(workspace=跨会话共享+不随空闲回收,fr11-01)。
+    // 此前 resolveMcpServerConfig 重建配置时把它丢弃,插件声明的 workspace 全部退化为
+    // session 级,面板/会话关闭即回收 server 进程,hba-run 这类插件丢运行状态。
+    const loaded = {
+      id: "hba-run@dev-market",
+      manifest: { name: "hba-run" },
+      manifestPath: "C:/plugins/hba-run/.zcode-plugin/plugin.json",
+      marketplace: "dev-market",
+      rootPath: "C:/plugins/hba-run",
+      source: { type: "directory", path: "C:/plugins/hba-run" },
+    } as unknown as Parameters<typeof resolvePluginMcpServers>[0]["loaded"];
+    const servers = resolvePluginMcpServers({
+      dataPath: "C:/data",
+      definitions: {
+        run: {
+          type: "stdio",
+          command: "node",
+          args: ["server.mjs"],
+          isolation: "workspace",
+          protocolVersion: "2026-07-28",
+        },
+        bogus: { type: "stdio", command: "node", isolation: "not-a-mode" },
+        sessionish: { type: "stdio", command: "node", isolation: "session" },
+      },
+      diagnostics: [],
+      env: {},
+      loaded,
+      options: {},
+      workingDirectory: "C:/workspace",
+    });
+    expect(servers["plugin:hba-run:run"]).toMatchObject({
+      isolation: "workspace",
+      protocolVersion: "2026-07-28",
+      type: "stdio",
+    });
+    expect(servers["plugin:hba-run:sessionish"].isolation).toBe("session");
+    // 非法枚举值不透传(回落默认 session 语义)
+    expect(servers["plugin:hba-run:bogus"].isolation).toBeUndefined();
   });
 
   it("still projects authoritative skill component names for a DISABLED plugin", async () => {
@@ -1385,7 +1427,7 @@ describe("NodePluginAdapter", () => {
         "git",
         [
           "-c",
-          "user.name=ZCode Test",
+          "user.name=VCode Test",
           "-c",
           "user.email=zcode-test@example.com",
           "commit",
@@ -1409,7 +1451,7 @@ describe("NodePluginAdapter", () => {
         "git",
         [
           "-c",
-          "user.name=ZCode Test",
+          "user.name=VCode Test",
           "-c",
           "user.email=zcode-test@example.com",
           "commit",
@@ -1434,7 +1476,7 @@ describe("NodePluginAdapter", () => {
         "git",
         [
           "-c",
-          "user.name=ZCode Test",
+          "user.name=VCode Test",
           "-c",
           "user.email=zcode-test@example.com",
           "commit",
@@ -1528,7 +1570,7 @@ describe("NodePluginAdapter", () => {
         "git",
         [
           "-c",
-          "user.name=ZCode Test",
+          "user.name=VCode Test",
           "-c",
           "user.email=zcode-test@example.com",
           "commit",
@@ -3937,7 +3979,7 @@ describe("NodePluginAdapter", () => {
     }
   });
 
-  it("prefers Claude manifest over Codex manifest when no ZCode manifest exists", async () => {
+  it("prefers Claude manifest over Codex manifest when no VCode manifest exists", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-codex-plugin-"));
     const pluginRoot = join(dir, "multi-manifest");
 
@@ -4040,7 +4082,7 @@ describe("NodePluginAdapter", () => {
   });
 
   // Bugfix 回归（差一层目录）：Claude 插件规范里 manifest skills 数组项指向「技能目录本身」
-  // （项内直接是 SKILL.md），此前 ZCode 把每项当作技能根去项下找子目录，扫描恒为空。
+  // （项内直接是 SKILL.md），此前 VCode 把每项当作技能根去项下找子目录，扫描恒为空。
   it("discovers skills for plugin manifest skills array entries pointing at skill directories", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-plugin-array-skills-"));
     const pluginRoot = join(dir, "mattpocock");

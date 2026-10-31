@@ -114,7 +114,7 @@ export function collectTopLevelBindingNames(ast: ESTree.Program): string[] {
  * 把 cell 里的动态 `import(...)` 改写为注入的 `importModule(...)`。
  *
  * Node 的 vm.Script 只有配置 vm module loader 才能直接执行 import expression，而 desktop/SEA
- * Agent 不能稳定携带 `--experimental-vm-modules`。旧合同因此要求模型写 ZCode 私有
+ * Agent 不能稳定携带 `--experimental-vm-modules`。旧合同因此要求模型写 VCode 私有
  * `importModule(...)`，与 skill 里通用的标准 `await import(...)` 写法不一致。AST 定位只替换真正的
  * ImportExpression，字符串、注释和 `import.meta` 均不受影响。
  */

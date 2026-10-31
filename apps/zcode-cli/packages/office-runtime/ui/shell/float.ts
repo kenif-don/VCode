@@ -6,7 +6,7 @@ const EDGE = 8;
 export interface FloatOptions {
   /** Preferred side of the anchor; flips when there is no room. */
   side: "top" | "bottom";
-  /** Gap between anchor and element (ZCode's popover uses 8). */
+  /** Gap between anchor and element (VCode's popover uses 8). */
   offset?: number;
   /** With no anchor box, sit at the top centre of the frame instead of hiding. */
   dock?: boolean;
@@ -14,7 +14,7 @@ export interface FloatOptions {
 
 /**
  * Keep an absolutely positioned element next to an anchor inside `frame` while the document
- * scrolls, like ZCode's Radix popovers (collision padding 8, hidden when the anchor leaves view).
+ * scrolls, like VCode's Radix popovers (collision padding 8, hidden when the anchor leaves view).
  * Positions are written straight to the element every frame, so scrolling never re-renders React.
  * The element gets `data-side` ("top" | "bottom" | "none") and `--tip` for its arrow.
  */

@@ -2,7 +2,8 @@ import { SidebarNativeTooltip, ControlHintTooltip } from "@/ControlHintTooltip.j
 /* eslint-disable max-lines -- 文件树行集中维护拖拽、打开方式、Git 状态与上下文菜单交互。 */
 import type { EditorInfo, OpenInEditorRemoteTarget } from "@zcode/shared";
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
-import { AlertCircle, ChevronRight, LoaderCircle } from "lucide-react";
+import { useRef } from "react";
+import { AlertCircle, ChevronRight, LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import { TID_WORKSPACE_FILE_TREE_ROW, testId } from "@zcode/shared/test-ids";
 import { cn } from "@/components/lib/utils.js";
 import {
@@ -72,6 +73,8 @@ export function WorkspaceFileTreeRowView({
   onToggleDirectory,
   onOpenPreview,
   onOpenBrowserUrl,
+  onRename,
+  onDelete,
   onKeyDown,
 }: {
   layout?: "absolute" | "static";
@@ -92,9 +95,13 @@ export function WorkspaceFileTreeRowView({
   onToggleDirectory: (row: WorkspaceFileTreeRow) => void;
   onOpenPreview: (row: WorkspaceFileTreeRow) => void;
   onOpenBrowserUrl?: (url: string) => void;
+  onRename?: (row: WorkspaceFileTreeRow) => void;
+  onDelete?: (row: WorkspaceFileTreeRow) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
 }) {
   const platform = usePlatform();
+  // 悬浮按钮位于可拖拽行内部：按钮按下期间抑制行拖拽，避免点按钮抖动触发拖拽手势。
+  const suppressRowDragRef = useRef(false);
   const { isDragging, setIsDragging } = useWorkspaceFileTreeRowDragState();
   const fileActions = useFileContextActions({
     canOpenLocalFileManager,
@@ -237,7 +244,7 @@ export function WorkspaceFileTreeRowView({
           onKeyDown(event, row);
         }}
         onDragStart={(event) => {
-          if (isDeletedFile) {
+          if (isDeletedFile || suppressRowDragRef.current) {
             event.preventDefault();
             return;
           }
@@ -254,6 +261,7 @@ export function WorkspaceFileTreeRowView({
           dispatchWorkspaceFileDragState(true);
         }}
         onDragEnd={() => {
+          suppressRowDragRef.current = false;
           setIsDragging(false);
           dispatchWorkspaceFileDragState(false);
         }}
@@ -328,6 +336,50 @@ export function WorkspaceFileTreeRowView({
         ) : row.error ? (
           <AlertCircle className="ml-2 size-3 shrink-0 text-warning" />
         ) : null}
+        {/* 行内悬浮操作：默认透明占位不改变行宽，hover/键盘聚焦时浮现；
+            浮现时覆盖右侧 Git 徽标（与 VS Code 文件树一致），删除仅对真实存在的条目开放。 */}
+        {!isDeletedFile && (onRename || onDelete) ? (
+          <span
+            className="pointer-events-none absolute inset-y-0 right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/file-tree-row:pointer-events-auto group-hover/file-tree-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+            onMouseDown={() => {
+              suppressRowDragRef.current = true;
+            }}
+            onMouseUp={() => {
+              suppressRowDragRef.current = false;
+            }}
+          >
+            {onRename ? (
+              <button
+                type="button"
+                className="flex size-5 items-center justify-center rounded-md text-foreground-subtlest hover:bg-surface-hover hover:text-foreground"
+                aria-label={contextMenuLabels.rename}
+                title={contextMenuLabels.rename}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onRename(row);
+                }}
+              >
+                <Pencil className="size-3" />
+              </button>
+            ) : null}
+            {onDelete ? (
+              <button
+                type="button"
+                className="flex size-5 items-center justify-center rounded-md text-foreground-subtlest hover:bg-destructive hover:text-destructive-foreground"
+                aria-label={contextMenuLabels.delete}
+                title={contextMenuLabels.delete}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDelete(row);
+                }}
+              >
+                <Trash2 className="size-3" />
+              </button>
+            ) : null}
+          </span>
+        ) : null}
       </div>
     </SidebarNativeTooltip>
   );
@@ -389,6 +441,21 @@ export function WorkspaceFileTreeRowView({
           <ContextMenuItem onSelect={() => void handleCopyRelativePath()}>
             {contextMenuLabels.copyRelativePath}
           </ContextMenuItem>
+          <ContextMenuSeparator />
+          {onRename ? (
+            <ContextMenuItem disabled={isDeletedFile} onSelect={() => onRename(row)}>
+              {contextMenuLabels.rename}
+            </ContextMenuItem>
+          ) : null}
+          {onDelete ? (
+            <ContextMenuItem
+              variant="destructive"
+              disabled={isDeletedFile}
+              onSelect={() => onDelete(row)}
+            >
+              {contextMenuLabels.delete}
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={() => dispatchWorkspaceFileAddToChat(workspaceFilePayload)}>
             {contextMenuLabels.addToChat}

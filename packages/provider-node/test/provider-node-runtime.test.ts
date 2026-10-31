@@ -237,7 +237,7 @@ describe("@zcode/provider-node", () => {
     ]);
   });
 
-  it("只在 ZCode Built-in 与 Personal 路径同时存在时启用进程 Registry", () => {
+  it("只在 VCode Built-in 与 Personal 路径同时存在时启用进程 Registry", () => {
     expect(resolveNodeProviderRuntimePaths({})).toBeNull();
     expect(() =>
       resolveNodeProviderRuntimePaths({
@@ -264,7 +264,7 @@ describe("@zcode/provider-node", () => {
     });
   });
 
-  it("ZCode Built-in Source 每次读取当前版本化文件，revision 随内容改变", async () => {
+  it("VCode Built-in Source 每次读取当前版本化文件，revision 随内容改变", async () => {
     const root = await temporaryDirectory();
     const filePath = join(root, "zcodeBuiltin.json");
     await writeZCodeBuiltin(filePath, "model-a");
@@ -283,7 +283,7 @@ describe("@zcode/provider-node", () => {
     source.dispose();
   });
 
-  it("ZCode Built-in Source 只为新的 content revision 发布一次变化", async () => {
+  it("VCode Built-in Source 只为新的 content revision 发布一次变化", async () => {
     const root = await temporaryDirectory();
     const filePath = join(root, "zcodeBuiltin.json");
     await writeZCodeBuiltin(filePath, "model-a");

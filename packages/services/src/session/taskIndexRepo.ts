@@ -34,7 +34,7 @@ function appendZCodeAgentIndexedProviderFilter(
   args: Array<string | number>,
   provider: ZCodeProvider,
 ): void {
-  // Bugfix: ZCode Agent 列表入口只展示当前 glm runtime 产生的 task。
+  // Bugfix: VCode Agent 列表入口只展示当前 glm runtime 产生的 task。
   // 旧 Claude Code 导入也不再例外，否则非 glm 历史数据仍会混入项目树与任务区。
   where.push("provider = ?");
   args.push(provider);
@@ -401,7 +401,7 @@ export class TaskIndexRepo {
     });
     this.migrationBackupSkipped = taskMigration.backupSkipped || migration.backupSkipped;
     this.backfillOffPeakTaskMarkers();
-    // Bugfix: z-code-2 早期列表 task_id 是 wrapper id，真实 ZCode session id 在旧列
+    // Bugfix: z-code-2 早期列表 task_id 是 wrapper id，真实 VCode session id 在旧列
     // acp_session_id。直接运行时映射会让 read/send/subscribe 到处变成双 ID 兜底；
     // 初始化时把索引行迁到真实 session id，后续统一走新协议正常路径。
     this.migrateLegacyAcpTaskIds();
@@ -578,7 +578,7 @@ export class TaskIndexRepo {
       }
       db.exec("COMMIT");
       if (migrated > 0) {
-        logger.info(undefined, `已迁移 legacy ACP task_id 到 ZCode session id 数量=${migrated}`);
+        logger.info(undefined, `已迁移 legacy ACP task_id 到 VCode session id 数量=${migrated}`);
       }
     } catch (error) {
       db.exec("ROLLBACK");
@@ -1236,7 +1236,7 @@ export class TaskIndexRepo {
         WHERE (@workspace_key IS NULL OR workspace_key = @workspace_key)
           AND cli_created_at IS NOT NULL
           AND (@include_deleted = 1 OR (deleted = 0 AND coalesce(cli_deleted,0) = 0))
-          -- Bugfix: ZCode Agent 列表只接受当前 glm provider；Claude Code 导入也属于非 glm 历史数据。
+          -- Bugfix: VCode Agent 列表只接受当前 glm provider；Claude Code 导入也属于非 glm 历史数据。
           AND (@provider IS NULL OR provider = @provider)
           AND (@pinned IS NULL OR pinned = @pinned)
           AND (@archived IS NULL OR archived = @archived)

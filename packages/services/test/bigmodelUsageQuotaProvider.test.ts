@@ -198,7 +198,7 @@ describe("BigModelUsageQuotaProvider", () => {
             plans: [
               {
                 plan_id: "zcode-v3-start-plan",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 status: "active",
                 starts_at: 1_780_291_200,
                 ends_at: 1_781_500_800,
@@ -259,7 +259,7 @@ describe("BigModelUsageQuotaProvider", () => {
     });
     expect(snapshot.subscription?.details[0]).toMatchObject({
       productId: "zcode-v3-start-plan",
-      productName: "ZCode V3 Start Plan",
+      productName: "VCode V3 Start Plan",
       billingCycle: "daily",
       // Start Plan 卡片不再展示套餐级续期时间；桶刷新时间由各 limit 的 nextResetTime 表达。
       renewTime: null,
@@ -390,7 +390,7 @@ describe("BigModelUsageQuotaProvider", () => {
             plans: [
               {
                 plan_id: "start-plan-welcome",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 status: "active",
                 ends_at: 1_781_500_800,
               },
@@ -534,7 +534,7 @@ describe("BigModelUsageQuotaProvider", () => {
             plans: [
               {
                 plan_id: "zcode-v3-start-plan",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 status: "active",
                 ends_at: 1_781_500_800,
               },
@@ -592,7 +592,7 @@ describe("BigModelUsageQuotaProvider", () => {
             plans: [
               {
                 plan_id: "zcode-v3-start-plan",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 status: "active",
               },
             ],
@@ -657,7 +657,7 @@ describe("BigModelUsageQuotaProvider", () => {
             plans: [
               {
                 plan_id: "zcode-v3-start-plan",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 status: "active",
                 starts_at: 1_787_900_000,
                 entitlements: [
@@ -765,7 +765,7 @@ describe("BigModelUsageQuotaProvider", () => {
             plans: [
               {
                 plan_id: "zcode-v3-start-plan",
-                name: "ZCode V3 Start Plan",
+                name: "VCode V3 Start Plan",
                 status: "active",
                 starts_at: 1_780_291_200,
                 ends_at: 1_781_500_800,

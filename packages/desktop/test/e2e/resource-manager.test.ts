@@ -41,7 +41,7 @@ describe("资源管理器", () => {
     await switchToElectronRendererTarget(isResourceManagerUrl);
     await waitForResourceManagerReady();
 
-    // 默认 CPU tab：三类分组固定存在（空组也要显示），CPU 指标卡带 ZCode / 整机两个读数。
+    // 默认 CPU tab：三类分组固定存在（空组也要显示），CPU 指标卡带 VCode / 整机两个读数。
     for (const category of ["base", "builtin-plugin", "community-plugin"]) {
       await expect($(`[data-testid="resource-manager-group-${category}"]`)).toBeDisplayed();
     }

@@ -412,7 +412,6 @@ function GitCommitDialog({
                 popoverSide="bottom"
                 popoverClassName="w-80"
                 branchListClassName="max-h-56"
-                showFooterActions={false}
               />
               <div className="flex shrink-0 items-center gap-1.5 font-mono text-ui-base">
                 <span className="text-diff-added">+{numberFormatter.format(displayAdded)}</span>

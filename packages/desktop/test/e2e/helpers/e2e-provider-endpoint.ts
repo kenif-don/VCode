@@ -15,7 +15,7 @@ export function getE2EProviderEndpointEnv(
   return {
     ZCODE_BASE_URL: PRODUCTION_E2E_PROVIDER_CONFIG_ORIGIN,
     ZCODE_ENDPOINT_ORIGIN: PRODUCTION_E2E_PROVIDER_CONFIG_ORIGIN,
-    // 账号校验独立于 ZCode 控制面。SSH 透传 ZCODE_ENV，但不透传 BigModel 地址覆盖；
+    // 账号校验独立于 VCode 控制面。SSH 透传 ZCODE_ENV，但不透传 BigModel 地址覆盖；
     // 仅覆盖本机地址会造成模型已可选、远端却向 bigmodel.cn 重试的半通状态。
     ZCODE_ENV: "production",
     BIGMODEL_API_BASE_URL: "https://bigmodel.cn",

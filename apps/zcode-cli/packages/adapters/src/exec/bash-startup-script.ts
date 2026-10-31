@@ -97,7 +97,7 @@ export function materializeBashInternalSourceScript(
     try {
       chmodSync(path, 0o600);
     } catch {
-      // Windows 可能不保留 POSIX mode bit；文件仍位于 ZCode 自有 storage 下。
+      // Windows 可能不保留 POSIX mode bit；文件仍位于 VCode 自有 storage 下。
     }
   }
 

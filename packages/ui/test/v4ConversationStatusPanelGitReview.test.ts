@@ -17,6 +17,10 @@ vi.mock("@/GitBranchSwitcher.js", () => ({
   GitBranchSwitcher: () => createElement("div", { "data-testid": "mock-git-branch-switcher" }),
 }));
 
+vi.mock("@/git-graph/GitGraphDialog.js", () => ({
+  GitGraphDialog: () => null,
+}));
+
 vi.mock("@/components/ui/dropdown-menu.js", () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => createElement("div", null, children),
   DropdownMenuContent: ({ children }: { children: ReactNode }) =>
@@ -82,11 +86,11 @@ describe("ConversationStatusPanel Git review entry", () => {
       }),
     );
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: /chat\.statusPanel\.changes/u,
-      }),
-    );
+    // 快捷簇与展开面板各有一个「更改」入口，行为一致，点击其一即可。
+    const [changesButton] = screen.getAllByRole("button", {
+      name: /chat\.statusPanel\.changes/u,
+    });
+    fireEvent.click(changesButton!);
 
     expect(onOpenGitReview).toHaveBeenCalledOnce();
     expect(onOpenGitReview).toHaveBeenCalledWith("staged");

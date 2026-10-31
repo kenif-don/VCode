@@ -93,5 +93,6 @@ it("does not close a replacement draft when an earlier entry registration finish
   render(createElement(ProjectEditor, props));
   await act(async () => registration.resolve());
   expect(onClose).not.toHaveBeenCalled();
-  expect(screen.getByTestId("virtual-project-name")).toBeTruthy();
+  // 创建态无名字输入（服务按目录自动命名）；用保存按钮探针确认替换草稿的表单仍开着。
+  expect(screen.getByTestId("virtual-project-save")).toBeTruthy();
 });

@@ -48,6 +48,10 @@ vi.mock("@/GitBranchSwitcher.js", () => ({
   },
 }));
 
+vi.mock("@/git-graph/GitGraphDialog.js", () => ({
+  GitGraphDialog: () => null,
+}));
+
 vi.mock("@/components/ui/dropdown-menu.js", () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) =>
     createElement("div", { "data-testid": "mock-dropdown" }, children),
@@ -573,7 +577,6 @@ describe("ConversationStatusPanel", () => {
     expect(html).toContain("chat.statusPanel.changes");
     expect(html).toContain("+12");
     expect(html).toContain("-3");
-    expect(html).not.toContain("mock-git-action-menu");
   });
 
   it("keeps goal and running background authority on the mini shell", async () => {

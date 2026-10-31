@@ -264,7 +264,7 @@ describe("MCP Settings Shared", () => {
             url: "https://mcp.notion.com/mcp",
             oauth: {
               type: "authorization_code",
-              clientName: "ZCode Notion MCP",
+              clientName: "VCode Notion MCP",
             },
           },
         }),
@@ -286,7 +286,7 @@ describe("MCP Settings Shared", () => {
       expect(formToConfig(form)).toMatchObject({
         oauth: {
           type: "authorization_code",
-          clientName: "ZCode Notion MCP",
+          clientName: "VCode Notion MCP",
         },
       });
     });

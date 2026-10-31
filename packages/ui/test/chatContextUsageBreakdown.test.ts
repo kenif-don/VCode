@@ -1368,7 +1368,7 @@ describe("Start Plan context balance panel", () => {
               details: [
                 {
                   productId: "zcode-v3-start-plan",
-                  productName: "ZCode Start Plan",
+                  productName: "VCode Start Plan",
                   purchaseTime: null,
                   beginTime: null,
                   renewTime: new Date(2026, 5, 13, 10, 0).toISOString(),
@@ -1443,7 +1443,7 @@ describe("Start Plan context balance panel", () => {
                 details: [
                   {
                     productId: "zcode-v3-start-plan",
-                    productName: "ZCode Start Plan",
+                    productName: "VCode Start Plan",
                     purchaseTime: null,
                     beginTime: null,
                     renewTime: null,

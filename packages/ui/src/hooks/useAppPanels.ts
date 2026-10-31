@@ -86,6 +86,8 @@ import {
 import { openPluginUiSidePane } from "@/plugin-ui/index.js";
 import type { OpenPluginUiSideTabRequest } from "@/plugin-ui/contract.js";
 import { logger } from "@/logger.js";
+import { toast } from "@/components/ui/toast.js";
+import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { getPathLeaf, joinFilePath, toFileUrl } from "@/lib/path.js";
 import { shouldOpenWorkflowArtifactInBrowser } from "@/lib/workflowArtifactOpen.js";
 import { useWhiteboardStore } from "@/store/whiteboardStore.js";
@@ -186,6 +188,7 @@ export function useAppPanels(options: {
   const supportsEmbeddedBrowser = explicitSupportsEmbeddedBrowser ?? Boolean(isDesktop);
   const activeWorkspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
   const { zcodeAgentService, zcodeSessionService } = useServices();
+  const { intl } = useZCodeIntl();
   const isOfficeMode = useIsOfficeMode();
   const sidePaneMemoryKey = useMemo(
     () =>
@@ -1068,21 +1071,64 @@ export function useAppPanels(options: {
     [commitOpenedSidePaneState, revealSidePaneForCurrentOwner],
   );
 
+  // HBA fr12：草稿（新会话未发首条消息）点开应用插件面板时没有可绑定会话，按需补建一个
+  // deferred 托管会话（不进任务索引/侧栏，随 runtime 生命周期消亡），同一工作区复用同一个。
+  // 会话只作面板宿主绑定（资源读取/工具调用/投影），面板 tab 仍是项目级（fr8）。
+  const pluginUiHostSessionsRef = useRef(new Map<string, string>());
+  const resolvePluginUiHostSession = useCallback(async (): Promise<string | null> => {
+    const workspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
+    const existing = pluginUiHostSessionsRef.current.get(workspaceKey);
+    if (existing) return existing;
+    try {
+      const snapshot = await zcodeSessionService.createSession({
+        workspacePath: workspaceAbsPath,
+        ...(workspaceIdentity?.trim() ? { workspaceIdentity } : {}),
+        ...(workspaceRemoteSessionId ? { remoteSessionId: workspaceRemoteSessionId } : {}),
+        persistence: "deferred",
+      });
+      pluginUiHostSessionsRef.current.set(workspaceKey, snapshot.session.sessionId);
+      logger.info("[App] 已补建插件面板托管会话", {
+        sessionId: snapshot.session.sessionId,
+        workspaceKey,
+      });
+      return snapshot.session.sessionId;
+    } catch (error) {
+      logger.warn("[App] 补建插件面板托管会话失败", error);
+      return null;
+    }
+  }, [workspaceAbsPath, workspaceIdentity, workspaceRemoteSessionId, zcodeSessionService]);
+
   const handleOpenPluginUi = useCallback(
     (request: OpenPluginUiSideTabRequest) => {
       const workspaceKey = request.workspaceIdentity?.trim() || request.workspacePath;
-      revealSidePaneForCurrentOwner();
-      commitOpenedSidePaneState((current) =>
-        openPluginUiSidePane(current, { ...request, workspaceKey }),
-      );
-      logger.debug("[App] 打开插件 UI 右侧 tab", {
-        parentSessionId: request.parentSessionId,
-        toolCallId: request.toolCallId,
-        pluginId: request.pluginId,
-        workspaceKey,
+      const open = (parentSessionId: string) => {
+        revealSidePaneForCurrentOwner();
+        commitOpenedSidePaneState((current) =>
+          openPluginUiSidePane(current, { ...request, parentSessionId, workspaceKey }),
+        );
+        logger.debug("[App] 打开插件 UI 右侧 tab", {
+          parentSessionId,
+          toolCallId: request.toolCallId,
+          pluginId: request.pluginId,
+          workspaceKey,
+        });
+      };
+      if (request.parentSessionId) {
+        open(request.parentSessionId);
+        return;
+      }
+      // 草稿态：先补建托管会话再开 tab；失败走既有「需要会话」提示，不落半开 tab。
+      void resolvePluginUiHostSession().then((hostSessionId) => {
+        if (hostSessionId) {
+          open(hostSessionId);
+          return;
+        }
+        toast(intl.formatMessage({ id: "settings.plugins.store.ui.needsSession" }), {
+          variant: "warning",
+        });
       });
     },
-    [commitOpenedSidePaneState, revealSidePaneForCurrentOwner],
+    [commitOpenedSidePaneState, intl, resolvePluginUiHostSession, revealSidePaneForCurrentOwner],
   );
 
   const handleOpenWorkflowRun = useCallback(

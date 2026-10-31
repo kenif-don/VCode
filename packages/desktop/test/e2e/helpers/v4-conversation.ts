@@ -16,9 +16,6 @@ import {
   TID_CHAT_THOUGHT_LEVEL_SELECT_TRIGGER,
   TID_PROMPT_SUGGESTION_OPTION,
   TID_PROMPT_SUGGESTION_PANEL,
-  TID_LOGIN_API_KEY_CONTINUE_BUTTON,
-  TID_LOGIN_API_KEY_INPUT,
-  TID_LOGIN_USE_API_KEY_BUTTON,
   TID_TASK_ITEM,
   TID_TASK_NEW_BUTTON,
   TID_V4_AUTODRAIN_TOGGLE,
@@ -78,7 +75,6 @@ import { sel } from "./selectors.js";
 import { skipOccupationOnboardingIfPresent } from "./occupation-onboarding.js";
 import { startDraftFromProject, waitForProjectRow } from "#e2e/helpers/project-sidebar";
 
-export const LOGIN_API_KEY = "e2e-login-api-key";
 export const E2E_REPLY_TOKEN = "upstream-e2e-ok";
 
 interface PrepareV4ConversationE2EOptions {
@@ -156,19 +152,9 @@ export async function prepareV4ConversationE2E(options: PrepareV4ConversationE2E
 }
 
 async function ensureV4ShellReady() {
-  try {
-    // 新隔离 profile 的职业引导会遮住工作区，先复用真实 UI 跳过流程。
-    await skipOccupationOnboardingIfPresent();
-    await waitForProjectRow(DEFAULT_WORKSPACE, { timeout: 30000 });
-    return;
-  } catch (error) {
-    if (!(await hasApiKeyLoginButton())) {
-      throw error;
-    }
-    await loginWithApiKey();
-    await skipOccupationOnboardingIfPresent();
-    await waitForProjectRow(DEFAULT_WORKSPACE, { timeout: 30000 });
-  }
+  // VCode 无登录入口：不再回退 API Key 登录页，直接跳过引导并等待项目行。
+  await skipOccupationOnboardingIfPresent();
+  await waitForProjectRow(DEFAULT_WORKSPACE, { timeout: 30000 });
 }
 
 async function ensureV4PreparationDraft(options: PrepareV4ConversationE2EOptions) {
@@ -203,44 +189,6 @@ async function ensureV4PreparationDraft(options: PrepareV4ConversationE2EOptions
   } else {
     await startDraftFromProject(DEFAULT_WORKSPACE);
   }
-}
-
-async function hasApiKeyLoginButton() {
-  const exists = await browser
-    .execute(
-      (currentTestId) => Boolean(document.querySelector(`[data-testid="${currentTestId}"]`)),
-      TID_LOGIN_USE_API_KEY_BUTTON,
-    )
-    .catch(() => false);
-  return Boolean(exists);
-}
-
-export async function loginWithApiKey() {
-  await clickTestIdByDom(TID_LOGIN_USE_API_KEY_BUTTON, {
-    timeout: 30000,
-    timeoutMsg: "欢迎页没有出现 API Key 登录入口",
-  });
-  await setInputValueByTestIdDom(TID_LOGIN_API_KEY_INPUT, LOGIN_API_KEY, {
-    timeout: 15000,
-    timeoutMsg: "API Key 登录输入框没有出现",
-  });
-  await browser.waitUntil(
-    async () =>
-      browser.execute((continueButtonTestId) => {
-        const button = document.querySelector<HTMLElement>(
-          `[data-testid="${continueButtonTestId}"]`,
-        );
-        return button instanceof HTMLButtonElement && !button.disabled;
-      }, TID_LOGIN_API_KEY_CONTINUE_BUTTON),
-    {
-      timeout: 15000,
-      timeoutMsg: "API Key 登录继续按钮没有变为可用",
-    },
-  );
-  await clickTestIdByDom(TID_LOGIN_API_KEY_CONTINUE_BUTTON, {
-    timeout: 15000,
-    timeoutMsg: "API Key 登录继续按钮没有出现或不可点击",
-  });
 }
 
 /** 新建草稿：点侧栏新任务按钮，等 v4 pane 回到 draft 态。 */

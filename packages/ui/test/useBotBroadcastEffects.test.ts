@@ -27,7 +27,7 @@ describe("useBotBroadcastEffects", () => {
     ).toBe(true);
   });
 
-  it("keeps skipping active local bot stream to avoid duplicate normal ZCode Agent subscription writes", () => {
+  it("keeps skipping active local bot stream to avoid duplicate normal VCode Agent subscription writes", () => {
     expect(
       shouldMirrorBotTaskStreamToStore({
         activeTaskId: "task-1",

@@ -1,5 +1,5 @@
 /**
- * The few Lucide icons the panel uses (ZCode's icon set), as inline SVG so the bundle stays small.
+ * The few Lucide icons the panel uses (VCode's icon set), as inline SVG so the bundle stays small.
  * Path data from Lucide (https://lucide.dev), ISC License, Copyright (c) Lucide Contributors 2022,
  * portions Copyright (c) Cole Bemis 2013-2022 (Feather, MIT). See THIRD_PARTY_NOTICES.txt.
  */

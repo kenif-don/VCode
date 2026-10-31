@@ -6,7 +6,7 @@ import {
   ZCodeAgentMcpStatusModeUnsupportedError,
 } from "#src/zcode-agent/zcodeAgentErrors.js";
 
-describe("ZCode Agent RPC errors", () => {
+describe("VCode Agent RPC errors", () => {
   it("preserves the MCP status-only unsupported code across ChannelClient RPC", async () => {
     const [serverProtocol, clientProtocol] = createQueuePair();
     const server = new ChannelServer(serverProtocol, "test");

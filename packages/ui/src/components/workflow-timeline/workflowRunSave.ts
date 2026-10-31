@@ -1,5 +1,5 @@
 // 完成卡「保存 / 再次运行」的纯逻辑（docs/dynamic-workflow/transcript-and-notifications.md
-// 「Saving the run, and running it again」）：名字规则、落点预览、交给 ZCode 的那条消息。
+// 「Saving the run, and running it again」）：名字规则、落点预览、交给 VCode 的那条消息。
 //
 // 与组件分文件的理由同 globalWorkflowGroupHelpers：这些判定没有 React，也该能被单独测。
 import type { ZCodeSavedWorkflowScope } from "@zcode/shared";
@@ -58,7 +58,7 @@ function isZh(locale: string): boolean {
 }
 
 /**
- * 「让 ZCode 帮我提炼保存」发出去的那条用户消息（docs/dynamic-workflow/transcript-and-notifications.md
+ * 「让 VCode 帮我提炼保存」发出去的那条用户消息（docs/dynamic-workflow/transcript-and-notifications.md
  * 「The message the lead sends」）。与中枢的「提升为全局」同一条先例：GUI 写、自动发、用户不再确认。
  *
  * 三件事必须在消息里：**提炼**而不是照抄（否则这条路径与「直接保存」没有分别）、用户已经填好的

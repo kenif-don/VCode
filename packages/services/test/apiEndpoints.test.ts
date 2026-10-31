@@ -3,7 +3,7 @@ import { TEST_ZCODE_ENDPOINT_ORIGIN } from "@zcode/shared";
 import { ZCODE_CLIENT_SCENES_URL } from "../src/providers/api/apiEndpoints.js";
 import { createNodeApiClient } from "../src/providers/api/nodeApiClient.js";
 
-describe("ZCode API endpoints", () => {
+describe("VCode API endpoints", () => {
   it("通过统一 ApiClient 注册并请求 client scenes", async () => {
     const requests: Array<{ headers: Headers; method: string; url: string }> = [];
     const client = createNodeApiClient({
@@ -25,7 +25,7 @@ describe("ZCode API endpoints", () => {
       method: "GET",
       url: `${TEST_ZCODE_ENDPOINT_ORIGIN}/api/v1/client/scenes`,
     });
-    expect(requests[0]?.headers.get("X-ZCode-App-Version")).toBeTruthy();
+    expect(requests[0]?.headers.get("X-VCode-App-Version")).toBeTruthy();
     expect(requests[0]?.headers.get("X-Platform")).toBe(`${process.platform}-${process.arch}`);
     expect(requests[0]?.headers.get("x-request-id")).toBeTruthy();
   });

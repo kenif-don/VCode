@@ -33,7 +33,7 @@ describe("project MCP config", () => {
   it("does not trust a project override that copies the official CUA plugin identity", () => {
     const officialPluginConfig: McpServerConfig = {
       type: "stdio",
-      command: "/Applications/ZCode Computer Use.app/Contents/MacOS/server",
+      command: "/Applications/VCode Computer Use.app/Contents/MacOS/server",
       env: {
         [ZCODE_PLUGIN_ID_ENV_KEY]: ZCODE_CUA_OFFICIAL_PLUGIN_ID,
       },
@@ -67,7 +67,7 @@ describe("project MCP config", () => {
   it("trusts the unmodified in-memory official CUA plugin config", () => {
     const officialPluginConfig: McpServerConfig = {
       type: "stdio",
-      command: "/Applications/ZCode Computer Use.app/Contents/MacOS/server",
+      command: "/Applications/VCode Computer Use.app/Contents/MacOS/server",
       env: {
         [ZCODE_PLUGIN_ID_ENV_KEY]: ZCODE_CUA_OFFICIAL_PLUGIN_ID,
       },
@@ -187,7 +187,7 @@ describe("project MCP config", () => {
     const previousUnavailable = process.env[ZCODE_CUA_BROKER_UNAVAILABLE_ENV];
     resetCapturedZCodeCuaBrokerCredentialsForTest();
     try {
-      // 捕获可信凭据（模拟 CLI 入口 sanitize 从 ZCode 下发的 spawn env 捕获）。
+      // 捕获可信凭据（模拟 CLI 入口 sanitize 从 VCode 下发的 spawn env 捕获）。
       const spawnEnv: Record<string, string | undefined> = {
         [ZCODE_CUA_BROKER_SOCKET_ENV]: "/tmp/captured.sock",
         [LEGACY_BROKER_TOKEN_ENV]: "captured-token",

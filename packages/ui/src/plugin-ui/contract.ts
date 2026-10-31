@@ -47,7 +47,11 @@ export type PluginUiOpenTarget =
 export type OpenPluginUiSideTabRequest = PluginUiOpenTarget & {
   /** 手动新建的文档窗口身份；恢复标签页时保持不变。 */
   instanceId?: string;
-  parentSessionId: string;
+  /**
+   * 绑定会话 id；草稿态（新会话未发首条消息）为 null——宿主建 tab 前补建 deferred 托管会话
+   * （不进任务索引/侧栏，同工作区复用），tab 落地时必为具体会话 id（HBA fr12）。
+   */
+  parentSessionId: string | null;
   pluginId: string;
   resourceUri: string;
   title: string;
@@ -172,8 +176,14 @@ export function buildPluginUiSurfaceKey(
   scope: PluginUiScopeRef,
 ): string {
   // 修复：surfaceId 由插件自行命名，必须同时隔离工作区、会话和插件。
+  // HBA fr8/fr19：面板（surface）跟随项目、跨会话共用，key 的会话位用 `*`（与 tab id 同口径）——
+  // 锚点会话消亡换锚重绑时不换 key，widgetState / surfaceStateKey / 页面实例保持连续；
+  // 工具卡片（toolCall）仍按会话隔离。
   return JSON.stringify([
-    buildPluginUiSessionKey(target),
+    JSON.stringify([
+      target.workspaceIdentity?.trim() || target.workspacePath,
+      scope.kind === "surface" ? "*" : target.sessionId,
+    ]),
     target.pluginId,
     target.serverName ?? "",
     target.resourceUri ?? "",
@@ -184,11 +194,14 @@ export function buildPluginUiSurfaceKey(
 export function buildPluginUiSidePaneTabId(request: OpenPluginUiSideTabRequest): string {
   const scope = readPluginUiScopeRef(request);
   if (!scope) throw new Error("plugin-ui side tab needs toolCallId or surfaceId");
+  // 工具卡片归对话，id 必须嵌具体会话 id；草稿态（会话待宿主补建）只出现在面板（surface）打开。
+  if (scope.kind === "toolCall" && !request.parentSessionId)
+    throw new Error("plugin-ui tool card side tab needs parentSessionId");
   return [
     "plugin-ui",
     request.workspaceIdentity?.trim() || request.workspacePath,
     // 面板（surface）跟随项目：同工作区跨会话共用一个 tab；工具卡片仍归对话（HBA fr7）。
-    scope.kind === "surface" ? "*" : request.parentSessionId,
+    scope.kind === "surface" ? "*" : request.parentSessionId ?? "",
     request.pluginId,
     request.serverName ?? "",
     request.resourceUri,

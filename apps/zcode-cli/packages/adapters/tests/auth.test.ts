@@ -22,7 +22,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("shared ZCode credentials", () => {
+describe("shared VCode credentials", () => {
   it("stores ZAI login credentials with z-code compatible encrypted keys", async () => {
     const dir = await mkdtemp(join(tmpdir(), "zcode-auth-"));
 
@@ -192,11 +192,11 @@ describe("shared ZCode credentials", () => {
 
       await Promise.all(
         Array.from({ length: 8 }, () =>
-          expect(store.load("safe-key")).rejects.toThrow("Shared ZCode credentials are corrupt"),
+          expect(store.load("safe-key")).rejects.toThrow("Shared VCode credentials are corrupt"),
         ),
       );
       await expect(store.save("safe-key", "safe-value")).rejects.toThrow(
-        "Shared ZCode credentials are corrupt",
+        "Shared VCode credentials are corrupt",
       );
       await expect(readFile(credentialsPath, "utf-8")).resolves.toBe("{not-json");
       const backups = (await readdir(dir)).filter((file) =>

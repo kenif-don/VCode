@@ -983,7 +983,7 @@ describe("createMcpAdapter", () => {
       type: "http",
       url: "https://mcp.example.test",
       headers: {
-        "X-ZCode": "1",
+        "X-VCode": "1",
       },
       oauth: {
         type: "client_credentials",
@@ -1020,7 +1020,7 @@ describe("createMcpAdapter", () => {
       };
     };
 
-    expect(httpOptions.requestInit?.headers).toEqual({ "X-ZCode": "1" });
+    expect(httpOptions.requestInit?.headers).toEqual({ "X-VCode": "1" });
     expect(httpOptions.authProvider?.clientInformation()).toEqual({
       client_id: "http-client",
       client_secret: "http-secret",
@@ -1051,7 +1051,7 @@ describe("createMcpAdapter", () => {
       url: "https://mcp.example.test/mcp",
       oauth: {
         type: "authorization_code",
-        clientName: "ZCode",
+        clientName: "VCode",
       },
     });
 
@@ -1084,7 +1084,7 @@ describe("createMcpAdapter", () => {
         url: "https://mcp.example.test/mcp",
         oauth: {
           type: "authorization_code",
-          clientName: "ZCode",
+          clientName: "VCode",
         },
       },
     });
@@ -1103,7 +1103,7 @@ describe("createMcpAdapter", () => {
         url: "https://mcp.example.test/mcp",
         oauth: {
           type: "authorization_code",
-          clientName: "ZCode",
+          clientName: "VCode",
         },
       },
     });
@@ -1142,7 +1142,7 @@ describe("createMcpAdapter", () => {
         url: "https://mcp.example.test/mcp",
         oauth: {
           type: "authorization_code" as const,
-          clientName: "ZCode",
+          clientName: "VCode",
         },
       },
     };
@@ -1187,7 +1187,7 @@ describe("createMcpAdapter", () => {
         url: "https://mcp.example.test/mcp",
         oauth: {
           type: "authorization_code" as const,
-          clientName: "ZCode",
+          clientName: "VCode",
         },
       },
     };
@@ -1245,7 +1245,7 @@ describe("createMcpAdapter", () => {
           type: "http",
           url: "https://mcp.example.test/mcp",
           timeoutMs: 2_000,
-          oauth: { type: "authorization_code", clientName: "ZCode" },
+          oauth: { type: "authorization_code", clientName: "VCode" },
         },
         { oauthAuthorizationTimeoutMs: 20 },
       );
@@ -1544,7 +1544,7 @@ describe("createMcpAdapter", () => {
   });
 
   it("converges Phase 2 orchestration errors to a retryable failed server status", async () => {
-    const credentialError = new Error("Unable to read shared ZCode credentials");
+    const credentialError = new Error("Unable to read shared VCode credentials");
     const credentialStore = {
       filePath: "/tmp/zcode-unreadable-credentials.json",
       load: vi.fn(async () => {
@@ -1572,7 +1572,7 @@ describe("createMcpAdapter", () => {
       await expect(adapter.connectConfiguredServers({ broken: config })).resolves.toMatchObject({
         statuses: {
           broken: {
-            error: "Unable to read shared ZCode credentials",
+            error: "Unable to read shared VCode credentials",
             failureKind: "oauth_authorization_failed",
             status: "failed",
           },
@@ -1615,7 +1615,7 @@ describe("createMcpAdapter", () => {
       url: "https://mcp.example.test/mcp",
       oauth: {
         type: "authorization_code",
-        clientName: "ZCode",
+        clientName: "VCode",
       },
     });
 

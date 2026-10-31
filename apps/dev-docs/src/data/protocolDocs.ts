@@ -82,7 +82,7 @@ export const concepts: Concept[] = [
     id: "sessionId",
     name: "sessionId",
     kind: "id",
-    summary: "Agent server 生成的会话主键，ZCode Protocol 里的核心实体 ID。",
+    summary: "Agent server 生成的会话主键，VCode Protocol 里的核心实体 ID。",
     lifecycle:
       "由 `session/create` 创建；`session/resume` 复用；会随 snapshot、event、message、part 全程回传。",
     owner: "agent server",
@@ -94,9 +94,9 @@ export const concepts: Concept[] = [
     id: "taskId",
     name: "taskId",
     kind: "id",
-    summary: "App/UI 任务列表里的产品层 ID。ZCode Agent 路径迁移后应等同或映射到 sessionId。",
+    summary: "App/UI 任务列表里的产品层 ID。VCode Agent 路径迁移后应等同或映射到 sessionId。",
     lifecycle:
-      "UI task 列表、缓存、导航和本地持久化使用；进入 ZCode Protocol 时必须找到对应 sessionId。",
+      "UI task 列表、缓存、导航和本地持久化使用；进入 VCode Protocol 时必须找到对应 sessionId。",
     owner: "app/ui",
     source: "packages/shared/src/zcode-task-types.ts#ZCodeTaskMeta",
     related: ["sessionId", "workspaceKey", "activeInputId"],
@@ -143,7 +143,7 @@ export const concepts: Concept[] = [
     name: "clientMessageId",
     kind: "compat",
     summary: "旧字段名，过去承载 UI 每次 prompt 的相关性 ID；已统一改名为 inputId。",
-    lifecycle: "旧协议字段；新 ZCode Protocol schema 不再接受它，继续发送会触发 Invalid params。",
+    lifecycle: "旧协议字段；新 VCode Protocol schema 不再接受它，继续发送会触发 Invalid params。",
     owner: "deprecated",
     source: "dae26032: packages/shared/src/zcode-protocol/index.ts",
     related: ["inputId", "sessionSend"],
@@ -288,10 +288,10 @@ export const concepts: Concept[] = [
   },
   {
     id: "eventEnvelope",
-    name: "ZCode Event Envelope",
+    name: "VCode Event Envelope",
     kind: "protocol",
     summary:
-      "ZCode Protocol 事件外壳，承载 eventId、sessionId、turnId、seq、traceId、timestamp、deliveryKind。",
+      "VCode Protocol 事件外壳，承载 eventId、sessionId、turnId、seq、traceId、timestamp、deliveryKind。",
     lifecycle: "所有 `session/event` 通知和 `session/events` 读取结果都使用它。",
     owner: "agent server",
     source: "packages/shared/src/zcode-protocol/index.ts#zcodeEventEnvelopeSchema",
@@ -301,7 +301,7 @@ export const concepts: Concept[] = [
     id: "sessionSend",
     name: "session/send",
     kind: "protocol",
-    summary: "提交用户输入的 ZCode Protocol 方法，立即 ACK，不等待整轮模型生成完成。",
+    summary: "提交用户输入的 VCode Protocol 方法，立即 ACK，不等待整轮模型生成完成。",
     lifecycle: "client 调用后，agent 后台执行 turn，并通过 session.event/state.updated 推送进度。",
     owner: "protocol client -> agent server",
     source: "packages/shared/src/zcode-protocol/index.ts#zcodeSessionSendParamsSchema",
@@ -334,7 +334,7 @@ export const structures: StructureDoc[] = [
   {
     id: "id-migration",
     title: "ID 语义迁移总览",
-    path: "跨 UI / host / agent / ZCode Protocol",
+    path: "跨 UI / host / agent / VCode Protocol",
     purpose:
       "把观测链路 traceId 和用户输入归属 inputId 拆开，解决 UI 状态收口、stop、队列和协议 schema 不一致。",
     oldShape:
@@ -382,7 +382,7 @@ export const structures: StructureDoc[] = [
         type: "sess_${uuid}",
         required: "required",
         meaning:
-          "ZCode Protocol 会话主键，由 agent server 生成并在 snapshot/event/message 中回传。",
+          "VCode Protocol 会话主键，由 agent server 生成并在 snapshot/event/message 中回传。",
         owner: "agent server",
         source: "createSessionId",
         conceptIds: ["sessionId"],
@@ -392,7 +392,7 @@ export const structures: StructureDoc[] = [
         type: "string",
         required: "required",
         meaning:
-          "App 产品层任务 ID。迁移期仍存在，但 ZCode Agent 路径进入协议时要找到对应 sessionId。",
+          "App 产品层任务 ID。迁移期仍存在，但 VCode Agent 路径进入协议时要找到对应 sessionId。",
         owner: "app/ui",
         source: "ZCodeTaskMeta",
         conceptIds: ["taskId", "sessionId"],
@@ -601,7 +601,7 @@ export const structures: StructureDoc[] = [
         name: "messageId",
         type: "string",
         required: "optional",
-        meaning: "ZCode message upsert 主键；synthetic timeline 消息也用它做稳定更新。",
+        meaning: "VCode message upsert 主键；synthetic timeline 消息也用它做稳定更新。",
         owner: "agent runtime",
         source: "ZCodeStreamEvent",
         conceptIds: ["messageId"],
@@ -714,7 +714,7 @@ export const structures: StructureDoc[] = [
   },
   {
     id: "zcode-event-envelope",
-    title: "ZCode Event Envelope",
+    title: "VCode Event Envelope",
     path: "packages/shared/src/zcode-protocol/index.ts",
     purpose: "协议事件外壳。它描述事件日志顺序和观测链路，不描述 UI 输入归属。",
     newShape: "{ eventId, sessionId, turnId?, seq, traceId?, timestamp, deliveryKind? }",
@@ -796,7 +796,7 @@ export const structures: StructureDoc[] = [
     fields: [
       {
         name: "protocol",
-        type: "{ name: 'ZCode Protocol'; version: 1 }",
+        type: "{ name: 'VCode Protocol'; version: 1 }",
         required: "required",
         meaning: "协议名和版本，客户端据此确定 schema。",
         owner: "agent server",
@@ -1080,7 +1080,7 @@ export const stdioTrafficLogFields: StdioTrafficLogField[] = [
   {
     name: "message",
     type: "object | null",
-    meaning: "raw 可解析为 ZCode Protocol 消息时的结构化结果；stderr 或解析失败时为空。",
+    meaning: "raw 可解析为 VCode Protocol 消息时的结构化结果；stderr 或解析失败时为空。",
   },
   {
     name: "parseError",

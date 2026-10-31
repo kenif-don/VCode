@@ -112,7 +112,7 @@ function toSnapshot(card: HighspeedCardApi): HighspeedCardSnapshot {
 
 /**
  * 构造一次加速执行的选择与动态鉴权材料。Endpoint、API 形态和模型能力等静态事实由
- * ZCode Built-in Provider Config 提供，禁止再随单次发送下发 provider 定义。
+ * VCode Built-in Provider Config 提供，禁止再随单次发送下发 provider 定义。
  */
 export function buildHighspeedTurnExecution(params: {
   card: HighspeedCardSnapshot;

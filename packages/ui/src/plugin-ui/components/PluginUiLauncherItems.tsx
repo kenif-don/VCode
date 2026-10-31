@@ -19,7 +19,10 @@ export interface PluginUiLauncherItemsProps {
   workspacePath: string;
   workspaceIdentity?: string;
   remoteSessionId?: string;
-  /** 正式会话 id；草稿态为 null，此时不显示入口（面板是会话级，第一版不支持草稿）。 */
+  /**
+   * 正式会话 id；草稿态（新会话未发首条消息）为 null——条目照常列出，打开时由宿主
+   * 按需补建 deferred 托管会话（HBA fr12：应用插件区不再随空会话隐藏）。
+   */
   sessionId: string | null;
   onOpenPluginUi: (request: OpenPluginUiSideTabRequest) => void;
   /** 菜单复用标准菜单项；空白页与内置应用共用 SidePaneLauncherRow。 */
@@ -88,7 +91,8 @@ export function PluginUiLauncherItems(props: PluginUiLauncherItemsProps) {
       </div>
     );
   }
-  if (props.sessionId === null || entries.length === 0)
+  // HBA fr12：草稿态（sessionId=null）也列出条目，不再只留空态文案；仅确实无推荐条目才显示空态。
+  if (entries.length === 0)
     return props.variant === "menu" ? null : (
       <p className="text-ui-base text-foreground-subtle" data-testid="side-pane-ui-empty">
         {intl.formatMessage({ id: "sidePane.launcher.empty" })}

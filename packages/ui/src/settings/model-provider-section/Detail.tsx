@@ -31,10 +31,7 @@ import {
   PresetProviderPlaceholderCard,
   CodingPlanStatusPanel,
 } from "./StatusCards.js";
-import {
-  resolveCodingPlanUpgradeProductsProviderId,
-  type CodingPlanLoginOptions,
-} from "./codingPlanPricingCards.js";
+import { resolveCodingPlanUpgradeProductsProviderId } from "./codingPlanPricingCards.js";
 import {
   type EnterpriseCodingPlanProductGroup,
   type PurchaseAudience,
@@ -246,7 +243,6 @@ export function ModelProviderSectionDetail({
   onDelete,
   onReorderProviderModels,
   onTestModel,
-  onCodingPlanLogin,
   onRetryCodingPlan,
   onCodingPlanDisconnect,
   onOpenApiKeyUrl,
@@ -286,13 +282,6 @@ export function ModelProviderSectionDetail({
   onReorderProviderModels?: (providerId: string, modelIds: string[]) => Promise<void>;
   onTestModel: (providerId: string, modelId: string) => Promise<ModelConnectivityResult>;
   onRetryCodingPlan?: () => void | Promise<void>;
-  onCodingPlanLogin: (
-    presetId: BuiltinModelProviderId,
-    providerId: OAuthProviderId,
-    providerName: string,
-    status: CodingPlanStatus,
-    options?: CodingPlanLoginOptions,
-  ) => number | void;
   onCodingPlanDisconnect: (
     presetId: BuiltinModelProviderId,
     providerId: OAuthProviderId,
@@ -533,17 +522,8 @@ export function ModelProviderSectionDetail({
       audience: PurchaseAudience,
       options: { initialTeamPlanKey?: string; eventText?: string } = {},
     ) => {
-      if (resolvePurchaseChoiceSelectionIntent(statusPanelViewState.displayStatus) === "login") {
-        // 未登录时个人/团队套餐必须先建立对应 provider 的 OAuth 身份。
-        // 直接打开购买面板会绕过账号态，导致后续价格/订单接口只能再报 oauth_required。
-        onCodingPlanLogin(
-          selectedNavItem.presetId,
-          selectedNavItem.oauthProviderId,
-          selectedNavItem.providerName,
-          selectedNavItem.status,
-        );
-        return;
-      }
+      // VCode 无 App 登录入口：断连状态下也直接打开购买面板，
+      // 账号登录由官网 webview 内部承接。
       const nextFunnelContext = createCodingPlanFunnelContext({
         providerId: selectedNavItem.presetId,
         upgradeSource:
@@ -606,7 +586,6 @@ export function ModelProviderSectionDetail({
       const statusPanel = (
         <CodingPlanStatusPanel
           providerId={selectedNavItem.presetId}
-          providerName={selectedNavItem.providerName}
           status={selectedNavItem.status}
           viewState={statusPanelViewState}
           planLevel={selectedNavItem.planLevel}
@@ -652,11 +631,6 @@ export function ModelProviderSectionDetail({
               : undefined
           }
           disconnectLoading={codingPlanDisconnectProviderId === selectedNavItem.presetId}
-          // Plan Card 在未登录/登录失效时仍然是用户当前选中的入口。
-          // 之前详情页没有打开状态卡内置登录动作，导致用户能进入 Coding tab 却只能看到“未连接”文案。
-          loginActionVisible
-          loginActionPlacement="trailing"
-          reloginOnFailure={!upgradePlansVisible && reloginOnFailure}
           onRetry={
             retryTeamPlan ??
             (!upgradePlansVisible &&
@@ -667,20 +641,9 @@ export function ModelProviderSectionDetail({
                 "settings.modelProvider.codingPlan.status.unavailable" ||
               (isIndividualCodingPlanModelProviderId(selectedNavItem.presetId) &&
                 selectedNavItem.provider?.accountState?.unavailableReason === "credential-failed"))
-              ? onRetryCodingPlan
-              : undefined)
+                ? onRetryCodingPlan
+                : undefined)
           }
-          onLogin={(options) => {
-            return onCodingPlanLogin(
-              selectedNavItem.presetId,
-              selectedNavItem.oauthProviderId,
-              selectedNavItem.providerName,
-              // 查看套餐接口要求业务 OAuth 仍有效；已购买状态下的“重新链接”不能只静默刷新 key，
-              // 否则 OAuth 过期时点击没有可见反馈。升级态的重连强制走重新登录路径。
-              upgradePlansVisible ? "unavailable" : selectedNavItem.status,
-              options,
-            );
-          }}
           onOpenUpgradePlans={(options) => {
             openCodingPlanUpgrade({
               providerId: selectedNavItem.presetId,
@@ -726,13 +689,8 @@ export function ModelProviderSectionDetail({
         <div className="space-y-3">
           <CodingPlanStatusPanel
             providerId={selectedNavItem.presetId}
-            providerName={selectedNavItem.providerName}
             status={selectedNavItem.status}
             viewState={statusPanelViewState}
-            // 未登录状态下右侧只渲染 Plan Card，不再回退到 API Key 表单。
-            // 因此登录入口必须留在 Plan Card 本身，否则用户进入 Coding tab 后没有下一步动作。
-            loginActionVisible
-            loginActionPlacement="trailing"
             purchaseUrl={selectedNavItem.purchaseUrl}
             planLevel={selectedNavItem.planLevel}
             inactivePlanTitle={selectedNavItem.inactivePlanTitle}
@@ -761,16 +719,6 @@ export function ModelProviderSectionDetail({
             mcpQuotaLimit={selectedNavItem.mcpQuotaLimit ?? null}
             authError={codingPlanAuthError}
             onOpenRegistration={onOpenBigModelRegistration}
-            onLogin={(options) => {
-              return onCodingPlanLogin(
-                selectedNavItem.presetId,
-                selectedNavItem.oauthProviderId,
-                selectedNavItem.providerName,
-                selectedNavItem.status,
-                options,
-              );
-            }}
-            reloginOnFailure={!upgradePlansVisible && reloginOnFailure}
             onRetry={
               retryTeamPlan ??
               (!upgradePlansVisible &&
@@ -867,12 +815,6 @@ export function ModelProviderSectionDetail({
       }
     />
   );
-}
-
-export function resolvePurchaseChoiceSelectionIntent(
-  status: CodingPlanStatus,
-): "login" | "purchase" {
-  return status === "disconnected" ? "login" : "purchase";
 }
 
 function CodingPlanPurchaseChoiceBanners({

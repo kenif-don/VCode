@@ -91,7 +91,12 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
     }
   };
 
-  const scheduleClose = (entry: PoolEntry): void => {
+  // fr9-01: isolation=workspace 的 server 是工作区级共享服务(如带常驻面板、
+  // 管理派生进程树的插件 server),不随租约归零空闲回收——面板/会话开关导致 server
+  // 被杀会丢运行状态并连带回收其派生进程。这类 entry 仅走显式关闭路径
+  // (disconnectServer、connectConfiguredServers 的 replace 收敛、pool.close())。
+  const scheduleClose = (entry: PoolEntry, explicit = false): void => {
+    if (!explicit && entry.connectionContext.mcpIsolation === "workspace") return;
     if (entry.closeTimer) return;
     if (idleGraceMs <= 0) {
       void closeEntry(entry);
@@ -186,7 +191,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       return entry;
     };
 
-    const release = (serverName: string): void => {
+    const release = (serverName: string, explicit = false): void => {
       const key = leased.get(serverName);
       if (!key) return;
       leased.delete(serverName);
@@ -206,7 +211,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         refCount: entry.refs.size,
         ...(sessionId ? { sessionId } : {}),
       });
-      if (entry.refs.size === 0) scheduleClose(entry);
+      if (entry.refs.size === 0) scheduleClose(entry, explicit);
     };
 
     const acquire = async (
@@ -454,7 +459,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         }
         const configuredNames = new Set(Object.keys(servers));
         for (const serverName of [...leased.keys()]) {
-          if (!configuredNames.has(serverName)) release(serverName);
+          if (!configuredNames.has(serverName)) release(serverName, true);
         }
         await Promise.all(
           Object.entries(servers).map(([serverName, config]) =>
@@ -473,8 +478,8 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       async disconnectServer(serverName: string): Promise<McpServerStatus | undefined> {
         const key = leased.get(serverName);
         const entry = key ? entries.get(key) : undefined;
-        const status = entry ? (await entry.adapter.status())[serverName] : undefined;
-        release(serverName);
+        const status = entry ? (await entry.adapter.status())[entry.serverName] : undefined;
+        release(serverName, true);
         return status
           ? {
               ...status,

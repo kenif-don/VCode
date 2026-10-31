@@ -104,7 +104,7 @@ async function createServiceWithClients(options: {
         if (method === zcodeProtocolMethods.initialize) {
           return {
             available: true,
-            protocolName: "ZCode Protocol",
+            protocolName: "VCode Protocol",
             protocolVersion: 1,
             workspaceKey: "/workspace/app",
           };

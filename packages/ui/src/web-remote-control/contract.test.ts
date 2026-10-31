@@ -1,22 +1,18 @@
 import { describe, expect, it } from "vitest";
-import {
-  isSameWebRemoteControlTarget,
-  isReusableWebRemoteControlSession,
-} from "@/web-remote-control/index.js";
 
-describe("remote control UI target contract", () => {
-  it("keeps identity and remote session distinct from display paths", () => {
-    const status = {
-      status: "active",
-      workspacePath: "/project",
-      workspaceIdentity: "host-a",
-      remoteSessionId: "session-a",
-      sessionId: "relay",
-      mobileConnected: true,
-    } as const;
-    expect(isSameWebRemoteControlTarget(status, "/project", "host-a", "session-a")).toBe(true);
-    expect(isSameWebRemoteControlTarget(status, "/project", "host-b", "session-a")).toBe(false);
-    expect(isSameWebRemoteControlTarget(status, "/project", "host-a", "session-b")).toBe(false);
-    expect(isReusableWebRemoteControlSession(status)).toBe(true);
+import { deviceNavigation } from "@/web-remote-control/contract.example.js";
+import { webRemoteControlUiModule } from "@/web-remote-control/module.js";
+
+// 契约测试只 import contract 与 module，不知道实现是谁；同一份测试应同时跑真实现与跨进程代理。
+describe("web-remote-control-ui contract", () => {
+  it("declares its module manifest", () => {
+    expect(webRemoteControlUiModule.id).toBe("web-remote-control-ui");
+  });
+
+  it("shapes device navigation from the remote switcher contract", () => {
+    const chooseOtherDevice = () => {};
+    const navigation = deviceNavigation(chooseOtherDevice);
+    expect(navigation.deviceName).toBe("Example computer");
+    expect(navigation.chooseOtherDevice).toBe(chooseOtherDevice);
   });
 });

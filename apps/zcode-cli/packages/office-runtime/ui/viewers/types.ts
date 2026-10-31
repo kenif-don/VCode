@@ -89,7 +89,7 @@ export interface ViewerProps {
   onError(error: Error): void;
 }
 
-/** Zoom steps (percent of actual size), as browsers and ZCode's PDF preview use. */
+/** Zoom steps (percent of actual size), as browsers and VCode's PDF preview use. */
 export const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400];
 
 export function nextZoom(percent: number, direction: 1 | -1): number {

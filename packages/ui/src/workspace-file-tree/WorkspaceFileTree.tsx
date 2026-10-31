@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/dropdown-menu.js";
 import { toast } from "@/components/ui/toast.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
+import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
   TID_WORKSPACE_FILE_TREE_PANEL,
@@ -69,6 +71,7 @@ import {
   WorkspaceFileTreeList,
 } from "@/workspace-file-tree/WorkspaceFileTreeList.js";
 import { WorkspaceFileTreeStickyFolders } from "@/workspace-file-tree/WorkspaceFileTreeStickyFolders.js";
+import { WorkspaceFileTreeRenameDialog } from "@/workspace-file-tree/WorkspaceFileTreeRenameDialog.js";
 import {
   createWorkspaceFileTreeRowsFromSearchEntries,
   getWorkspaceFileSearchDirectoryRevealPaths,
@@ -109,6 +112,11 @@ export function WorkspaceFileTree({
   const [showChangedOnly, setShowChangedOnly] = useState(false);
   const [showScrollBottomMask, setShowScrollBottomMask] = useState(false);
   const [hasScrollableFileTree, setHasScrollableFileTree] = useState(false);
+  // 重命名弹窗状态集中在这里（而非行组件）：虚拟列表滚动会让行卸载，
+  // 弹窗挂在行上会随之消失；删除确认走全局 ConfirmDialogStore，无此问题。
+  const [renameTarget, setRenameTarget] = useState<WorkspaceFileTreeRow | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const requestConfirmation = useConfirmDialog();
   const handleListRef = useCallback((node: HTMLDivElement | null) => {
     listRef.current = node;
     if (node) {
@@ -259,6 +267,8 @@ export function WorkspaceFileTree({
       openFailed: intl.formatMessage({ id: "workspaceFileTree.openFailed" }),
       openWith: intl.formatMessage({ id: "workspaceFileTree.openWith" }),
       reveal: fileManagerLabel,
+      rename: intl.formatMessage({ id: "workspaceFileTree.rename" }),
+      delete: intl.formatMessage({ id: "common.delete" }),
     }),
     [fileManagerLabel, intl],
   );
@@ -462,6 +472,86 @@ export function WorkspaceFileTree({
       });
     }
   }, [workspacePath]);
+
+  // 服务走 useWorkspaceServices：远程（SSH/WSL）工作区自动路由到远端 host 的文件服务。
+  const { fileService } = useWorkspaceServices(
+    workspacePath,
+    workspaceRemoteSessionId,
+    workspaceIdentity,
+  );
+  const handleRenameRow = useCallback((row: WorkspaceFileTreeRow) => {
+    setRenameValue(row.name);
+    setRenameTarget(row);
+  }, []);
+  const handleRenameConfirm = useCallback(async () => {
+    const target = renameTarget;
+    if (!target) {
+      return;
+    }
+    const newName = renameValue.trim();
+    if (!newName || newName === target.name) {
+      // 名称未变视为取消；非法名（含分隔符等）由服务层拒绝并统一走失败提示。
+      setRenameTarget(null);
+      return;
+    }
+    try {
+      const { newPath } = await fileService.renamePath({ path: target.path, newName });
+      setRenameTarget(null);
+      // 重命名预览中的文件后，把预览切到新路径，避免留在失效旧路径上。
+      if (activePreviewPath && areWorkspaceFilePathsEqual(activePreviewPath, target.path)) {
+        onOpenPreview?.(createCodeViewerSourceForWorkspaceFile(newPath));
+      }
+    } catch (error) {
+      logger.warn("[WorkspaceFileTree] 重命名失败", {
+        path: target.path,
+        newName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      toast(
+        `${intl.formatMessage({ id: "workspaceFileTree.renameFailed" })}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }, [activePreviewPath, fileService, intl, onOpenPreview, renameTarget, renameValue]);
+  const handleDeleteRow = useCallback(
+    async (row: WorkspaceFileTreeRow) => {
+      const confirmed = await requestConfirmation({
+        title: intl.formatMessage(
+          { id: "workspaceFileTree.deleteConfirmTitle" },
+          { name: row.name },
+        ),
+        description: intl.formatMessage({
+          id:
+            row.type === "directory"
+              ? "workspaceFileTree.deleteConfirmDirectoryDescription"
+              : "workspaceFileTree.deleteConfirmFileDescription",
+        }),
+        confirmLabel: intl.formatMessage({ id: "common.delete" }),
+        confirmVariant: "destructive",
+      });
+      if (!confirmed) {
+        return;
+      }
+      try {
+        await fileService.deletePath({
+          path: row.path,
+          recursive: row.type === "directory",
+        });
+      } catch (error) {
+        logger.warn("[WorkspaceFileTree] 删除失败", {
+          path: row.path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        toast(
+          `${intl.formatMessage({ id: "workspaceFileTree.deleteFailed" })}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    },
+    [fileService, intl, requestConfirmation],
+  );
 
   const handleToggleDirectory = useCallback(
     (row: WorkspaceFileTreeRow) => {
@@ -762,6 +852,8 @@ export function WorkspaceFileTree({
             onRevealRow={handleRevealStickyFolderRow}
             onOpenPreview={handleOpenPreview}
             onOpenBrowserUrl={onOpenBrowserUrl}
+            onRename={handleRenameRow}
+            onDelete={handleDeleteRow}
             onKeyDown={handleRowKeyDown}
           />
           <WorkspaceFileTreeList
@@ -792,10 +884,24 @@ export function WorkspaceFileTree({
             onToggleDirectory={handleDirectoryAction}
             onOpenPreview={handleOpenPreview}
             onOpenBrowserUrl={onOpenBrowserUrl}
+            onRename={handleRenameRow}
+            onDelete={handleDeleteRow}
             onKeyDown={handleRowKeyDown}
           />
         </div>
       </div>
+      <WorkspaceFileTreeRenameDialog
+        open={renameTarget !== null}
+        value={renameValue}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameTarget(null);
+          }
+        }}
+        onChange={setRenameValue}
+        onCancel={() => setRenameTarget(null)}
+        onConfirm={() => void handleRenameConfirm()}
+      />
     </section>
   );
 }

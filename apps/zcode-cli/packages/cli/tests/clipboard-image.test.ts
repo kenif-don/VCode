@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { createNodeClipboardImageReader } from "../src/clipboard-image.js";
 
-test("image clipboard reader uses the ZCode storage root for native temp files", async () => {
+test("image clipboard reader uses the VCode storage root for native temp files", async () => {
   const storageRoot = await mkdtemp(join(tmpdir(), "zcode-clipboard-storage-root-"));
   const imagePaths: string[] = [];
   const readClipboardImage = createNodeClipboardImageReader({

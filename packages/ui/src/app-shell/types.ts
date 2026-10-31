@@ -1,5 +1,6 @@
 import type { FileManagerTarget } from "@/lib/workspaceSidePane.js";
 import type { ComposerDraftHandoff } from "@/v4/composer/composerDraftWorkspaceTransfer.js";
+import type { ConversationStatusPanelGitRepository } from "@/v4/conversationStatusPanelModel.js";
 import type { RefObject } from "react";
 import type {
   ZCodeProvider,
@@ -162,7 +163,6 @@ export interface AppProps {
   onCancelRemoteProject: (sessionId: string) => Promise<void>;
   onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
   onLogout?: () => void;
-  onLogin?: () => void;
   user?: UserInfo | null;
   reconnectingRemoteWorkspaceKeys: string[];
   remoteWorkspaceRecoveryByWorkspaceKey?: Record<string, RemoteWorkspaceRecoveryStatus>;
@@ -235,15 +235,9 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   sidebarContainerRef: RefObject<HTMLElement | null>;
   toggleSidebarShortcutLabel: string;
   newTaskShortcutLabel: string;
-  goBackShortcutLabel: string;
-  goForwardShortcutLabel: string;
   toggleSidePaneShortcutLabel: string;
   /** 「进入 / 退出完整视图」快捷键标签（仅桌面）。 */
   toggleSidePaneFullViewShortcutLabel?: string;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  canTaskNavBack: boolean;
-  canTaskNavForward: boolean;
   isTerminalOpen: boolean;
   isSidebarVisible: boolean;
   isBrowserOpen: boolean;
@@ -281,6 +275,10 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   >;
   gitWorktreeReviewSourceId: GitChangeSourceId | null;
   gitWorktreeChangeSummary: GitChangeSummary;
+  /** 子目录仓库发现结果（多仓选择器）；缺省退化为单仓。 */
+  gitRepositories?: readonly ConversationStatusPanelGitRepository[] | null;
+  activeGitRepositoryKey?: string | null;
+  onSelectGitRepository?: (repoKey: string) => void;
   activeGitSourceId: GitChangeSourceId;
   gitState: ReturnType<typeof import("@/hooks/useGitRepository.js").useGitRepository>;
   browserNavigationRequest: BrowserNavigationRequest | null;
@@ -318,8 +316,6 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
     targetWorkspaceIdentity?: string,
     expectedUnreadAt?: number,
   ) => void;
-  handleTaskNavBack: () => void;
-  handleTaskNavForward: () => void;
   handleStartDraftInWorkspace: (
     targetWorkspacePath: string,
     targetWorkspaceIdentity?: string,

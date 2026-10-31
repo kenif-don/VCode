@@ -152,7 +152,7 @@ describe("MCP connection pool isolation", () => {
     await pool.close();
   });
 
-  it("shares only an explicitly workspace-isolated server in the same workspace", async () => {
+  it("shares a workspace-isolated server and keeps it alive after all leases close", async () => {
     const created: Array<{
       adapter: McpPort;
       config: McpServerConfig;
@@ -189,7 +189,36 @@ describe("MCP connection pool isolation", () => {
     expect(created[0]?.adapter.close).not.toHaveBeenCalled();
     await sessionB.close();
     await Promise.resolve();
+    // fr9-01: workspace 级共享 server 常驻,不随租约归零空闲回收;仅显式路径关闭。
+    expect(created[0]?.adapter.close).not.toHaveBeenCalled();
+    await pool.close();
     expect(created[0]?.adapter.close).toHaveBeenCalledOnce();
+  });
+
+  it("closes a workspace-isolated server on explicit disconnect", async () => {
+    const created: Array<{ adapter: McpPort }> = [];
+    const pool = createMcpConnectionPool({
+      createAdapter: ({ serverName }) => {
+        const adapter = createFakeAdapter(serverName);
+        created.push({ adapter });
+        return adapter;
+      },
+      idleGraceMs: 0,
+    });
+    const session = pool.acquireLease({ leaseId: "session-a" });
+    const config: McpServerConfig = {
+      command: "node",
+      isolation: "workspace",
+      type: "stdio",
+    };
+    await session.connectServer("browser_use", config, {
+      workingDirectory: "/workspace",
+      workspaceIdentity: "local-workspace-a",
+    });
+    await session.disconnectServer("browser_use");
+    await Promise.resolve();
+    expect(created[0]?.adapter.close).toHaveBeenCalledOnce();
+    await session.close();
     await pool.close();
   });
 

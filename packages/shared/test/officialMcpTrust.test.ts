@@ -1,6 +1,6 @@
 /* 官方 MCP 信任判定（spec §5.1 / §5.2）。
  *
- * 规则：目标 origin 等于当前 ZCode API origin（https）。
+ * 规则：目标 origin 等于当前 VCode API origin（https）。
  *
  * 2026-08 决策变更：移除了「pluginId 必须以 `@zcode-plugins-official` 结尾」这道检查。
  * 它会让官方插件在发布到官方 marketplace 之前无法对真实端点自测（本地装的插件 id 是
@@ -31,7 +31,7 @@ function check(input: {
 }
 
 describe("isOfficialMcpOriginTrusted", () => {
-  it("trusts the current ZCode API origin", () => {
+  it("trusts the current VCode API origin", () => {
     expect(check({ origin: ZCODE_ORIGIN })).toEqual({ detail: "ok", trusted: true });
     // 带路径的 URL 归一化到同一 origin（真实端点形态：POST /api/v1/mcp/server/:mcp_group）
     expect(check({ origin: `${ZCODE_ORIGIN}/api/v1/mcp/server/image_search` })).toMatchObject({
@@ -61,7 +61,7 @@ describe("isOfficialMcpOriginTrusted", () => {
     }
   });
 
-  it("rejects any origin other than the resolved ZCode API origin", () => {
+  it("rejects any origin other than the resolved VCode API origin", () => {
     for (const origin of [
       "https://attacker.example",
       "https://zcode.z.ai.attacker.example",
@@ -84,7 +84,7 @@ describe("isOfficialMcpOriginTrusted", () => {
     ).toMatchObject({ trusted: false });
   });
 
-  it("fails closed when the ZCode API origin cannot be resolved", () => {
+  it("fails closed when the VCode API origin cannot be resolved", () => {
     expect(check({ origin: ZCODE_ORIGIN, zcodeApiOrigin: undefined })).toEqual({
       detail: "zcode_origin_unresolved",
       trusted: false,
@@ -153,7 +153,7 @@ describe("isOfficialMcpOriginTrusted", () => {
 });
 
 describe("createOfficialMcpTrustedOriginRegistry", () => {
-  it("resolves the ZCode API origin per call, so environment switches are picked up", async () => {
+  it("resolves the VCode API origin per call, so environment switches are picked up", async () => {
     let origin = ZCODE_ORIGIN;
     const registry = createOfficialMcpTrustedOriginRegistry({
       resolveZCodeApiOrigin: () => origin,

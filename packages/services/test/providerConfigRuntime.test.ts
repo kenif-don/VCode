@@ -244,7 +244,7 @@ describe("ProviderConfigRuntime", () => {
     }
   });
 
-  it("用注入的 ZCode Built-in Source 初始化，并在 Personal 文件缺失时单向导入旧配置", async () => {
+  it("用注入的 VCode Built-in Source 初始化，并在 Personal 文件缺失时单向导入旧配置", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-provider-runtime-"));
     const zcodeBuiltinFilePath = join(root, "zcodeBuiltin.json");
     const personalFilePath = join(root, "personal.json");

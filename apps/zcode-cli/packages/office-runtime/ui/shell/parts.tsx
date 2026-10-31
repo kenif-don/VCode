@@ -14,7 +14,7 @@ import type { Locate, PageState, ZoomState } from "#ui/viewers/types.ts";
 
 /* ---------------------------------------------------------------- Menu */
 
-/** ZCode dropdown: closes on Escape and on any pointer press outside it. */
+/** VCode dropdown: closes on Escape and on any pointer press outside it. */
 export function Menu({
   className,
   onClose,

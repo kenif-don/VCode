@@ -5,7 +5,6 @@ import {
   TID_MODEL_PROVIDER_CONNECTION_MODE_ITEM,
   TID_MODEL_PROVIDER_CONNECTION_MODE_TRIGGER,
   TID_MODEL_PROVIDER_NAV_ITEM,
-  TID_LOGIN_TRIGGER,
   TID_CHAT_CONTEXT_USAGE_TRIGGER,
   TID_SETTINGS_USAGE_TAB,
   TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON,
@@ -1006,30 +1005,7 @@ describe("Team Plan 设置与使用统计 E2E", () => {
     await browser.keys("Escape");
   });
 
-  for (const locale of ["zh-CN", "en-US"] as const) {
-    it(`CTP-02B: 侧栏头像菜单应显示当前已确认的 Team Plan 标签（${locale}）`, async function () {
-      this.timeout(120000);
-
-      await prepareScenario("teamOnly", TEAM_PLAN_KEY, "none", "none", locale);
-      await waitForWorkspaceApp(DEFAULT_WORKSPACE, 60000);
-
-      const profileTrigger = $(sel(TID_LOGIN_TRIGGER));
-      await profileTrigger.waitForDisplayed({
-        timeout: 30000,
-        timeoutMsg: "侧栏头像入口没有出现",
-      });
-      // 英文 UI 的套餐标签为 Team；只断言徽标本身，避免用户名包含团队文字时误通过。
-      const teamLabel = locale === "zh-CN" ? "团队" : "Team";
-      // 套餐标签已移入头像菜单；不再从头像按钮的旧布局查找。
-      await profileTrigger.click();
-      const badge = $('[data-testid="profile-menu-plan"]').$(`span[title="${teamLabel}"]`);
-      await badge.waitForDisplayed({ timeout: 30000 });
-      await expect(badge).toHaveText(teamLabel);
-      await browser.keys("Escape");
-    });
-  }
-
-  it("CTP-03: 用户头像菜单应进入 Team Plan 使用统计并请求团队额度", async function () {
+  it("CTP-03: 使用统计按钮应进入 Team Plan 使用统计并请求团队额度", async function () {
     this.timeout(120000);
 
     await prepareScenario("teamOnly", TEAM_PLAN_KEY);
@@ -1756,13 +1732,10 @@ async function ensureSettingsPageOpen() {
 
 async function openSidebarUsageStats() {
   await closeTransientOverlays();
-  await clickVisibleTestIdByDom(TID_LOGIN_TRIGGER, {
-    timeout: 10000,
-    timeoutMsg: "没有找到头像菜单入口",
-  });
+  // 白标无头像菜单：使用统计入口直接位于 footer 图标行。
   await clickVisibleTestIdByDom(TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON, {
     timeout: 10000,
-    timeoutMsg: "没有找到头像菜单里的使用统计入口",
+    timeoutMsg: "没有找到使用统计按钮",
   });
 }
 
