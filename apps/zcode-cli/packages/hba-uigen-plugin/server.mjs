@@ -665,7 +665,7 @@ const TOOLS = [
   {
     name: "uigen_canvas_get",
     description:
-      "Read the workspace-level canvas layout saved by uigen_canvas_save (null when never saved). Also reports the bound ZCode workspace { root, name } for the panel header.",
+      "Read the workspace-level canvas layout saved by uigen_canvas_save (null when never saved). Also reports the bound VCode workspace { root, name } for the panel header.",
     inputSchema: { type: "object", properties: {} },
   },
 ];

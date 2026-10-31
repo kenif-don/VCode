@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
 
+import engineeringTestFiles from "./scripts/engineering-test-files.json";
+
 const processLifecycleTests = [
   "packages/services/test/processTreeTerminator.test.ts",
   "packages/services/test/zcodeAgentService.test.ts",
@@ -81,12 +83,18 @@ export default defineConfig({
   },
   test: {
     setupFiles: ["./vitest.setup.ts"],
-    // 官方 affected 图不额外追踪 setupFiles；公共 setup 必须触发全量选择，再由入口跳过 UT 并成功退出。
+    // 官方依赖图不追踪 setupFiles；公共配置变化必须明确选中整个工程套件并报告跳过。
     forceRerunTriggers: [
       ...configDefaults.forceRerunTriggers,
-      // 默认配置 glob 的尾部 /** 在当前版本不能匹配部分配置文件，补充文件模式。
       "**/{vitest,vite}.config.*",
       "**/vitest.setup.ts",
+      // managed worktree 路径含 .codex，globstar 默认不匹配隐藏目录；关键入口用精确绝对路径。
+      ...[
+        "package.json",
+        "vitest.config.ts",
+        "vitest.setup.ts",
+        "scripts/engineering-test-files.json",
+      ].map((file) => resolve(__dirname, file)),
     ],
     // 修复原因：全量 run 的 stdout 会把**通过**测试里的 console 输出一并转发——services 层
     // 用 createServiceLogger 的用例在绿态下也要刷几千行多行日志，全量输出因此膨胀到
@@ -101,10 +109,7 @@ export default defineConfig({
     hookTimeout: 30_000,
     maxWorkers: 4,
     testTimeout: 30_000,
-    // 修复原因：900+ 文件全部使用隔离 fork 时，macOS 会在尾部因连续创建进程而随机
-    // 启动 worker 超时。普通用例使用 threads；会修改 cwd/umask、回收 POSIX 进程树或
-    // 密集 spawn shell 的用例最后串行 fork，避免跨用例误杀、进程级状态竞争和系统
-    // spawn 队列饥饿。
+    // 工程测试使用明确清单；不再发现 App 业务单测。真实子进程测试串行运行。
     projects: [
       {
         extends: true,
@@ -123,7 +128,13 @@ export default defineConfig({
             "scripts/assert-safe-cua-helper-zip.test.mjs",
             "scripts/ci/ci-telemetry-keyword-guard.test.mjs",
           ],
-          exclude: ["packages/desktop/test/e2e/**", "packages/zcode-cua/**", ...forkIsolatedTests],
+          exclude: [
+            "packages/desktop/test/e2e/**",
+            "packages/zcode-cua/**",
+            ...forkIsolatedTests,
+            // engineering 项目按官方清单直跑；unit 侧排除避免全量（无 --project）时重复执行。
+            ...engineeringTestFiles,
+          ],
           // Node 24/macOS 的 threads 全量运行可触发 V8 SIGSEGV；诊断时切换进程隔离，测试范围不变。
           pool: process.env.ZCODE_TEST_POOL === "forks" ? "forks" : "threads",
           maxWorkers: process.env.ZCODE_TEST_POOL === "forks" ? 2 : 4,
@@ -141,11 +152,17 @@ export default defineConfig({
           sequence: { groupOrder: 1 },
         },
       },
+      {
+        extends: true,
+        test: {
+          name: "engineering",
+          include: engineeringTestFiles,
+          pool: "forks",
+          fileParallelism: false,
+          maxWorkers: 1,
+        },
+      },
       "packages/zcode-cua/vitest.config.ts",
     ],
-    coverage: {
-      provider: "v8",
-      include: ["packages/*/src/**/*.ts"],
-    },
   },
 });

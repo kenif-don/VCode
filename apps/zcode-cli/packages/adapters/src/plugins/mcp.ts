@@ -183,15 +183,15 @@ function resolveMcpServerConfig(
   if (!SUPPORTED_MCP_TYPES.has(type)) throw new Error(`Unsupported MCP transport: ${type}`);
   // 修复原因：各 transport 分别重建配置曾漏传 alwaysLoad，导致插件常驻工具被延迟。
   // 通用字段只在此解析；source 按 marketplace 归类，兼容 source 为 cache 的官方 CDN 插件。
+  const official = context.loaded.marketplace === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE;
   const baseConfig: McpServerConfigBase = {
     alwaysLoad: typeof server.alwaysLoad === "boolean" ? server.alwaysLoad : undefined,
     enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
-    // fr11-02: isolation/protocolVersion 必须透传。isolation 是连接池的语义开关:
-    // workspace 级 = 跨会话共享同一 server 且不随空闲回收(fr11-01),此前解析器把
-    // 两字段都丢弃,插件声明的 workspace 全部退化为 session 级——面板/会话关闭即
-    // 回收 server 进程,hba-run 这类管着常驻进程树的插件因此丢运行状态。
+    // isolation 是连接池的语义开关：workspace 级 = 跨会话共享同一 server 且不随空闲回收。
+    // 只信任官方插件的声明（文档插件查看面板 spec §8），其他插件忽略、保持 session isolation；
+    // fr11-02 另透传 protocolVersion（mcp/index.ts 的 pin/legacy 解析消费）。
     isolation:
-      server.isolation === "workspace" || server.isolation === "session"
+      official && (server.isolation === "workspace" || server.isolation === "session")
         ? server.isolation
         : undefined,
     protocolVersion:
@@ -201,9 +201,7 @@ function resolveMcpServerConfig(
         ? server.protocolVersion
         : undefined,
     timeoutMs: typeof server.timeoutMs === "number" ? server.timeoutMs : undefined,
-    source: {
-      kind: context.loaded.marketplace === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE ? "builtin" : "plugin",
-    },
+    source: { kind: official ? "builtin" : "plugin" },
   };
 
   // zcode_official 允许 http 与 stdio，sse 出现即禁用该 MCP，不静默忽略——静默会让配置作者以为鉴权已生效。
@@ -446,7 +444,6 @@ function resolveTemplate(
       return envValue;
     }
     if (options.allowSensitive && ENVIRONMENT_VARIABLE_NAME_PATTERN.test(name)) {
-
       // token。只在敏感 sink 解析，避免 secret 被展开到 args、URL 或其它可见字段。
       const envValue = context.env[name];
       if (envValue === undefined)

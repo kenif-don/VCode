@@ -1,6 +1,7 @@
 import type { McpUiHostCapabilities } from "@modelcontextprotocol/ext-apps/app-bridge";
 import {
   MCP_APPS_INSERT_INPUT_TEXT_EXPERIMENTAL_KEY,
+  MCP_APPS_NESTED_FRAMES_EXPERIMENTAL_KEY,
   MCP_APPS_RESOURCE_SUBSCRIBE_EXPERIMENTAL_KEY,
   MCP_APPS_SURFACE_EXPERIMENTAL_KEY,
   MCP_APPS_WIDGET_STATE_EXPERIMENTAL_KEY,
@@ -27,7 +28,7 @@ export interface PluginUiHostCapabilityInput {
 
 /**
  * hostCapabilities 的唯一构造点。声明与 handler 一一对应：没有会话动作绑定就不声明 message，没有 composer 就不声明
- * updateModelContext。VCode 扩展（widgetState、resourceSubscribe、surface、csp 放宽）一律放 `experimental["zcode/…"]`，
+ * updateModelContext。VCode 扩展（widgetState、resourceSubscribe、surface、csp 放宽、nestedFrames）一律放 `experimental["zcode/…"]`，
  * 官方 SDK 的 zod 会剥掉标准位之外的未知能力键。
  */
 export function buildPluginUiHostCapabilities(
@@ -48,6 +49,7 @@ export function buildPluginUiHostCapabilities(
     experimental: {
       ...buildMcpAppsCspExperimentalCapability(),
       ...(input.canInsertInputText ? { [MCP_APPS_INSERT_INPUT_TEXT_EXPERIMENTAL_KEY]: {} } : {}),
+      [MCP_APPS_NESTED_FRAMES_EXPERIMENTAL_KEY]: {},
       ...(input.canSetWidgetState ? { [MCP_APPS_WIDGET_STATE_EXPERIMENTAL_KEY]: {} } : {}),
       ...(input.canSubscribeResources
         ? { [MCP_APPS_RESOURCE_SUBSCRIBE_EXPERIMENTAL_KEY]: {} }

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HBA 运行面板</title>
 <style>
-  /* 双主题:色板消费宿主注入的 MCP Apps 标准样式变量(ZCode 主题 token,
-     见宿主 pluginUiStyleVariables.ts),兜底值 = ZCode 自身 zai-dark / zai-light
+  /* 双主题:色板消费宿主注入的 MCP Apps 标准样式变量(VCode 主题 token,
+     见宿主 pluginUiStyleVariables.ts),兜底值 = VCode 自身 zai-dark / zai-light
      色值,独立打开时兜底即准;宿主经 hostContext.theme /
      host-context-changed 通知切换 documentElement[data-theme]。 */
   :root, [data-theme="dark"] {
@@ -416,7 +416,7 @@
 "use strict";
 /* ===========================================================================
  * bridge 适配层(独立块,便于集成期替换)
- * 协议来源:对 ZCode 官方 pdf-plugin 的 .zcode-plugin/plugin.json + dist/ui/panel.html
+ * 协议来源:对 VCode 官方 pdf-plugin 的 .zcode-plugin/plugin.json + dist/ui/panel.html
  * 反推得到的 MCP-over-postMessage 桥:
  *   - 面板 iframe 是一个 MCP client,JSON-RPC 2.0 消息原样经 window.parent.postMessage
  *     发往宿主,window "message" 事件收取(e.source 必须是 window.parent);
@@ -585,7 +585,7 @@ function envToLines(env) {
 // 进程输出(vite/chalk 等)常带 SGR 色码,直接当文本渲染会显示成 [31m 这类乱码;
 // 这里解析成带内联样式的 span,其余转义序列一律剥掉。调色板随主题切换。
 const ANSI_PALETTE = {
-  // 与 ZCode 内置终端同款(--color-terminal-* 的 zai-dark / zai-light 值)
+  // 与 VCode 内置终端同款(--color-terminal-* 的 zai-dark / zai-light 值)
   dark: ["#363636", "#ff5c5c", "#46bf72", "#ff8a30", "#4099ff", "#7b5ce5", "#42c8c8", "#adadad",
          "#747474", "#ff9999", "#87d9a4", "#ffb26b", "#80beff", "#a888f2", "#8ee5e5", "#f8f8f8"],
   light: ["#5c5c5c", "#e03131", "#1e8a3e", "#e07b00", "#0b7fff", "#9e77ed", "#0aa7a7", "#adadad",

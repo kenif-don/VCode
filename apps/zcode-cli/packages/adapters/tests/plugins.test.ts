@@ -33,6 +33,7 @@ import {
 } from "../src/plugins/atomic-directory.js";
 import { createArchiveFetchError } from "../src/plugins/source-errors.js";
 import { resolvePluginMcpServers } from "../src/plugins/mcp.js";
+import { enumeratePluginComponents } from "../src/plugins/plugin-components.js";
 import {
   buildGitHubArchiveUrl,
   parsePublicGitHubRepositoryUrl,
@@ -55,6 +56,51 @@ import {
 const execFileAsync = promisify(execFile);
 
 describe("NodePluginAdapter", () => {
+  it("retains the first discovered agent source and rejects paths outside the plugin", async () => {
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "zcode-agent-component-source-"));
+    const root = join(temporaryRoot, "plugin");
+    try {
+      for (const directory of ["agents", "custom", "absolute"])
+        await mkdir(join(root, directory), { recursive: true });
+      const outside = join(temporaryRoot, "outside");
+      await mkdir(outside);
+      for (const directory of [outside, join(root, "absolute")]) {
+        await writeFile(
+          join(directory, "forbidden.md"),
+          "---\nname: forbidden\ndescription: Must not load\n---\nForbidden prompt",
+        );
+      }
+      await writeFile(
+        join(root, "agents", "first.md"),
+        "---\nname: reviewer\ndescription: Default\n---\nDefault prompt",
+      );
+      await writeFile(
+        join(root, "custom", "duplicate.md"),
+        "---\nname: reviewer\ndescription: Custom\n---\nCustom prompt",
+      );
+      await writeFile(
+        join(root, "custom", "other.md"),
+        "---\nname: researcher\ndescription: Research\n---\nResearch prompt",
+      );
+      const groups = enumeratePluginComponents(root, {
+        name: "fixture",
+        agents: ["custom", "agents", "custom", "../outside", join(root, "absolute")],
+      });
+      expect(groups.find((group) => group.kind === "agent")?.items).toEqual([
+        { name: "reviewer", description: "Default", path: join(root, "agents", "first.md") },
+        { name: "researcher", description: "Research", path: join(root, "custom", "other.md") },
+      ]);
+      expect(
+        enumeratePluginComponents(root, {
+          name: "fixture",
+          agents: { reviewer: { description: "Declared" } },
+        }).find((group) => group.kind === "agent")?.items,
+      ).toEqual([{ name: "reviewer", description: "Declared" }]);
+    } finally {
+      await rm(temporaryRoot, { force: true, recursive: true });
+    }
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -992,11 +1038,13 @@ describe("NodePluginAdapter", () => {
     // fr11-02: isolation 是连接池语义开关(workspace=跨会话共享+不随空闲回收,fr11-01)。
     // 此前 resolveMcpServerConfig 重建配置时把它丢弃,插件声明的 workspace 全部退化为
     // session 级,面板/会话关闭即回收 server 进程,hba-run 这类插件丢运行状态。
+    // v3.17.1 合并:上游只信任官方市场插件的 isolation 声明(按 _meta.session_id 分状态),
+    // hba-run 经 official-plugin-definitions 注册为官方市场插件,声明照常透传。
     const loaded = {
-      id: "hba-run@dev-market",
+      id: "hba-run@zcode-plugins-official",
       manifest: { name: "hba-run" },
       manifestPath: "C:/plugins/hba-run/.zcode-plugin/plugin.json",
-      marketplace: "dev-market",
+      marketplace: "zcode-plugins-official",
       rootPath: "C:/plugins/hba-run",
       source: { type: "directory", path: "C:/plugins/hba-run" },
     } as unknown as Parameters<typeof resolvePluginMcpServers>[0]["loaded"];

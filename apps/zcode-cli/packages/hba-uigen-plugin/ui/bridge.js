@@ -1,7 +1,7 @@
 /*!
  * UiGenBridge — panel <-> host MCP bridge adapter for the hba-uigen panel.
  *
- * Protocol (reverse-engineered from the official ZCode pdf-plugin):
+ * Protocol (reverse-engineered from the official VCode pdf-plugin):
  *  - The panel runs as an mcp-app iframe ("text/html;profile=mcp-app").
  *  - It is an MCP *client*: newline-free JSON-RPC 2.0 envelopes are exchanged
  *    with the host over window.parent.postMessage(msg, "*") and the window
@@ -26,7 +26,7 @@
  *    onThemeChange(cb)           -> subscribe to host theme changes (ctx.theme)
  *    connect()                   -> Promise<"mcp" | "standalone">
  *
- * If no host answers (opened outside ZCode, or during integration bring-up),
+ * If no host answers (opened outside VCode, or during integration bring-up),
  * the bridge degrades to a local in-page demo backend so the panel stays fully
  * usable. Integration-phase verification notes live in README.md.
  */
@@ -220,7 +220,7 @@
                 });
                 resolve({ ok: true, targetDir: "(panel-local, 未写盘)", screens: screens.length, files: files });
               } else if (name === "uigen_import_dir") {
-                reject(new Error("panel-local 模式不支持目录导入,请在 ZCode 宿主内使用"));
+                reject(new Error("panel-local 模式不支持目录导入,请在 VCode 宿主内使用"));
               } else if (name === "uigen_canvas_save") {
                 var layout = args && args.layoutJson;
                 if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
