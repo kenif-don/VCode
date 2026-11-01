@@ -32,6 +32,7 @@ import type {
   SyncSubagentSessionTabsRequest,
 } from "@/lib/workspaceSidePane.js";
 import { SessionPane } from "@/v4/SessionPane.js";
+import type { ConversationStatusPanelGitRepository } from "@/v4/conversationStatusPanelModel.js";
 import type { PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
 import type { ConversationDropTargetController } from "@/v4/composer/conversationDropTarget.js";
 import { V4PaneConversationProvider } from "@/v4/V4ConversationContext.js";
@@ -221,6 +222,10 @@ export interface WorkbenchShellBinding {
   gitDirtyFileCount?: number;
   gitWorktreeReviewSourceId?: GitChangeSourceId | null;
   gitWorktreeChangeSummary?: { added: number; removed: number } | null;
+  /** 多仓选择器数据；漏传时面板模型退化为单仓、分支弹层不显示仓库列表。 */
+  gitRepositories?: readonly ConversationStatusPanelGitRepository[] | null;
+  activeGitRepositoryKey?: string | null;
+  onSelectGitRepository?: (repoKey: string) => void;
   activeTaskChangeSummary?: ZCodeTaskChangeSummary | null;
   summaryPanelVariantOverride?: ChatViewSummaryPanelVariant | null;
   onSummaryPanelVariantOverrideChange?: (variant: ChatViewSummaryPanelVariant | null) => void;
@@ -444,6 +449,13 @@ export function WorkbenchLeafPane({
           }
           gitWorktreeChangeSummary={
             shouldUseShellStatusPanel ? shell.gitWorktreeChangeSummary : undefined
+          }
+          gitRepositories={shouldUseShellStatusPanel ? shell.gitRepositories : undefined}
+          activeGitRepositoryKey={
+            shouldUseShellStatusPanel ? shell.activeGitRepositoryKey : undefined
+          }
+          onSelectGitRepository={
+            shouldUseShellStatusPanel ? shell.onSelectGitRepository : undefined
           }
           activeTaskChangeSummary={isPrimary ? shell.activeTaskChangeSummary : undefined}
           summaryPanelVariantOverride={

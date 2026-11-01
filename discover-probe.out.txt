@@ -1,0 +1,6 @@
+WIN repr: "D:\\ai_workspace\\AI IDE"
+readdir OK: 31 entries
+lstat HBA/.git OK dir=true
+scan WIN: 5
+discover WIN: 5
+refresh HBA WIN: isRepo=true branch=main
