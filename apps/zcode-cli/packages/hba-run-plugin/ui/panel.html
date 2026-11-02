@@ -491,7 +491,7 @@ const Bridge = (() => {
     // (UI protocol 2026-01-26) -> ui/notifications/initialized.
     const result = await request("ui/initialize", {
       appInfo: { name: "hba-run", version: "0.1.1" },
-      appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline"] },
+      appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline", "fullscreen"] },
       protocolVersion: "2026-01-26"
     }, 5000);
     notify("ui/notifications/initialized", {});
