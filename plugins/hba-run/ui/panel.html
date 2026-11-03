@@ -88,13 +88,16 @@
     gap: 4px;
     padding: 7px 9px;
     border-radius: 6px;
-    cursor: pointer;
+    cursor: grab;
+    user-select: none;
     border: 1px solid transparent;
     margin-bottom: 4px;
   }
   .config-item:hover { background: var(--hover); }
   .config-item.selected { background: var(--selected); border-color: var(--accent); }
-  .config-item .name { font-weight: 600; word-break: break-all; }
+  .config-item.dragging { opacity: 0.55; border-color: var(--accent); background: var(--selected); }
+  .config-item .name { display: flex; gap: 6px; align-items: flex-start; font-weight: 600; word-break: break-all; }
+  .ci-grip { flex: none; color: var(--fg-dim); cursor: grab; letter-spacing: -1px; line-height: 1.5; }
   .config-item .cmd {
     color: var(--fg-dim);
     font-family: var(--mono);
@@ -121,7 +124,25 @@
     overflow: hidden;
   }
   /* 日志区无内外间距:卡片铺满工作区,日志贴边(需求:取消日志区上下左右间距) */
-  #console-box { flex: 1; display: flex; flex-direction: column; min-height: 0; border: none; border-radius: 0; }
+  #console-box { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; border: none; border-radius: 0; }
+  /* 「回到底部」浮动按钮:贴日志底部居中,上翻时出现(磁性跟随见 consoleFollowAllowed) */
+  #btn-to-bottom {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    background: var(--fill);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2px 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--fg-dim);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  #btn-to-bottom:hover { color: var(--fg); border-color: var(--border-hover); }
+  #btn-to-bottom[hidden] { display: none; }
   #console-box .body { flex: 1; display: flex; flex-direction: column; gap: 0; min-height: 0; padding: 0; }
   .card .body { padding: 0; }
   .form-grid {
@@ -213,7 +234,6 @@
   #console .l-stdout { color: var(--fg); }
 
   .empty { color: var(--fg-dim); padding: 12px; text-align: center; }
-  .tag { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
   .aside-show { display: none; }
   body.aside-hidden aside { display: none; }
   body.aside-hidden .aside-show { display: inline-block; }
@@ -314,6 +334,8 @@
     <div class="head">
       运行配置
       <span class="spacer"></span>
+      <button class="icon-btn" id="btn-import" title="导入配置(JSON)">⤒</button>
+      <button class="icon-btn" id="btn-export" title="导出全部配置(JSON)">⤓</button>
       <button class="icon-btn" id="btn-new" title="新建配置">＋</button>
       <button class="icon-btn" id="btn-dup" title="复制当前配置">⧉</button>
       <button class="icon-btn" id="btn-del" title="删除当前配置">🗑</button>
@@ -329,15 +351,14 @@
         <button class="small primary" id="btn-h-start" title="启动当前配置" disabled>启动</button>
         <button class="small" id="btn-h-restart" title="重启当前配置(先停止再启动)" hidden>重启</button>
         <button class="small" id="btn-h-stop" title="停止当前配置" hidden>停止</button>
-        <span id="console-run-tag" class="tag"></span>
         <span class="spacer"></span>
-        <label class="hint" title="贴底时自动跟随新输出;向上翻看或选中文字时暂停,回到底部自动恢复"><input type="checkbox" id="chk-autoscroll" checked> 自动滚动</label>
         <button class="small" id="btn-clear">清空</button>
         <button class="small" id="btn-copy">复制</button>
       </div>
       <div class="body">
         <div id="console"><div class="empty">选择配置查看输出</div></div>
       </div>
+      <button id="btn-to-bottom" title="回到底部" hidden>⤓</button>
     </div>
   </section>
 </main>
@@ -384,10 +405,11 @@
 
 <!-- 日志右键菜单 -->
 <div id="ctx-menu" class="ctx-menu" hidden>
-  <button data-act="insert">插入到输入框</button>
+  <button data-act="insert">添加到对话</button>
   <button data-act="copy">复制</button>
 </div>
 
+<input type="file" id="import-file" accept=".json,application/json" hidden>
 <div id="toast" class="toast"></div>
 
 <script>
@@ -404,7 +426,7 @@
  *     ui/notifications/host-context-changed 通知推送(部分增量,可能只含 theme);
  *   - 之后走标准 MCP:tools/call、resources/read、resources/subscribe,
  *     服务端以 notifications/resources/updated 推送状态变化;
- *   - 日志插入输入框优先 ui/insert-input-text(VCode 扩展,文本进输入框不发送),
+ *   - 日志添加到对话优先 ui/insert-input-text(VCode 扩展,文本进输入框不发送),
  *     老宿主降级 ui/update-model-context(插件上下文附到对话输入区);
  *     ui/message(以用户身份发送,宿主可能弹确认框)已不再使用。
  * ======================================================================== */
@@ -425,8 +447,11 @@ const Bridge = (() => {
       if (!entry) return;
       pending.delete(msg.id);
       clearTimeout(entry.timer);
-      if (msg.error) entry.reject(new Error(msg.error.message || "JSON-RPC error"));
-      else entry.resolve(msg.result);
+      if (msg.error) {
+        const err = new Error(msg.error.message || "JSON-RPC error");
+        if (typeof msg.error.code === "number") err.code = msg.error.code;
+        entry.reject(err);
+      } else entry.resolve(msg.result);
       return;
     }
     if (typeof msg.method === "string") {
@@ -466,7 +491,7 @@ const Bridge = (() => {
     // (UI protocol 2026-01-26) -> ui/notifications/initialized.
     const result = await request("ui/initialize", {
       appInfo: { name: "hba-run", version: "0.1.1" },
-      appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline"] },
+      appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline", "fullscreen"] },
       protocolVersion: "2026-01-26"
     }, 5000);
     notify("ui/notifications/initialized", {});
@@ -520,7 +545,6 @@ const App = {
   selectedConfigId: null,
   currentRunId: null,
   outputByRun: Object.create(null), // runId -> { lines: [], since: 0 }
-  autoScroll: true,
   editingConfigId: null, // null = 弹窗处于「新建」模式;否则为被编辑配置 id
   pollTimer: null,
   refreshTimer: null,
@@ -690,6 +714,67 @@ function renderConsoleHead() {
   $("btn-h-stop").disabled = !has;
 }
 
+// ---- 配置列表拖动排序 --------------------------------------------------------
+// 按住行(操作按钮除外)上下拖动即调序,松手经 run_config_reorder 持久化;
+// 4px 阈值区分点击/双击与拖动,拖动只在 mousemove 超过阈值后开始。
+
+function persistConfigOrder(ids) {
+  callTool("run_config_reorder", { configIds: ids }).then(() => {
+    // 本地同步顺序,免等资源刷新;失败才回读服务端真实顺序
+    App.configs = ids.map((id) => App.configs.find((c) => c.id === id)).filter(Boolean);
+    renderConfigs();
+    renderConsoleHead();
+  }).catch((e) => {
+    toast("保存顺序失败:" + (e.message || e), true);
+    refreshConfigs().catch(() => {});
+  });
+}
+
+function beginConfigDrag(e, el) {
+  if (e.button !== 0) return;
+  if (e.target.closest("button")) return; // 行内操作按钮不触发拖动
+  e.preventDefault(); // 避免拖动过程选中文本
+  const startY = e.clientY;
+  let started = false;
+
+  const onMove = (ev) => {
+    if (!started) {
+      if (Math.abs(ev.clientY - startY) < 4) return;
+      started = true;
+      el.classList.add("dragging");
+    }
+    ev.preventDefault();
+    const container = $("config-items");
+    const siblings = [...container.querySelectorAll(".config-item")].filter((n) => n !== el);
+    let target = null;
+    for (const other of siblings) {
+      const r = other.getBoundingClientRect();
+      if (ev.clientY < r.top + r.height / 2) {
+        target = other;
+        break;
+      }
+    }
+    if (target) {
+      if (el.nextElementSibling !== target) container.insertBefore(el, target);
+    } else if (container.lastElementChild !== el) {
+      container.appendChild(el);
+    }
+  };
+  const onUp = () => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    window.removeEventListener("blur", onUp);
+    if (!started) return;
+    el.classList.remove("dragging");
+    const ids = [...$("config-items").querySelectorAll(".config-item")].map((n) => n.dataset.id);
+    const unchanged = ids.join("\n") === App.configs.map((c) => c.id).join("\n");
+    if (!unchanged) persistConfigOrder(ids);
+  };
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+  window.addEventListener("blur", onUp); // 鼠标在窗口外松开也要收尾
+}
+
 function renderConfigs() {
   const box = $("config-items");
   renderConsoleHead();
@@ -703,13 +788,14 @@ function renderConfigs() {
     const running = !!runningRunOf(c.id);
     return `
     <div class="config-item ${c.id === App.selectedConfigId ? "selected" : ""}" data-id="${escapeHtml(c.id)}">
-      <div class="name">${escapeHtml(c.name)}</div>
+      <div class="name"><span class="ci-grip" title="按住拖动排序">⋮⋮</span>${escapeHtml(c.name)}</div>
       <div class="cmd" title="${escapeHtml(c.command)}">${escapeHtml(c.command)}</div>
       <div class="ci-actions">
         <button class="icon-btn" data-act="edit" title="编辑配置">✎</button>
-        <button class="icon-btn go" data-act="start" title="运行该配置" ${running ? "disabled" : ""}>▶</button>
-        <button class="icon-btn stop" data-act="stop" title="停止该配置" ${running ? "" : "disabled"}>■</button>
-        <button class="icon-btn" data-act="restart" title="重启(先停止再启动同一配置)">↻</button>
+        ${running
+          ? `<button class="icon-btn stop" data-act="stop" title="停止该配置">■</button>
+        <button class="icon-btn" data-act="restart" title="重启(先停止再启动同一配置)">↻</button>`
+          : `<button class="icon-btn go" data-act="start" title="运行该配置">▶</button>`}
       </div>
     </div>`;
   }).join("");
@@ -718,6 +804,8 @@ function renderConfigs() {
     el.addEventListener("click", () => selectConfig(id).catch((e) => toast(e.message, true)));
     // 双击行 = 打开编辑弹窗(与 ✎ 等价,避免误触直接跑命令)
     el.addEventListener("dblclick", () => openModal(id));
+    // 按住行(按钮除外)拖动排序
+    el.addEventListener("mousedown", (e) => beginConfigDrag(e, el));
     for (const btn of el.querySelectorAll("[data-act]")) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -742,37 +830,41 @@ function consoleLineEl(l) {
 }
 
 /**
- * 日志区的「磁性跟随」规则:
- *  - 仅当用户本来就贴底时才跟随新输出滚到底;翻上去看日志时不被拉回;
+ * 日志区的「磁性跟随」规则(自动,无开关):
+ *  - 滚动条贴底 → 自动跟随新输出滚到底;用户上翻后 → 保持位置不被拉回,回到底部自动恢复;
  *  - 有未收起的选区(正在拖选/准备右键发送)时不滚动,避免拖拽终点被带走;
  *  - 日志 DOM 增量追加而非整体重建,选区锚点不会中途被毁。
  */
-function consoleFollowAllowed(box) {
-  if (!App.autoScroll) return false;
-  const sel = window.getSelection();
-  if (sel && !sel.isCollapsed) return false;
+function isConsoleNearBottom(box) {
   return box.scrollHeight - box.scrollTop - box.clientHeight <= 40;
 }
 
+function updateToBottomBtn(box) {
+  $("btn-to-bottom").hidden = isConsoleNearBottom(box);
+}
+
+function consoleFollowAllowed(box) {
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) return false;
+  return isConsoleNearBottom(box);
+}
+
 function renderConsole() {
-  const tag = $("console-run-tag");
   const box = $("console");
   const view = App.outputByRun[App.currentRunId];
-  const run = App.runs.find((r) => r.runId === App.currentRunId);
-  tag.textContent = App.currentRunId
-    ? (run ? (run.configName || run.command) + " · " + App.currentRunId : App.currentRunId)
-    : "";
   App.consoleRenderedRun = App.currentRunId;
   if (!view || !view.lines.length) {
     box.innerHTML = '<div class="empty">' +
       (App.currentRunId ? "暂无输出" : "选择配置查看输出") + "</div>";
+    updateToBottomBtn(box);
     return;
   }
   const frag = document.createDocumentFragment();
   for (const l of view.lines) frag.appendChild(consoleLineEl(l));
   box.innerHTML = "";
   box.appendChild(frag);
-  if (App.autoScroll) box.scrollTop = box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
+  updateToBottomBtn(box);
 }
 
 /** 增量追加新行。整体重建会毁掉进行中的选区(表现为"选择从日志开头起选"),必须避免。 */
@@ -788,6 +880,17 @@ function appendConsoleLines(newLines) {
   if (emptyEl) box.removeChild(emptyEl);
   for (const l of newLines) box.appendChild(consoleLineEl(l));
   if (follow) box.scrollTop = box.scrollHeight;
+  updateToBottomBtn(box);
+}
+
+/** 「回到底部」浮动按钮:上翻时出现,点击跳回底部后隐藏,磁性跟随随之恢复。 */
+function setupConsoleScroll() {
+  const box = $("console");
+  box.addEventListener("scroll", () => updateToBottomBtn(box), { passive: true });
+  $("btn-to-bottom").addEventListener("click", () => {
+    box.scrollTop = box.scrollHeight;
+    updateToBottomBtn(box);
+  });
 }
 
 const previewShown = new Set();
@@ -1027,13 +1130,24 @@ function clearConsole() {
   fetchOutput(App.currentRunId).catch(() => {});
 }
 
-// ---- 日志右键「插入到输入框」 ----------------------------------------------
+// ---- 日志右键「添加到对话」 ------------------------------------------------
 // 旧实现走 ui/message(以用户身份发送),宿主会弹「插件想以你的身份发送消息」确认框。
-// 现改为直接插入会话输入框,不发送、不弹框:
+// 现改为直接添加到对话输入区,不发送、不弹框:
 //   1) ui/insert-input-text(VCode 扩展桥方法):文本进输入框,用户改完自己发;
 //   2) 老宿主降级 ui/update-model-context:以「插件上下文」附在对话输入区,同样不弹框,
 //      发送时内容与正文一并送达模型;
-//   3) 两者都不可用(独立模式/无 composer)才退到剪贴板。
+//   3) 输入框(composer)可能尚未挂载(切会话/加载中),宿主回 -32601「没人接住」——
+//      等待就绪后自动重试(ADD_WAIT_*),超时才退到剪贴板;
+//   4) 通道宿主根本没实现(方法不存在)时不再等,直接进下一通道/剪贴板。
+
+const ADD_WAIT_TIMEOUT_MS = 10000;
+const ADD_WAIT_STEP_MS = 500;
+let addInFlight = false;
+
+/** -32601 有两种:「方法不存在」=宿主没实现该通道(重试无意义);其余(如 No composer…) =暂时没接住,可等待重试。 */
+function isBridgeUnsupported(e) {
+  return /method not found|not available|不支持/i.test(String((e && e.message) || ""));
+}
 
 function hideCtxMenu() {
   $("ctx-menu").hidden = true;
@@ -1044,27 +1158,59 @@ async function insertSelectionToInput(text) {
   if (window.parent === window || !Bridge.connected) {
     // 独立模式没有宿主可以代发,降级为复制到剪贴板
     await copyText(payload);
-    toast("独立模式:无法插入输入框,已复制到剪贴板");
+    toast("独立模式:无法添加到对话,已复制到剪贴板");
     return;
   }
+  if (addInFlight) {
+    toast("正在添加到对话,请稍候…");
+    return;
+  }
+  addInFlight = true;
   try {
-    await Bridge.request("ui/insert-input-text", { text: payload });
-    toast("已插入到输入框");
-    return;
-  } catch (e) {
-    /* 老宿主没有该桥方法(-32601),继续降级 */
+    let insertOk = true, contextOk = true;
+    let waited = false;
+    const deadline = Date.now() + ADD_WAIT_TIMEOUT_MS;
+    for (;;) {
+      if (insertOk) {
+        try {
+          await Bridge.request("ui/insert-input-text", { text: payload }, 3000);
+          toast("已添加到对话");
+          return;
+        } catch (e) {
+          if (isBridgeUnsupported(e)) insertOk = false;
+        }
+      }
+      if (contextOk) {
+        try {
+          await Bridge.request("ui/update-model-context", {
+            content: [{ type: "text", text: payload }]
+          }, 3000);
+          toast("已添加到对话输入区(宿主不支持直插文本,以插件上下文附上)");
+          return;
+        } catch (e) {
+          if (isBridgeUnsupported(e)) contextOk = false;
+        }
+      }
+      if (!insertOk && !contextOk) {
+        // 两条通道宿主都没实现,再等也没用
+        await copyText(payload);
+        toast("宿主不支持添加到对话,已复制到剪贴板");
+        return;
+      }
+      if (Date.now() >= deadline) {
+        await copyText(payload);
+        toast("等待输入框就绪超时,已复制到剪贴板");
+        return;
+      }
+      if (!waited) {
+        waited = true;
+        toast("输入框尚未就绪,等待后自动添加…");
+      }
+      await new Promise((r) => setTimeout(r, ADD_WAIT_STEP_MS));
+    }
+  } finally {
+    addInFlight = false;
   }
-  try {
-    await Bridge.request("ui/update-model-context", {
-      content: [{ type: "text", text: payload }]
-    });
-    toast("已添加到对话输入区(宿主不支持直插文本,以插件上下文附上)");
-    return;
-  } catch (e) {
-    /* 没有 composer 接住等,继续降级 */
-  }
-  await copyText(payload);
-  toast("宿主不支持插入输入框,已复制到剪贴板");
 }
 
 function setupCtxMenu() {
@@ -1094,8 +1240,131 @@ function setupCtxMenu() {
   window.addEventListener("scroll", hideCtxMenu, true);
 }
 
+// ---- 配置导入/导出(同事间交换配置) ------------------------------------------
+// 导出走 ui/download-file(宿主弹原生另存为;面板 iframe 无下载权限,浏览器下载会被沙箱拦),
+// 取消/不支持时退到剪贴板。导入用 <input type=file> 读文件,不带 id 逐条 run_config_save 新建,
+// 同名不覆盖不合并——双方各自维护自己的副本。
+
+const CONFIG_EXPORT_FORMAT = "hba-run-configs";
+
+function exportFileName() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `hba-run-configs-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.json`;
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportConfigs() {
+  // 只导出共享需要的字段:id/时间戳由双方各自生成,避免导入时覆盖对方已有配置
+  const configs = App.configs.map((c) => ({
+    name: c.name,
+    command: c.command,
+    cwd: c.cwd || "",
+    env: c.env || {},
+    previewUrl: c.previewUrl || ""
+  }));
+  if (!configs.length) {
+    toast("暂无配置可导出", true);
+    return;
+  }
+  const json = JSON.stringify({
+    format: CONFIG_EXPORT_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    configs
+  }, null, 2);
+  const filename = exportFileName();
+  if (window.parent === window || !Bridge.connected) {
+    downloadTextFile(filename, json); // 独立打开:直接触发浏览器下载
+    toast(`已导出 ${configs.length} 条配置`);
+    return;
+  }
+  try {
+    const res = await Bridge.request("ui/download-file", {
+      contents: [{
+        type: "resource",
+        resource: { uri: "file:///" + filename, name: filename, mimeType: "application/json", text: json }
+      }]
+    }, 30000);
+    if (res && res.isError) throw new Error("save cancelled");
+    toast(`已导出 ${configs.length} 条配置`);
+  } catch (e) {
+    await copyText(json);
+    toast("导出未完成,已复制配置 JSON 到剪贴板");
+  }
+}
+
+async function importConfigsFromText(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    throw new Error("不是有效的 JSON 文件");
+  }
+  // 兼容裸数组;标准格式为 { format, version, configs: [] }
+  const list = Array.isArray(data) ? data : data && Array.isArray(data.configs) ? data.configs : null;
+  if (!list) throw new Error("缺少 configs 数组,不是有效的配置文件");
+  if (!list.length) throw new Error("配置文件里没有配置");
+  let count = 0;
+  for (const raw of list) {
+    const name = String((raw && raw.name) || "").trim();
+    const command = String((raw && raw.command) || "").trim();
+    if (!name || !command) continue; // 缺必填字段的条目跳过
+    const envIn = raw.env && typeof raw.env === "object" && !Array.isArray(raw.env) ? raw.env : {};
+    const env = {};
+    for (const [k, v] of Object.entries(envIn)) {
+      if (k && v != null) env[String(k)] = String(v);
+    }
+    await callTool("run_config_save", {
+      name,
+      command,
+      cwd: String(raw.cwd || "").trim(),
+      env,
+      previewUrl: String(raw.previewUrl || "").trim()
+    });
+    count += 1;
+  }
+  if (!count) throw new Error("没有可导入的配置(条目缺少 name/command)");
+  await refreshConfigs();
+  return count;
+}
+
+function setupImportExport() {
+  const fileInput = $("import-file");
+  $("btn-export").addEventListener("click", () => exportConfigs().catch((e) => toast(e.message, true)));
+  $("btn-import").addEventListener("click", () => {
+    if (window.parent === window || !Bridge.connected) {
+      toast("独立模式:无法导入(需连接宿主)", true);
+      return;
+    }
+    fileInput.value = ""; // 重置后才能重复选同一个文件
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    try {
+      const count = await importConfigsFromText(await file.text());
+      toast(`已导入 ${count} 条配置`);
+    } catch (e) {
+      toast("导入失败:" + (e.message || e), true);
+    }
+  });
+}
+
 // ---- 面板状态持久化(B 方案:项目级共享) --------------------------------------
-// UI 状态(选中配置/当前运行/自动滚动/侧栏折叠)经 run_ui_state 工具持久化到
+// UI 状态(选中配置/当前运行/侧栏折叠)经 run_ui_state 工具持久化到
 // <workspace>/.hba/run-ui-state.json:同项目所有会话/窗口的运行面板共享一份
 // 状态,打开面板即恢复。独立模式(未连接宿主)不持久化。
 const UI_STATE_SAVE_DEBOUNCE_MS = 500;
@@ -1106,7 +1375,6 @@ function currentUiState() {
   return {
     selectedConfigId: App.selectedConfigId,
     currentRunId: App.currentRunId,
-    autoScroll: App.autoScroll,
     asideCollapsed: document.body.classList.contains("aside-hidden")
   };
 }
@@ -1130,10 +1398,6 @@ async function loadUiState() {
 }
 
 function applyUiChromeState(saved) {
-  if (typeof saved.autoScroll === "boolean") {
-    App.autoScroll = saved.autoScroll;
-    $("chk-autoscroll").checked = saved.autoScroll;
-  }
   if (typeof saved.asideCollapsed === "boolean") {
     document.body.classList.toggle("aside-hidden", saved.asideCollapsed);
   }
@@ -1207,11 +1471,6 @@ async function init() {
   $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => toast(e.message, true)));
   $("btn-clear").addEventListener("click", clearConsole);
   $("btn-copy").addEventListener("click", () => copyConsole().catch((e) => console.warn(e)));
-  $("chk-autoscroll").addEventListener("change", (e) => {
-    App.autoScroll = e.target.checked;
-    if (App.autoScroll) renderConsole();
-    scheduleUiStateSave();
-  });
   // 标题区:下拉框切换配置(换日志)+ 按运行态显示的 启动 / 重启 / 停止
   $("cfg-select").addEventListener("change", (e) => {
     const id = e.target.value;
@@ -1242,6 +1501,8 @@ async function init() {
     if (e.key === "Escape" && !$("cfg-modal").hidden) closeModal();
   });
   setupCtxMenu();
+  setupImportExport();
+  setupConsoleScroll();
 
   // 先落一次标题区状态(无配置=下拉占位+按钮禁用),避免首帧三个按钮齐亮
   renderConsoleHead();

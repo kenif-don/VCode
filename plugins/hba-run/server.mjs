@@ -8,7 +8,7 @@
  * plus the notification side (notifications/resources/updated).
  *
  * Tools: run_config_list / run_config_save / run_config_delete / run_config_duplicate /
- *        run_start / run_stop / run_status / run_output / run_history
+ *        run_config_reorder / run_start / run_stop / run_status / run_output / run_history
  *
  * Config + history persistence: <workspace>/.hba/run.json
  * Workspace root: $ZCODE_WORKSPACE_ROOT (set by plugin.json), fallback process.cwd().
@@ -616,6 +616,40 @@ const TOOLS = [
       saveStore();
       sendResourceUpdated();
       return ok({ config: publicConfig(copy) }, `Duplicated as ${copy.name}`);
+    }
+  },
+  {
+    name: "run_config_reorder",
+    description:
+      "Reorder run configurations: pass every existing config id exactly once in the new order (first = top of the list).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        configIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "All config ids in their new order."
+        }
+      },
+      required: ["configIds"],
+      additionalProperties: false
+    },
+    readOnly: false,
+    handler: async ({ configIds }) => {
+      const ids = Array.isArray(configIds) ? configIds.filter((x) => typeof x === "string") : [];
+      const currentIds = store.configs.map((c) => c.id);
+      const unique = new Set(ids);
+      if (
+        ids.length !== currentIds.length ||
+        unique.size !== ids.length ||
+        !currentIds.every((id) => unique.has(id))
+      ) {
+        return fail("configIds must contain each existing config id exactly once");
+      }
+      store.configs = ids.map((id) => store.configs.find((c) => c.id === id));
+      saveStore();
+      sendResourceUpdated();
+      return ok({ configs: store.configs.map(publicConfig) }, `Reordered ${ids.length} configs`);
     }
   },
   {

@@ -193,6 +193,7 @@ test("initialize handshake negotiates protocol and advertises tools + resources"
     "run_config_delete",
     "run_config_duplicate",
     "run_config_list",
+    "run_config_reorder",
     "run_config_save",
     "run_history",
     "run_output",
@@ -273,6 +274,17 @@ test("config CRUD is persisted to .hba/run.json", async () => {
   assert.notEqual(dup.config.id, cfgId);
   assert.equal(dup.config.name, "dev server v2 (copy)");
   assert.equal(dup.config.env.PORT, "5174");
+
+  // reorder: [cfg, dup] -> [dup, cfg], persisted on disk
+  const reordered = await rpc.toolOk("run_config_reorder", {
+    configIds: [dup.config.id, cfgId]
+  });
+  assert.deepEqual(reordered.configs.map((c) => c.id), [dup.config.id, cfgId]);
+  const onDiskReorder = JSON.parse(fs.readFileSync(runJsonPath, "utf8"));
+  assert.deepEqual(onDiskReorder.configs.map((c) => c.id), [dup.config.id, cfgId]);
+  // partial / foreign id lists are rejected
+  const bad = await rpc.callTool("run_config_reorder", { configIds: [cfgId] });
+  assert.ok(bad.isError, "partial configIds list should be rejected");
 
   // delete the copy
   await rpc.toolOk("run_config_delete", { configId: dup.config.id });

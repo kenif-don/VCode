@@ -352,7 +352,7 @@
             // request (UI protocol 2026-01-26) -> ui/notifications/initialized.
             sendRequest("ui/initialize", {
               appInfo: APP_INFO,
-              appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline"] },
+              appCapabilities: { tools: { listChanged: false }, availableDisplayModes: ["inline", "fullscreen"] },
               protocolVersion: UI_PROTOCOL_VERSION
             }, timeoutMs).then(function (result) {
               sendNotification("ui/notifications/initialized", {});
