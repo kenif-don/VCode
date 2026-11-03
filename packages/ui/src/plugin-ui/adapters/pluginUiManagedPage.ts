@@ -44,6 +44,11 @@ import { pluginUiPages } from "./pluginUiPageRegistry.js";
 import { attachPluginUiResourceDeltaFeed } from "./pluginUiResourceDeltaFeed.js";
 type Platform = IPlatformService;
 type Services = IServiceAccessor;
+// error 相位有界自动恢复（HBA fr21）：退避 5s→15s→45s→60s 封顶、单错误事件最多 6 次，
+// 可见性重试另有 10s 限流；回 running 或手动 reload 清零（reload 仍清 widgetState）。
+const AUTO_RECOVER_BACKOFF_MS = [5_000, 15_000, 45_000, 60_000];
+const AUTO_RECOVER_MAX_ATTEMPTS = 6;
+const AUTO_RECOVER_VISIBLE_THROTTLE_MS = 10_000;
 export function createPage(
   key: string,
   input: UsePluginUiHostInput,
@@ -91,6 +96,9 @@ export function createPage(
   let appIdentity: string | undefined;
   // 当前租约/订阅锚定的会话（HBA fr19）；update 交付不同锚点时整体重绑。
   let boundSessionId: string | null = null;
+  let autoRecoverAttempts = 0;
+  let autoRecoverTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastAutoRecoverAt = 0;
   const notify = () => {
     for (const listener of listeners) listener();
   };
@@ -103,12 +111,19 @@ export function createPage(
     error: null,
     appCapabilities: undefined,
     reload: () => {
+      resetAutoRecover();
       clearPluginUiWidgetState(key);
       void page.suspend(true).then(ensure);
     },
   };
   const patch = (value: Partial<UsePluginUiHostResult>) => {
+    const previousPhase = snapshot.phase;
     snapshot = { ...snapshot, ...value };
+    // error 相位有界自动恢复（HBA fr21）：进 error 挂退避重试，回 running 清零。
+    if (snapshot.phase !== previousPhase) {
+      if (snapshot.phase === "error") scheduleAutoRecover();
+      else if (snapshot.phase === "running") resetAutoRecover();
+    }
     notify();
   };
   const setPhase = (phase: PluginUiHostPhase) => patch({ phase });
@@ -152,7 +167,10 @@ export function createPage(
   const plane = createPluginUiPagePlane({
     onVisibility(visible) {
       if (page.visible !== visible) pluginUiPages.visibility(page, visible);
-      if (visible) ensure();
+      if (visible) {
+        if (snapshot.phase === "error") recoverOnVisible();
+        else ensure();
+      }
       syncExecution();
     },
     onCrash() {
@@ -186,8 +204,50 @@ export function createPage(
       });
   }
   function onWindowVisibility() {
-    if (!document.hidden && plane.hasVisibleAnchor()) void ensure();
+    if (!document.hidden && plane.hasVisibleAnchor()) {
+      if (snapshot.phase === "error") recoverOnVisible();
+      else void ensure();
+    }
     syncExecution();
+  }
+  function cancelAutoRecover() {
+    if (autoRecoverTimer !== undefined) {
+      clearTimeout(autoRecoverTimer);
+      autoRecoverTimer = undefined;
+    }
+  }
+  function resetAutoRecover() {
+    autoRecoverAttempts = 0;
+    cancelAutoRecover();
+  }
+  function scheduleAutoRecover() {
+    if (disposed || autoRecoverTimer !== undefined) return;
+    if (autoRecoverAttempts >= AUTO_RECOVER_MAX_ATTEMPTS) return;
+    const delay =
+      AUTO_RECOVER_BACKOFF_MS[Math.min(autoRecoverAttempts, AUTO_RECOVER_BACKOFF_MS.length - 1)];
+    autoRecoverTimer = setTimeout(() => {
+      autoRecoverTimer = undefined;
+      runAutoRecover();
+    }, delay);
+  }
+  function runAutoRecover() {
+    if (disposed || snapshot.phase !== "error") return;
+    autoRecoverAttempts++;
+    lastAutoRecoverAt = Date.now();
+    logger.lifecycle.info(`[plugin-ui] auto-recover attempt ${autoRecoverAttempts}`, {
+      sessionId: latest.current.scope.sessionId,
+      pluginId: latest.current.presentation.pluginId,
+    });
+    // 与手动 reload 同一重启路径（suspend 清 controller/换 incarnation，ensure 重建），
+    // 但不清 widgetState——面板未保存状态在自动恢复中保留。
+    void page.suspend(true).then(ensure);
+  }
+  function recoverOnVisible() {
+    if (disposed || snapshot.phase !== "error") return;
+    if (autoRecoverAttempts >= AUTO_RECOVER_MAX_ATTEMPTS) return;
+    if (Date.now() - lastAutoRecoverAt < AUTO_RECOVER_VISIBLE_THROTTLE_MS) return;
+    cancelAutoRecover();
+    runAutoRecover();
   }
   async function ensure() {
     if (disposed || controller || starting || snapshot.phase === "error") return;
@@ -544,6 +604,7 @@ export function createPage(
       return true;
     },
     destroy() {
+      cancelAutoRecover();
       document.removeEventListener("visibilitychange", onWindowVisibility);
       workspaceEvents.dispose();
       clearPluginUiSurfaceFeed(key);

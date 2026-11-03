@@ -435,8 +435,10 @@ const Bridge = (() => {
   const resourceListeners = new Set();
   const teardownListeners = new Set();
   const themeListeners = new Set();
+  const deadListeners = new Set();
   let nextId = 1;
   let connected = false;
+  let consecutiveFailures = 0;
 
   window.addEventListener("message", (event) => {
     if (event.source !== window.parent) return;
@@ -469,14 +471,31 @@ const Bridge = (() => {
     }
   });
 
+  // 请求层连续失败计数(任一请求成功即清零):达到阈值视为「桥假死」,
+  // 通知上层面板强制重新 init,防止宿主无响应时面板永久僵尸。
+  const DEAD_FAIL_THRESHOLD = 5;
+  function noteRequestResult(ok) {
+    if (ok) { consecutiveFailures = 0; return; }
+    consecutiveFailures += 1;
+    if (consecutiveFailures < DEAD_FAIL_THRESHOLD) return;
+    consecutiveFailures = 0; // 触发一次即清零,避免连续风暴式重入
+    for (const cb of deadListeners) { try { cb(); } catch (e) { console.error(e); } }
+  }
+
   function request(method, params, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
       const id = nextId++;
       const timer = setTimeout(() => {
         pending.delete(id);
+        noteRequestResult(false);
         reject(new Error("bridge 请求超时: " + method));
       }, timeoutMs);
-      pending.set(id, { resolve, reject, timer });
+      // 成功/失败都过计数器:响应分发处调用的就是这对包装函数
+      pending.set(id, {
+        timer,
+        resolve: (v) => { noteRequestResult(true); resolve(v); },
+        reject: (e) => { noteRequestResult(false); reject(e); }
+      });
       window.parent.postMessage({ jsonrpc: "2.0", id, method, params: params || {} }, "*");
     });
   }
@@ -514,12 +533,14 @@ const Bridge = (() => {
   }
 
   async function subscribe(uri) {
-    try { await request("resources/subscribe", { uri }); } catch (e) { console.warn(e); }
+    // 失败向上抛:由 init 区分「宿主不支持→降级继续」与「传输失败→退避重试」
+    await request("resources/subscribe", { uri });
   }
 
   function onResourceUpdate(cb) { resourceListeners.add(cb); return () => resourceListeners.delete(cb); }
   function onTeardown(cb) { teardownListeners.add(cb); return () => teardownListeners.delete(cb); }
   function onThemeChange(cb) { themeListeners.add(cb); return () => themeListeners.delete(cb); }
+  function onBridgeDead(cb) { deadListeners.add(cb); return () => deadListeners.delete(cb); }
 
   function sendSizeChanged() {
     const width = Math.ceil(window.innerWidth);
@@ -529,7 +550,7 @@ const Bridge = (() => {
 
   return {
     connect, request, notify, callTool, readResource, subscribe,
-    onResourceUpdate, onTeardown, onThemeChange, sendSizeChanged,
+    onResourceUpdate, onTeardown, onThemeChange, onBridgeDead, sendSizeChanged,
     get connected() { return connected; }
   };
 })();
@@ -1001,6 +1022,8 @@ async function refreshAll() {
 
 async function refreshConfigs() {
   const res = await callTool("run_config_list", {});
+  // 请求已先发;状态变更与渲染等 savedUi(选中配置)落地后再做,防竞态
+  await uiStateGate;
   const configs = res.configs || [];
   const changed = JSON.stringify(configs) !== JSON.stringify(App.configs);
   App.configs = configs;
@@ -1017,6 +1040,7 @@ async function refreshConfigs() {
 
 async function refreshRuns() {
   const res = await callTool("run_status", {});
+  await uiStateGate; // 同 refreshConfigs:渲染等 savedUi 落地
   App.runs = res.runs || [];
   // 运行态变化会翻转行内 ▶/■ 的可用性,配置列表也要重绘
   renderConfigs();
@@ -1389,12 +1413,11 @@ function scheduleUiStateSave() {
 }
 
 async function loadUiState() {
-  try {
-    const res = await callTool("run_ui_state", {});
-    return res && res.state && typeof res.state === "object" ? res.state : null;
-  } catch {
-    return null;
-  }
+  // 失败向上抛:传输类失败由 init 退避重试;「无状态/空」是正常降级,记日志后按 null 继续
+  const res = await callTool("run_ui_state", {});
+  if (res && res.state && typeof res.state === "object") return res.state;
+  console.info("[hba-run] 无已保存的面板状态(首次打开或已清空),按空状态继续");
+  return null;
 }
 
 function applyUiChromeState(saved) {
@@ -1408,8 +1431,9 @@ async function restoreCurrentRun(runId) {
   if (!App.outputByRun[runId]) App.outputByRun[runId] = { lines: [], since: 0 };
   try {
     await fetchOutput(runId);
-  } catch {
-    // 运行记录已滚出历史,恢复不了就回落到空控制台
+  } catch (e) {
+    if (isTransportFailure(e)) throw e; // 传输失败 → 上层调度重试整段 init
+    // 运行记录已滚出历史等业务失败,恢复不了就回落到空控制台
     App.currentRunId = null;
   }
   renderConsole();
@@ -1455,6 +1479,125 @@ function startPolling() {
   }, 1200);
 }
 
+// ---- 启动自愈(init 失败退避重试 + 桥看门狗) --------------------------------
+// connect 或任一数据阶段失败都不让面板永久停摆:按 2/4/8/15/30s 退避重试整段
+// init(30s 封顶,之后每 30s 一次),面板存活期间持续自愈;桥请求层连续失败
+// 达阈值(见 Bridge.onBridgeDead)则强制重入,防「桥假死、面板僵尸」。
+const INIT_RETRY_DELAYS_MS = [2000, 4000, 8000, 15000, 30000];
+let initRetryTimer = null;
+let initRetryAttempt = 0;
+let initGeneration = 0; // 每轮 init 递增,作废旧轮结果,防并发重入
+// 渲染闸门:init 期间挂起,savedUi(外观/选中配置)落地后放行;使
+// config_list/status 的网络请求可与 loadUiState 并行先发,渲染等状态。
+let uiStateGate = Promise.resolve();
+
+/** 传输类失败(超时/桥层错误)→ 需重试整段 init;round-trip 成功但工具报业务错 → 降级继续。 */
+function isTransportFailure(e) {
+  if (!e) return false;
+  if (isBridgeUnsupported(e)) return false; // 宿主明确「不支持」,重试无意义
+  if (typeof e.code === "number") return true; // JSON-RPC 层错误(消息送达但被拒)
+  return /bridge 请求超时/.test(String(e.message || ""));
+}
+
+/** 重入前清运行期定时器,防僵尸轮询/旧刷新/旧重试残留。
+ *  uiStateTimer(状态防抖保存)刻意保留:清了会丢最后一次状态保存。 */
+function clearInitTimers() {
+  if (App.pollTimer) { clearInterval(App.pollTimer); App.pollTimer = null; }
+  if (App.refreshTimer) { clearTimeout(App.refreshTimer); App.refreshTimer = null; }
+  if (initRetryTimer) { clearTimeout(initRetryTimer); initRetryTimer = null; }
+}
+
+function scheduleInitRetry(reason) {
+  if (initRetryTimer) return;
+  const delay = INIT_RETRY_DELAYS_MS[Math.min(initRetryAttempt, INIT_RETRY_DELAYS_MS.length - 1)];
+  console.warn("[hba-run] init 失败(" + reason + "), " + delay + "ms 后重试(第 " + (initRetryAttempt + 1) + " 次退避)");
+  initRetryAttempt += 1;
+  initRetryTimer = setTimeout(() => { initRetryTimer = null; runInit(); }, delay);
+}
+
+/**
+ * 单轮宿主初始化,串行跨进程往返压到 2 跳:
+ *   阶段1 Bridge.connect();阶段2 订阅 ∥ 读 UI 状态 ∥ 刷新列表并行发出,
+ *   savedUi 落地即放行渲染闸门,并立刻发起当前运行日志回放。
+ * 任一传输类失败抛给 runInit 调度退避重试。
+ */
+async function initHostData(gen) {
+  const t0 = Date.now();
+  console.debug("[hba-run] init connect ...");
+  const initResult = await Bridge.connect();
+  if (gen !== initGeneration) return; // 已被新一轮 init 取代
+  console.debug("[hba-run] init connect ok +" + (Date.now() - t0) + "ms");
+
+  // hostContext 携带初始主题;之后的变化走 host-context-changed 通知
+  if (initResult && initResult.hostContext && initResult.hostContext.theme) {
+    applyTheme(initResult.hostContext.theme);
+  }
+
+  // 渲染闸门:本轮 savedUi 落地前,refresh* 只发请求、不改状态不渲染
+  let releaseGate;
+  uiStateGate = new Promise((r) => { releaseGate = r; });
+
+  // 三路并行:订阅状态推送 ∥ 读共享面板状态 ∥ 刷新配置与运行列表(其内部已并行)
+  const subscribeP = Bridge.subscribe("ui://run/state");
+  const refreshP = refreshAll();
+  const savedUiP = loadUiState().then((savedUi) => {
+    // savedUi(外观+选中配置)必须先于任何消费 selectedConfigId 的渲染落地
+    if (gen === initGeneration) {
+      uiStateRestoring = true;
+      try {
+        if (savedUi) {
+          applyUiChromeState(savedUi);
+          if (savedUi.selectedConfigId) App.selectedConfigId = savedUi.selectedConfigId;
+        }
+      } finally {
+        uiStateRestoring = false;
+      }
+    }
+    releaseGate();
+    console.debug("[hba-run] init savedUi applied +" + (Date.now() - t0) + "ms");
+    return savedUi;
+  }, (e) => {
+    releaseGate(); // 成败都放行,避免渲染闸门挂死
+    throw e;
+  });
+  // savedUi 一返回即发起当前运行日志回放:restoreCurrentRun 不依赖 refreshAll
+  // (fetchOutput/renderConsole 只读 outputByRun/currentRunId),与渲染并行
+  const restoreP = savedUiP.then(
+    (savedUi) => (savedUi && savedUi.currentRunId ? restoreCurrentRun(savedUi.currentRunId) : null),
+    () => null // loadUiState 的错误由 savedUiP 自身上报,这里不重复
+  );
+
+  const settled = await Promise.allSettled([savedUiP, subscribeP, refreshP, restoreP]);
+  if (gen !== initGeneration) return; // 旧轮结果作废,新一轮已接管
+  const stages = ["loadUiState", "subscribe", "refreshAll", "restoreCurrentRun"];
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i];
+    if (r.status !== "rejected") continue;
+    if (isTransportFailure(r.reason)) throw r.reason; // 传输失败 → 退避重试整段 init
+    console.warn("[hba-run] init " + stages[i] + " 非传输失败,按降级继续:", r.reason);
+  }
+  console.debug("[hba-run] init data ready +" + (Date.now() - t0) + "ms");
+}
+
+/** 跑一轮 init:成功收尾启动轮询;失败清定时器并按退避调度重试。
+ *  重试定时器与看门狗强制重入都收敛到这里,靠 initGeneration 防并发重入。 */
+function runInit() {
+  clearInitTimers();
+  const gen = ++initGeneration;
+  return initHostData(gen).then(() => {
+    if (gen !== initGeneration) return;
+    initRetryAttempt = 0; // 成功后退避归零
+    startPolling();
+    Bridge.sendSizeChanged();
+    console.debug("[hba-run] init done");
+  }, (e) => {
+    if (gen !== initGeneration) return; // 旧轮失败,已被新一轮接管
+    console.warn("[hba-run] init 失败:", e);
+    clearInitTimers();
+    scheduleInitRetry((e && e.message) || String(e));
+  });
+}
+
 async function init() {
   // 启动先落一个系统主题兜底;连上宿主后由 hostContext 覆盖
   applyTheme(systemTheme());
@@ -1465,7 +1608,7 @@ async function init() {
     }
   }
 
-  // 事件绑定
+  // 事件绑定(一次性:init 重试只重跑数据阶段,不重复绑定)
   $("btn-new").addEventListener("click", () => openModal(null));
   $("btn-del").addEventListener("click", () => deleteConfig().catch((e) => toast(e.message, true)));
   $("btn-dup").addEventListener("click", () => duplicateConfig().catch((e) => toast(e.message, true)));
@@ -1511,18 +1654,7 @@ async function init() {
     return; // standalone preview mode: no host bridge
   }
 
-  let initResult = null;
-  try {
-    initResult = await Bridge.connect();
-  } catch (e) {
-    console.warn("bridge connect failed:", e);
-    return;
-  }
-
-  // hostContext 携带初始主题;之后的变化走 host-context-changed 通知
-  if (initResult && initResult.hostContext && initResult.hostContext.theme) {
-    applyTheme(initResult.hostContext.theme);
-  }
+  // 宿主监听器只注册一次:init 重试/看门狗重入不会重复挂载
   Bridge.onThemeChange((ctx) => { if (ctx && ctx.theme) applyTheme(ctx.theme); });
 
   Bridge.onResourceUpdate(() => {
@@ -1531,29 +1663,17 @@ async function init() {
     startPolling();
   });
   Bridge.onTeardown(() => {
-    if (App.pollTimer) clearInterval(App.pollTimer);
-    if (App.refreshTimer) clearTimeout(App.refreshTimer);
+    clearInitTimers(); // 含重试定时器:面板被卸载后不再自愈重试
   });
-
-  await Bridge.subscribe("ui://run/state");
-
-  // 恢复共享面板状态(B 方案):先恢复外观与选中配置,refreshAll 之后恢复当前运行
-  // 及其日志(run_output 对活运行和历史记录都能回放)。
-  const savedUi = await loadUiState();
-  uiStateRestoring = true;
-  try {
-    if (savedUi) {
-      applyUiChromeState(savedUi);
-      if (savedUi.selectedConfigId) App.selectedConfigId = savedUi.selectedConfigId;
-    }
-    await refreshAll();
-    if (savedUi && savedUi.currentRunId) await restoreCurrentRun(savedUi.currentRunId);
-  } finally {
-    uiStateRestoring = false;
-  }
-  startPolling();
-  Bridge.sendSizeChanged();
+  // 桥看门狗:请求层连续失败达阈值 → 强制重新 init(防「桥假死、面板僵尸」)
+  Bridge.onBridgeDead(() => {
+    console.warn("[hba-run] 桥连续请求失败达阈值,强制重新初始化");
+    runInit();
+  });
   window.addEventListener("resize", () => Bridge.sendSizeChanged());
+
+  // 数据初始化在后台自愈循环里跑:失败按退避重试,不阻塞面板首帧
+  return runInit();
 }
 
 init().catch((e) => {
