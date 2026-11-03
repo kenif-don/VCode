@@ -106,6 +106,7 @@ pnpm run test:unit                # vitest 单元测试(排除 desktop e2e)
 | `patches/fr18-02-remove-settings-onboarding-entries.patch` | fr18-02 删设置弹框底部引导入口(左栏"引导"按钮 + 通用区"打开引导"行及其 prop 链) | 同上 |
 | `patches/fr18-03-remove-mobile-connect-stale-tests.patch` | fr18-03 清理已删手机连接入口的遗留用例(e2e 10 例/专属单测与助手/回放 fixture 共 39 文件,含 wdio 与清单剪裁) | 同上 |
 | `patches/fr19-01-plugin-ui-session-anchor-fallback-rebind.patch` | fr19-01 插件面板会话容错(12 文件):mcp/ui* 会话锚点兜底(requireSessionForMcpUi 回退任一存活记录)、面板 surface key 会话位改 `*`、锚点会话消亡换锚重绑(model+managedPage),删除/归档会话不再挂死项目级面板 | `../docs/fr19-plugin-ui-session-anchor.md` |
+| `patches/fr21-01-plugin-ui-error-auto-recover.patch` | fr21-01 插件面板 error 相位有界自动恢复(1 文件):进 error 挂退避重试 5s→15s→45s→60s 封顶、单错误事件最多 6 次,页面可见时另按 10s 限流触发一次;回 running/手动 reload 清零,自动重试不清 widgetState。叠在 `patches/sync-v3.17.1/` 01→08 之上验证(非 3c5b227 旧栈) | `patch-verify-report.md` 附 fr21-01 |
 | `branding/apply-whitelabel.mjs`(**脚本**,非补丁) | fr13 白标改名:独立词 ZCode→VCode(约 740 文件)+ 产品身份/进程名定点转换;版权/署名行依法豁免 | 同上 |
 | `branding/generate-icons.py` + `branding/icons/`(**脚本**,非补丁) | fr13 图标资产:由 `icons/hba-icon-1024.png` 生成全套 ico/icns/png 并铺到既有位置(含 favicon data URI) | 同上 |
 

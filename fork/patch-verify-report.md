@@ -264,3 +264,25 @@ pnpm run bundle:desktop -- --os win --arch x64   # 可选:完整打包
 - 验证:modelProvider 全系 332/332(含 fr15 既有 188 例);`tsc -b packages/ui` 0 错;补丁 `git apply --check` 在「基线+fr15-01」前态零冲突、`git apply --reverse --check` 在开发树通过;fr15-02~fr18-03 均不触碰本补丁源文件,fr15-01 之后任意位置可叠(上下文依赖 fr15-01 白标块)。全量 `packages/ui` 仍有 fr18 已记录的 18 文件 107 例存量失败(失败集与 pre-fr18 对照一致),与本补丁无关。
 - 产物:**打包(2026-10-30,r20)**:`pnpm run bundle:desktop -- --os win --arch x64` 全链路 exit 0(生产构建→asar→NSIS→闭包校验→体积审计 156.4 MiB<500 MiB)。产物 `dist/VCode-3.16.2-hba-panels-r20-win-x64.exe`(163,983,084 字节,sha256 d63e74b4fbc3a2d612c6082f1c073a1531a3f0f940c6b6fe7612a0d7d794d410)。产物探针:`app.asar` 命中 `isNavItemVisible`(属性名不参与压缩,证明修复代码入包;desktop 直接打包 `packages/ui` 源码)。r20 同时含 r19 之后在树工作:fr18 批次(删手机连接/设置引导入口)与 hba-run 面板「回到底部」按钮;hba-uigen 插件种子(server.mjs/bridge.js/panel.html)按 r13 配方同步为 hba-on-zcode/plugins 当前源码,防安装后重新播种回滚用户热部署。
 - 复现:修复前打包件点「设置→模型配置」即崩;r20 同路径正常打开,无自定义供应商时选中稳定为空。
+
+
+## 附:fr21-01 插件面板 error 相位有界自动恢复(2026-11-03)
+
+- 补丁:`fork/patches/fr21-01-plugin-ui-error-auto-recover.patch`(1 文件,+63/-2,git diff 格式,单文件收敛 `pluginUiManagedPage.ts`,无新增测试文件)
+- 现象:会话/项目闲置很久后面板死掉不再显示,所有恢复入口都进不来,必须手动点「重新加载」才恢复。
+- 根因:`pluginUiManagedPage.ts` 的 `ensure()` 开头有 `if (disposed || controller || starting || snapshot.phase === "error") return;`——一旦进入 error 相位(onCrash / onInstanceClosed / runtimeStopped / prepare·validate 失败 / 握手超时)就永久短路,`onVisibility(true)`、`onWindowVisibility`、`bind` 三个恢复入口全被挡在门外;宿主把一次瞬时失败固化成终态,是"闲置回来面板挂死"的直接机制之一。唯一出口是手动 reload(`suspend(true).then(ensure)` 把 phase 打回 idle)。
+- 修复:error 相位改为有界自动恢复(全部收敛在 `pluginUiManagedPage.ts` 单文件):
+  - **退避重试**:任一路径 `patch({phase:"error"})` 进入 error 相位时挂定时重试 5s→15s→45s→之后 60s 封顶;每个"错误事件"最多 6 次自动尝试(计数在进 error 时按已试次数取退避档)。
+  - **可见性触发**:`onVisibility(true)` / `onWindowVisibility`(窗口可见且有锚点)遇到 phase==="error" 时立即尝试一次,但距上次自动重试须 ≥10s(限流);尝试前取消挂起的退避定时器,失败再进 error 会按计数重新挂退避。
+  - **重试动作**:照手动 reload 的重启路径 `page.suspend(true).then(ensure)`(suspend 清 controller/换 incarnation epoch,ensure 重建,与 releasing 链不打架),但**不调用 `clearPluginUiWidgetState`**——面板未保存的 widgetState 在自动恢复中保留。
+  - **计数清零**:相位回 `running`(在 `patch` 里集中判相位迁移)或手动 `reload()` 时清零并取消定时器;`destroy()` 取消挂起定时器。`ensure()` 的 error 短路守卫保持原样(防止 bind/工具feed 等入口无界重试)。
+  - **打点**:每次自动尝试走 `logger.lifecycle.info("[plugin-ui] auto-recover attempt {n}", {sessionId, pluginId})`,沿用文件内既有 lifecycle 日志写法。
+  - 手动 reload 行为不变(仍清 widgetState);未改 CONTRACT.md 大语义,行为差异以代码注释说明。
+- 触碰文件:
+  - `packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts`(行 47-51 退避常量与注释、99-101 计数/定时器/上次尝试时间状态、114 reload 清零、120-127 `patch` 相位迁移钩子、168-175 `onVisibility` 可见性恢复、207-251 `onWindowVisibility` 与四个恢复辅助函数、607 `destroy` 清定时器)
+- 验证:
+  - typecheck:`pnpm exec tsc -b packages/ui` → **exit 0,0 错误**。
+  - 单测:`packages/ui` 下无 plugin-ui / pluginUiManagedPage 相关单测(全仓 `*.test.ts` 无一引用该模块);现行门禁范围实跑——`vitest run --project unit` **20 文件 111 例全过**;`vitest run --project fork-isolated` **3 过 / 1 跳过(6 例 skipped)/ 0 失败**;engineering 项目 157 文件清单 grep 确认 0 处涉及 plugin-ui。注:fr18 记录的"18 文件 107 例存量失败"是 v3.17.1 sync 前旧 unit 口径(sync 后多数已迁 engineering 项目),现行 unit 无该失败集,本补丁未新增失败。
+  - 补丁生成:`git diff -- packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts`(仅该路径)→ `fork/patches/fr21-01-plugin-ui-error-auto-recover.patch`。
+  - **干净树重放(硬指标)**:`git worktree add <scratch>/fr21-replay a60ba6a7` → 按序对 `fork/patches/sync-v3.17.1/01..08` 逐个 `git apply --check` + `git apply`(全部 OK)→ `git apply --check` + `git apply` fr21-01(**CHECK OK + APPLY OK,零冲突零 fuzz**)→ 重放树该文件与开发树工作区文件 `cmp` 逐字节一致;且 01..08 栈产物(撤掉 fr21 后)与开发树 HEAD 版本逐字节一致(无散改缺口)。开发树 `git apply --reverse --check` fr21-01 **通过**。worktree 用毕 `git worktree remove --force` 已清理。
+- 复现:装包后让带插件面板的会话闲置至 MCP App 断连/崩溃(面板显示 error),不做任何操作——5s 起按 5/15/45/60s 自动重试(主日志见 `[plugin-ui] auto-recover attempt N`),或把窗口/面板重新弄可见即触发一次(≥10s 限流);恢复成功后面板继续显示且 widgetState 未丢。手动「重新加载」行为与改前一致。
