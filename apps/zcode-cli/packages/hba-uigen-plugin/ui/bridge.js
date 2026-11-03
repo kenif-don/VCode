@@ -35,120 +35,221 @@
 
   var PROTOCOL_VERSION = "2025-06-18";
   var UI_PROTOCOL_VERSION = "2026-01-26";
-  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.3.0" };
-  var APP_INFO = { name: "hba-uigen", version: "0.3.0" };
+  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.4.0" };
+  var APP_INFO = { name: "hba-uigen", version: "0.4.0" };
 
   // -------------------------------------------------------------------------
-  // local demo backend — compact mirror of server.mjs / uigen_sidecar.py demo
+  // local demo backend — 原型库工具面的内存 mock(uigen_* 新契约),
+  // standalone 打开 panel 时走这里;宿主 MCP 可用时不经过它。
   // -------------------------------------------------------------------------
-  var DEMO_NAMES = ["首页", "列表页", "详情页", "个人中心", "设置页", "搜索页", "消息页", "订单页", "登录页", "结果页"];
+  var WORKSPACE = "/demo/workspace";
 
-  function demoScreens(prompt, format, count) {
-    var title = String(prompt || "").trim().slice(0, 12) || "UI 原型";
-    var short = String(prompt || "").trim().slice(0, 40);
-    var tabs = Math.min(count, 5);
-    var screens = [];
-    for (var i = 0; i < count; i++) {
-      var hotspots = [];
-      for (var j = 0; j < tabs; j++) {
-        hotspots.push({
-          to: "s" + (j + 1),
-          label: DEMO_NAMES[j % DEMO_NAMES.length],
-          x: Math.round((j * 390) / tabs),
-          y: 774,
-          w: Math.floor(390 / tabs),
-          h: 70
-        });
-      }
-      screens.push({
-        id: "s" + (i + 1),
-        name: DEMO_NAMES[i % DEMO_NAMES.length],
-        html: demoHtml(i, title, short, hotspots),
-        jsx: demoJsx(i, title, short),
-        vue: demoVue(i, title, short),
-        hotspots: hotspots
-      });
-    }
-    return screens;
-  }
-
-  function demoHtml(i, title, prompt, hotspots) {
-    var name = DEMO_NAMES[i % DEMO_NAMES.length];
-    var cards = [
-      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
-      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
-      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
-    ].map(function (c) {
-      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
-    }).join("\n");
-    var tabsHtml = (hotspots || []).map(function (h) {
-      return '      <a class="tab' + (h.to === "s" + (i + 1) ? " on" : "") + '" data-uigen-goto="' + h.to + '">' + h.label + "</a>";
-    }).join("\n");
+  function demoPage(title, bodyHtml) {
     return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
       "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
-      "  <title>" + name + " · " + title + "</title>\n" +
-      "  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
+      "  <title>" + title + "</title>\n  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
       "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
-      "    .app-bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
-      "    main { padding: 16px; padding-bottom: 96px; }\n    h1 { font-size: 22px; margin-bottom: 6px; }\n" +
-      "    .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }\n" +
-      "    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }\n" +
-      "    .card h2 { font-size: 15px; margin-bottom: 6px; }\n    .card p { font-size: 13px; color: #4b5563; line-height: 1.6; }\n" +
-      "    .tab-bar { position: fixed; left: 0; bottom: 0; width: 390px; height: 70px; display: flex; background: #fff; border-top: 1px solid #e5e7eb; }\n" +
-      "    .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; text-decoration: none; }\n" +
-      "    .tab.on { color: #2b6cb0; font-weight: 600; }\n  </style>\n</head>\n<body>\n" +
-      '  <header class="app-bar">' + title + "</header>\n  <main>\n    <h1>" + name + "</h1>\n" +
-      '    <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards + "\n  </main>\n" +
-      '  <nav class="tab-bar">\n' + tabsHtml + "\n  </nav>\n" +
-      '  \x3cscript type="application/json" id="uigen-hotspots">' + JSON.stringify(hotspots || []) + "\x3c/script>\n</body>\n</html>\n";
+      "    .bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
+      "    main { padding: 16px; }\n    h1 { font-size: 22px; margin: 12px 0 6px; }\n" +
+      "    p { font-size: 13px; color: #4b5563; line-height: 1.6; margin-bottom: 8px; }\n" +
+      "    .btn { display: inline-block; margin-top: 12px; padding: 10px 18px; border: 0; cursor: pointer; border-radius: 8px; background: #2b6cb0; color: #fff; font-size: 14px; }\n" +
+      "    .field { display: block; width: 100%; margin-top: 10px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: #fff; }\n" +
+      "  </style>\n</head>\n<body>\n  <header class=\"bar\">" + title + "</header>\n  <main>\n" +
+      bodyHtml + "\n  </main>\n</body>\n</html>\n";
   }
 
-  function demoJsx(i, title, prompt) {
-    var name = DEMO_NAMES[i % DEMO_NAMES.length];
-    var cards = [
-      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
-      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
-      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
-    ].map(function (c) {
-      return '        <div className="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
-    }).join("\n");
-    return "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default function Screen" + (i + 1) + "() {\n  return (\n" +
-      '    <div className="phone" style={{ width: 390, minHeight: 844 }}>\n' +
-      '      <header className="app-bar">' + title + "</header>\n      <main>\n        <h1>" + name + "</h1>\n" +
-      '        <p className="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
-      '\n      </main>\n      <nav className="tab-bar">{/* hotspots: see ui state */}</nav>\n    </div>\n  );\n}\n';
+  function blankPage(stem) {
+    return demoPage(stem, "    <h1>" + stem + "</h1>\n    <p>新页面,从树的 ⋯ 菜单或画布进入编辑。</p>");
   }
 
-  function demoVue(i, title, prompt) {
-    var name = DEMO_NAMES[i % DEMO_NAMES.length];
-    var cards = [
-      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
-      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
-      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
-    ].map(function (c) {
-      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
-    }).join("\n");
-    return "<template>\n  <div class=\"phone\">\n    <header class=\"app-bar\">" + title + "</header>\n    <main>\n      <h1>" + name + "</h1>\n" +
-      '      <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
-      "\n    </main>\n    <nav class=\"tab-bar\"><!-- hotspots: see ui state --></nav>\n  </div>\n</template>\n\n\x3cscript>\n" +
-      "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default {\n  name: \"Screen" + (i + 1) + "\"\n};\n\x3c/script>\n\n" +
-      "<style scoped>\n.phone { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; }\n</style>\n";
-  }
+  var DEMO_JSX = "// banner.jsx — 演示 JSX 产物(单页视图以代码形式展示)\n" +
+    "export default function Banner() {\n  return (\n" +
+    "    <div className=\"banner\">\n      <h1>促销横幅</h1>\n" +
+    "      <p>限时活动进行中 — JSX 产物在单页视图里显示源码。</p>\n" +
+    "    </div>\n  );\n}\n";
 
   function localBackend() {
-    // 磁盘即真源的内存镜像(0.3.0):screens 清单 + 产物,无版本概念。
-    var screens = [];      // [{id,name,html,jsx,vue,hotspots,order}]
+    // 虚拟工作区文件系统:key = 工作区相对 posix 路径("" = 工作区根)
+    var fsMap = null;
+    var root = "";            // 原型根(工作区相对路径;"" = 工作区根本身,与 server 缺省对齐)
+    // 布局持久化:standalone 下 mock 即"服务端",用 localStorage 模拟 canvas-layout.json
+    // 落盘,刷新面板后画布布局/卡片位置才能恢复(与宿主 MCP 模式行为对齐)。
+    var LAYOUT_KEY = "hba-uigen-local-canvas-layout";
     var canvasLayout = null;
+    try {
+      var savedLayout = global.localStorage ? global.localStorage.getItem(LAYOUT_KEY) : null;
+      if (savedLayout) canvasLayout = JSON.parse(savedLayout);
+    } catch (e) { canvasLayout = null; }
+    // 技能假数据:字段面与 server.mjs normalizeSkillRecord 对齐
+    // (id/name/description/category/scope/is_active/sort_order/instructions/examples),
+    // 8 条覆盖多分类、2 条 is_active:false,供技能弹窗走查。
+    var skills = [
+      {
+        id: "skill-landing-hero", name: "营销落地页",
+        description: "单页营销落地页骨架(Hero + 卖点 + CTA)",
+        category: "layout", scope: "global", is_active: true, sort_order: 10,
+        instructions: "# 营销落地页\n\n- 顶部大图 Hero\n- 三列卖点卡片\n- 底部 CTA 按钮",
+        examples: "", updatedAt: "2026-11-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-auth-flow", name: "登录注册流",
+        description: "登录 / 注册 / 找回密码三屏流程",
+        category: "components", scope: "global", is_active: true, sort_order: 20,
+        instructions: "# 登录注册流\n\n- login 登录屏\n- register 注册屏\n- reset 找回密码屏",
+        examples: "", updatedAt: "2026-11-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-brand-voice", name: "品牌语调",
+        description: "",
+        category: "brand", scope: "global", is_active: true, sort_order: 30,
+        instructions: "# 品牌语调\n\n- 第二人称称呼用户\n- 禁用夸张感叹号\n- 价格统一「¥ + 数字」",
+        examples: "", updatedAt: "2026-11-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-style-minimal", name: "极简风格",
+        description: "留白优先、单主色、弱阴影的视觉基调",
+        category: "style", scope: "global", is_active: true, sort_order: 40,
+        instructions: "# 极简风格\n\n- 单主色 + 中性灰\n- 卡片圆角 8-12px\n- 阴影只用一层",
+        examples: "", updatedAt: "2026-10-28T00:00:00.000Z"
+      },
+      {
+        id: "skill-constraints-a11y", name: "无障碍约束",
+        description: "对比度、焦点态与语义标签的硬性约束",
+        category: "constraints", scope: "global", is_active: true, sort_order: 50,
+        instructions: "# 无障碍约束\n\n- 正文对比度 ≥ 4.5:1,大字号 ≥ 3:1\n- 所有可交互元素必须有 :focus-visible 焦点态,焦点环颜色与主色一致且不得被 overflow 裁切\n- 图标按钮必须有 aria-label 或 title,纯装饰图标 aria-hidden=\"true\"\n- 页面结构按 header/main/footer/section 语义标签组织,标题层级 h1→h2→h3 不跳级\n- 表单控件必须有关联 label,错误提示用 aria-describedby 关联并 role=\"alert\"\n- 触控目标不小于 44×44px,间距不小于 8px 以防误触\n- 动画遵循 prefers-reduced-motion,开启减弱动效时仅保留不超过 100ms 的透明度过渡\n- 颜色不作为传达信息的唯一手段,状态同时给出文字或图标",
+        examples: "", updatedAt: "2026-10-20T00:00:00.000Z"
+      },
+      {
+        id: "skill-general-copy", name: "文案规范",
+        description: "界面文案的长度、标点与术语口径",
+        category: "general", scope: "global", is_active: true, sort_order: 60,
+        instructions: "# 文案规范\n\n- 按钮文案 ≤ 6 字\n- 中文标点用全角,数字/英文半角\n- 术语首次出现给一句话解释",
+        examples: "", updatedAt: "2026-10-15T00:00:00.000Z"
+      },
+      {
+        id: "skill-legacy-grid", name: "旧版九宫格",
+        description: "已停用的九宫格模板,默认不注入提示词",
+        category: "general", scope: "global", is_active: false, sort_order: 70,
+        instructions: "# 旧版九宫格\n\n- 3x3 图标宫格\n- 固定 88px 格宽",
+        examples: "", updatedAt: "2026-10-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-motion-heavy", name: "重动效模板",
+        description: "停用:动效过多与极简基调冲突",
+        category: "style", scope: "global", is_active: false, sort_order: 80,
+        instructions: "# 重动效模板\n\n- 页面转场 300ms\n- 卡片入场逐个 stagger",
+        examples: "", updatedAt: "2026-09-20T00:00:00.000Z"
+      }
+    ];
 
-    function entryOf(s) {
-      return { id: s.id, name: s.name, files: { html: s.id + ".html" }, hotspots: s.hotspots || [], order: s.order || 0, updatedAt: "" };
+    /** name → slug(与 server.mjs slugify 同口径):小写、非字母数字转 -、空则 untitled。 */
+    function slugify(s) {
+      var slug = String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+      return slug || "untitled";
     }
-    function nextId() {
-      var n = screens.length + 1;
-      var used = {};
-      screens.forEach(function (s) { used[s.id] = true; });
-      while (used["s" + n]) n += 1;
-      return "s" + n;
+
+    function seed() {
+      var m = {};
+      function mod(p) { m[p] = { type: "module" }; }
+      function page(p, content) { m[p] = { type: "page", content: content }; }
+      mod("prototypes"); mod("assets"); mod("docs");
+      page("prototypes/home.html", demoPage("首页",
+        "    <h1>首页</h1>\n    <p>mock 原型的首页,用于 standalone 走查全览画布与单页视图。</p>\n    <button class=\"btn\" type=\"button\">主要按钮</button>"));
+      mod("prototypes/auth");
+      page("prototypes/auth/login.html", demoPage("登录",
+        "    <h1>登录</h1>\n    <p>输入用户名与密码(演示表单,无脚本)。</p>\n" +
+        "    <input class=\"field\" placeholder=\"用户名\" value=\"demo\">\n" +
+        "    <input class=\"field\" placeholder=\"密码\" type=\"password\" value=\"****\">\n" +
+        "    <span class=\"btn\">登录</span>"));
+      page("prototypes/auth/register.html", demoPage("注册",
+        "    <h1>注册</h1>\n    <p>创建账号(演示表单,无脚本)。</p>\n" +
+        "    <input class=\"field\" placeholder=\"邮箱\" value=\"demo@example.com\">\n" +
+        "    <span class=\"btn\">下一步</span>"));
+      mod("prototypes/shop"); mod("prototypes/shop/catalog");
+      page("prototypes/shop/catalog/list.html", demoPage("商品列表",
+        "    <h1>商品列表</h1>\n    <p>目录页:列表项 1 / 2 / 3(演示)。</p>\n" +
+        "    <p>· 无线耳机 — ¥299</p>\n    <p>· 机械键盘 — ¥499</p>\n    <p>· 显示器支架 — ¥199</p>"));
+      page("prototypes/shop/catalog/detail.html", demoPage("商品详情",
+        "    <h1>商品详情</h1>\n    <p>无线耳机 — ¥299。详情页用于验证单页视图预览。</p>\n" +
+        "    <span class=\"btn\">加入购物车</span>"));
+      mod("prototypes/playground");
+      page("prototypes/playground/banner.jsx", DEMO_JSX);
+      mod("prototypes/drafts");   // 空模块
+      fsMap = m;
+    }
+    seed();
+
+    function absPath(rel) { return rel ? WORKSPACE + "/" + rel : WORKSPACE; }
+
+    /** 直接子节点(按磁盘字典序);dirRel="" 表示工作区根。 */
+    function childrenOf(dirRel) {
+      var prefix = dirRel ? dirRel + "/" : "";
+      var out = [];
+      Object.keys(fsMap).forEach(function (k) {
+        if (k === dirRel || k.indexOf(prefix) !== 0) return;
+        var rest = k.slice(prefix.length);
+        if (rest.indexOf("/") >= 0) return;
+        out.push({ name: rest, path: k, node: fsMap[k] });
+      });
+      out.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+      return out;
+    }
+
+    function extOf(name) {
+      var i = name.lastIndexOf(".");
+      return i > 0 ? name.slice(i + 1).toLowerCase() : "";
+    }
+
+    /** 树节点 id 相对原型根;name 页面取 stem(徽标另显扩展名)。 */
+    function buildTree(dirRel, idPrefix) {
+      return childrenOf(dirRel).map(function (ch) {
+        var id = idPrefix ? idPrefix + "/" + ch.name : ch.name;
+        if (ch.node.type === "module") {
+          return { id: id, name: ch.name, type: "module", children: buildTree(ch.path, id) };
+        }
+        var ext = extOf(ch.name);
+        var stem = ext ? ch.name.slice(0, ch.name.length - ext.length - 1) : ch.name;
+        return { id: id, name: stem, type: "page", framework: ext || "html" };
+      });
+    }
+
+    function countStats(dirRel) {
+      var modules = 0, pages = 0;
+      (function walk(d) {
+        childrenOf(d).forEach(function (ch) {
+          if (ch.node.type === "module") { modules += 1; walk(ch.path); } else { pages += 1; }
+        });
+      })(dirRel);
+      return { modules: modules, pages: pages };
+    }
+
+    /** id(相对原型根) → 文件系统绝对 key。 */
+    function resolveId(id) {
+      id = String(id == null ? "" : id).trim().replace(/\\/g, "/").replace(/^\/+/, "");
+      if (!id || id === "." || id.split("/").some(function (s) { return s === ".."; })) {
+        throw new Error("非法 id: " + id);
+      }
+      var full = root ? root + "/" + id : id;
+      if (!Object.prototype.hasOwnProperty.call(fsMap, full)) throw new Error("节点不存在: " + id);
+      return full;
+    }
+
+    function isPageFull(full) {
+      var name = full.slice(full.lastIndexOf("/") + 1);
+      var ext = extOf(name);
+      return ext === "html" || ext === "htm" || ext === "jsx" || ext === "tsx" || ext === "vue";
+    }
+
+    function moveSubtree(fromFull, toFull) {
+      var keys = Object.keys(fsMap).filter(function (k) {
+        return k === fromFull || k.indexOf(fromFull + "/") === 0;
+      });
+      keys.sort(function (a, b) { return b.length - a.length; }); // 长键先挪,避免前缀撞车
+      keys.forEach(function (k) {
+        var nk = toFull + k.slice(fromFull.length);
+        fsMap[nk] = fsMap[k];
+        delete fsMap[k];
+      });
     }
 
     return {
@@ -156,80 +257,170 @@
         return new Promise(function (resolve, reject) {
           setTimeout(function () {
             try {
-              if (name === "uigen_generate") {
-                var prompt = String((args && args.prompt) || "").trim();
-                if (!prompt) return reject(new Error("prompt is required"));
-                var format = (args && args.format) || "html";
-                var count = Math.min(10, Math.max(1, parseInt(args && args.screenCount, 10) || 3));
-                if (emitProgress) emitProgress({ progress: 0, total: count + 2, message: "准备生成(本地演示)" });
-                screens = demoScreens(prompt, format, count).map(function (s, i) { s.order = i; return s; });
-                if (emitProgress) {
-                  for (var i = 0; i < count; i++) emitProgress({ progress: i + 1, total: count + 2, message: "生成屏幕 " + (i + 1) + "/" + count });
-                }
-                if (emitProgress) emitProgress({ progress: count + 2, total: count + 2, message: "完成" });
+              args = args || {};
+              if (name === "uigen_rescan" || name === "uigen_list_pages") {
+                resolve({ ok: true, root: absPath(root), tree: buildTree(root, ""), stats: countStats(root) });
+              } else if (name === "uigen_get_page") {
+                var full = resolveId(args.id);
+                if (!isPageFull(full)) return reject(new Error("不是页面: " + args.id));
+                var name1 = full.slice(full.lastIndexOf("/") + 1);
+                var ext1 = extOf(name1);
                 resolve({
                   ok: true,
-                  engine: "demo(panel-local)",
-                  prompt: prompt,
-                  format: format,
-                  screenCount: screens.length,
-                  screens: screens.map(function (s) { return { id: s.id, name: s.name, html: s.html, jsx: s.jsx, vue: s.vue, hotspots: s.hotspots || [] }; })
+                  id: args.id,
+                  name: ext1 ? name1.slice(0, name1.length - ext1.length - 1) : name1,
+                  type: "page",
+                  framework: ext1 || "html",
+                  content: fsMap[full].content || ""
                 });
-              } else if (name === "uigen_list_screens") {
-                var limit = Math.max(1, parseInt(args && args.limit, 10) || 100);
-                resolve({ ok: true, screens: screens.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).slice(0, limit).map(entryOf), updatedAt: "" });
-              } else if (name === "uigen_get_screen") {
-                var gid = String((args && args.id) || "");
-                var found = null;
-                screens.forEach(function (s) { if (s.id === gid) found = s; });
-                if (!found) return reject(new Error("screen not found: " + gid));
-                resolve({ ok: true, screen: { id: found.id, name: found.name, order: found.order || 0, hotspots: found.hotspots || [], files: { html: found.id + ".html" }, updatedAt: "", html: found.html, jsx: found.jsx || "", vue: found.vue || "" } });
-              } else if (name === "uigen_save_screen") {
-                var name2 = String((args && args.name) || "").trim();
-                if (!name2) return reject(new Error("name is required"));
-                var sid = String((args && args.id) || "").trim();
-                var target = null;
-                screens.forEach(function (s) { if (s.id === sid) target = s; });
-                if (sid && !target) {
-                  target = { id: sid, name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
-                  screens.push(target);
-                } else if (!sid) {
-                  target = { id: nextId(), name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
-                  screens.push(target);
+              } else if (name === "uigen_save_page") {
+                var id2 = String(args.id == null ? "" : args.id).trim().replace(/\\/g, "/").replace(/^\/+/, "");
+                if (!id2 || id2.split("/").some(function (s) { return s === ".." || s === "."; })) {
+                  return reject(new Error("非法 id: " + args.id));
                 }
-                target.name = name2;
-                if (args && typeof args.html === "string") target.html = args.html;
-                if (args && typeof args.jsx === "string") target.jsx = args.jsx;
-                if (args && typeof args.vue === "string") target.vue = args.vue;
-                if (args && Array.isArray(args.hotspots)) target.hotspots = args.hotspots;
-                if (args && typeof args.order === "number") target.order = args.order;
-                resolve({ ok: true, screen: entryOf(target) });
-              } else if (name === "uigen_delete_screen") {
-                var did = String((args && args.id) || "");
-                var at = -1;
-                screens.forEach(function (s, i) { if (s.id === did) at = i; });
-                if (at < 0) return reject(new Error("screen not found: " + did));
-                screens.splice(at, 1);
-                resolve({ ok: true, deleted: did });
-              } else if (name === "uigen_export") {
-                var files = [];
-                screens.forEach(function (s) {
-                  ["html", "jsx", "vue"].forEach(function (ext) {
-                    if (s[ext] && String(s[ext]).trim()) files.push({ name: s.id + "-" + s.name + "." + ext, bytes: String(s[ext]).length });
-                  });
+                var parentRel = id2.indexOf("/") < 0 ? "" : id2.slice(0, id2.lastIndexOf("/"));
+                var parentFull = root ? (parentRel ? root + "/" + parentRel : root) : parentRel;
+                var newName = id2.slice(id2.lastIndexOf("/") + 1);
+                var existing = null;
+                try { existing = resolveId(id2); } catch (e) { existing = null; }
+
+                if (args.name !== undefined && args.name !== null && String(args.name).trim()) {
+                  // 重命名:page 换 stem 保扩展名;module 换目录名
+                  if (!existing) return reject(new Error("节点不存在: " + id2));
+                  var target = String(args.name).trim().replace(/\\/g, "/");
+                  if (!target || target.indexOf("/") >= 0 || target === "." || target === "..") {
+                    return reject(new Error("非法名称: " + args.name));
+                  }
+                  var baseName = existing.slice(existing.lastIndexOf("/") + 1);
+                  var oldExt = extOf(baseName);
+                  var isPage = isPageFull(existing);
+                  if (isPage) {
+                    var givenExt = extOf(target);
+                    if (givenExt) target = target.slice(0, target.length - givenExt.length - 1);
+                    if (!target) return reject(new Error("名称不能为空"));
+                    target = target + "." + (oldExt || "html");
+                  }
+                  var toFull = (existing.lastIndexOf("/") < 0 ? "" : existing.slice(0, existing.lastIndexOf("/") + 1)) + target;
+                  if (toFull !== existing && fsMap[toFull]) return reject(new Error("已存在同名节点: " + target));
+                  moveSubtree(existing, toFull);
+                  var newId = (root && toFull.indexOf(root + "/") === 0)
+                    ? toFull.slice(root.length + 1) : toFull;
+                  resolve({ ok: true, id: newId });
+                  return;
+                }
+
+                if (existing) {
+                  if (args.content !== undefined && typeof args.content === "string") {
+                    fsMap[existing].content = args.content;
+                  }
+                  resolve({ ok: true, id: id2 });
+                  return;
+                }
+                // 新建:有页面扩展名 → 页面(默认内容);无扩展名 → 模块(mkdir)
+                var ext2 = extOf(newName);
+                var isPageNew = ext2 === "html" || ext2 === "htm" || ext2 === "jsx" || ext2 === "tsx" || ext2 === "vue";
+                if (parentRel || root) {
+                  if (!fsMap[parentFull] || fsMap[parentFull].type !== "module") {
+                    return reject(new Error("父模块不存在: " + (parentRel || "/")));
+                  }
+                }
+                if (isPageNew) {
+                  var stem2 = newName.slice(0, newName.length - ext2.length - 1);
+                  fsMap[root ? root + "/" + id2 : id2] = {
+                    type: "page",
+                    content: typeof args.content === "string" ? args.content
+                      : (ext2 === "jsx" || ext2 === "tsx" ? "// " + newName + "\nexport default function Page() {\n  return null;\n}\n"
+                        : ext2 === "vue" ? "<template>\n  <div>" + stem2 + "</div>\n</template>\n"
+                        : blankPage(stem2))
+                  };
+                } else {
+                  fsMap[root ? root + "/" + id2 : id2] = { type: "module" };
+                }
+                resolve({ ok: true, id: id2 });
+              } else if (name === "uigen_delete_page") {
+                var full3 = resolveId(args.id);
+                var kids = Object.keys(fsMap).filter(function (k) { return k.indexOf(full3 + "/") === 0; });
+                if (kids.length && !args.recursive) {
+                  return reject(new Error("模块非空,需要 recursive:true"));
+                }
+                delete fsMap[full3];
+                kids.forEach(function (k) { delete fsMap[k]; });
+                resolve({ ok: true, deleted: String(args.id) });
+              } else if (name === "uigen_list_skills") {
+                // 与 server toolListSkills 同口径:缺省只回启用项,includeInactive 回全部
+                resolve({
+                  ok: true,
+                  skills: skills.filter(function (s) { return args.includeInactive || s.is_active !== false; })
+                    .map(function (s) {
+                      return {
+                        id: s.id, name: s.name, description: s.description,
+                        category: s.category, scope: s.scope, is_active: s.is_active,
+                        sort_order: s.sort_order, instructions: s.instructions, examples: s.examples
+                      };
+                    })
                 });
-                resolve({ ok: true, targetDir: "(panel-local, 未写盘)", screens: screens.length, files: files });
-              } else if (name === "uigen_import_dir") {
-                reject(new Error("panel-local 模式不支持目录导入,请在 VCode 宿主内使用"));
+              } else if (name === "uigen_get_skill") {
+                var found = null;
+                skills.forEach(function (s) { if (s.id === String(args.id)) found = s; });
+                if (!found) return reject(new Error("skill not found: " + args.id));
+                resolve({
+                  ok: true, id: found.id, name: found.name, description: found.description,
+                  category: found.category, scope: found.scope, is_active: found.is_active,
+                  sort_order: found.sort_order, instructions: found.instructions, examples: found.examples
+                });
+              } else if (name === "uigen_save_skill") {
+                // 与 server toolSaveSkill 同口径:name + instructions 每次必填,
+                // 更新时未传字段保留存储值(is_active 切换只回传整条记录改开关)。
+                var skillName = String(args.name || "").trim();
+                var instructions = typeof args.instructions === "string" ? args.instructions : "";
+                if (!skillName) return reject(new Error("name is required"));
+                if (!instructions.trim()) {
+                  return reject(new Error("instructions is required and must be non-empty"));
+                }
+                var sid = args.id ? String(args.id) : "";
+                var target2 = null;
+                skills.forEach(function (s) { if (s.id === sid) target2 = s; });
+                if (sid && !target2) return reject(new Error("skill not found: " + sid));
+                if (!target2) {
+                  var base = "skill-" + slugify(skillName);
+                  var newId = base, suffix = 1, used = {};
+                  skills.forEach(function (s) { used[s.id] = true; });
+                  while (used[newId]) { suffix += 1; newId = base + "-" + suffix; }
+                  target2 = {
+                    id: newId, scope: "global", category: "general", description: "",
+                    is_active: true, sort_order: 0, examples: ""
+                  };
+                  skills.push(target2);
+                }
+                target2.name = skillName;
+                if (typeof args.description === "string") target2.description = args.description;
+                target2.instructions = instructions;
+                if (typeof args.category === "string" && args.category) target2.category = args.category;
+                if (typeof args.is_active === "boolean") target2.is_active = args.is_active;
+                if (Number.isFinite(args.sort_order)) target2.sort_order = Math.trunc(args.sort_order);
+                target2.updatedAt = new Date().toISOString();
+                resolve({ ok: true, id: target2.id });
+              } else if (name === "uigen_delete_skill") {
+                var at = -1;
+                skills.forEach(function (s, i) { if (s.id === String(args.id)) at = i; });
+                if (at < 0) return reject(new Error("skill not found: " + args.id));
+                var gone = skills.splice(at, 1)[0];
+                resolve({ ok: true, deleted: gone.id });
               } else if (name === "uigen_canvas_save") {
-                var layout = args && args.layoutJson;
+                var layout = args.layoutJson;
                 if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
                   return reject(new Error("layoutJson must be an object"));
                 }
                 canvasLayout = layout;
+                try {
+                  if (global.localStorage) global.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+                } catch (e) { /* 存储不可用时退回内存态 */ }
                 resolve({ ok: true, updatedAt: new Date().toISOString(), bytes: 0, file: "(panel-local, 未写盘)" });
               } else if (name === "uigen_canvas_get") {
-                resolve({ ok: true, layout: canvasLayout, updatedAt: "", workspace: null });
+                resolve({
+                  ok: true, layout: canvasLayout, updatedAt: "",
+                  workspace: { name: "demo-workspace", root: WORKSPACE }
+                });
               } else {
                 reject(new Error("unknown tool: " + name));
               }
@@ -393,7 +584,7 @@
     return bridge;
   }
 
-  var api = { create: createUiGenBridge, version: "0.3.0" };
+  var api = { create: createUiGenBridge, version: "0.4.0" };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   global.UiGenBridge = api;
 })(typeof window !== "undefined" ? window : globalThis);

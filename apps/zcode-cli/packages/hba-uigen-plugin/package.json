@@ -3,7 +3,7 @@
   "name": "@zcode/hba-uigen-plugin",
   "version": "0.3.0",
   "private": true,
-  "description": "UI prototype generation panel (HBA FR-2): disk-as-truth screens store, multi-screen canvas, 390px preview, demo playback, HTML/JSX/Vue artifacts, import/export.",
+  "description": "HBA prototype library browser: scan the workspace project into a module/page tree (dirs = modules, html/jsx/tsx/vue = pages), browse single pages, cite them into the conversation, and manage the skill library.",
   "license": "Apache-2.0",
   "type": "module"
 }

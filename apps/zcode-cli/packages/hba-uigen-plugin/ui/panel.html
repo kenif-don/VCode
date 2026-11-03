@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UI 原型设计 · hba-uigen</title>
+<title>原型库 · hba-uigen</title>
 <style>
   /* ─────────────────────────────────────────────────────────────
-   * hba-uigen 面板 — HBA UI 原型设计页布局(暖琥珀主题)。
+   * hba-uigen 面板 — HBA 原型库浏览器布局(暖琥珀主题)。
    * 变量移植自 HBA web/src/features/ui-gen/ui-gen.css(openstitch),
    * 深/浅两盘;documentElement[data-theme] 由桥 onThemeChange 驱动
    * (独立模式跟 prefers-color-scheme,默认 dark)。
@@ -152,7 +152,7 @@
   }
   select:focus, textarea:focus, input:focus { outline: none; border-color: var(--border-focus); }
 
-  /* ── 顶栏(约 40px):左=工作区项目名+路径;右=播放/刷新/导入/导出/生成应用 ── */
+  /* ── 顶栏(约 40px):左=当前项目名+路径;右=刷新/技能 ── */
   #top-bar {
     height: 40px; flex: none; display: flex; align-items: center; gap: 8px;
     padding: 0 12px; background: var(--bg-surface);
@@ -170,14 +170,12 @@
     background: var(--status-amber); flex: none;
   }
   #bridge-dot.ok { background: var(--status-green); }
-  #btn-play-top { padding: 4px 12px; }
-  #btn-gen-top { padding: 4px 14px; }
+  #top-bar button { padding: 4px 10px; font-size: 12px; }
 
-  /* ── 版本下拉 ── */
-  .dropdown { position: relative; }
+  /* ── 下拉浮层(树 ⋯ 菜单 / ＋ 菜单) ── */
   .dropdown-menu {
-    position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
-    min-width: 300px; max-height: 380px; overflow-y: auto;
+    position: fixed; z-index: 60;
+    min-width: 150px; max-height: 380px; overflow-y: auto;
     background: var(--bg-surface-raised); border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
     padding: 6px; display: none;
@@ -185,16 +183,11 @@
   .dropdown-menu.open { display: block; }
   .dropdown-menu .v-item {
     padding: 7px 10px; border-radius: var(--radius-md); cursor: pointer;
-    border: 1px solid transparent;
+    border: 1px solid transparent; font-size: 12.5px;
   }
   .dropdown-menu .v-item:hover { background: var(--bg-hover); }
-  .dropdown-menu .v-item.on { border-color: var(--primary); background: var(--bg-hover); }
-  .dropdown-menu .v-id { font-size: 11px; color: var(--primary); font-family: Consolas, Menlo, monospace; }
-  .dropdown-menu .v-meta {
-    font-size: 11px; color: var(--text-muted); margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .dropdown-menu .v-empty { padding: 14px 10px; text-align: center; color: var(--text-muted); font-size: 12px; }
+  .dropdown-menu .v-item.danger { color: #ef4444; }
+  .dropdown-menu .menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 
   /* ── 主体:左页面树(220px,可折叠) + 右画布 ── */
   #layout { flex: 1; display: flex; min-height: 0; }
@@ -212,7 +205,10 @@
   }
   #sidebar-head .count { color: var(--text-muted); font-weight: 400; }
   #sidebar-head .spacer { flex: 1; }
-  #sidebar-head button { padding: 2px 8px; font-size: 12px; }
+  #sidebar-head button { padding: 2px 8px; font-size: 11.5px; }
+  #btn-all-pages.on {
+    background: var(--bg-subtle); border-color: var(--border-focus); color: var(--text);
+  }
   #screen-tree { flex: 1; overflow-y: auto; padding: 6px; }
   #btn-sidebar-open {
     position: absolute; left: 8px; top: 50px; z-index: 40; display: none;
@@ -221,43 +217,56 @@
   #btn-sidebar-open.show { display: block; }
 
   .tree-row {
-    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    display: flex; align-items: center; gap: 6px; padding: 5px 6px;
     border-radius: var(--radius-md); cursor: pointer; user-select: none;
     border: 1px solid transparent; margin-bottom: 2px;
   }
   .tree-row:hover { background: var(--bg-hover); }
   .tree-row.on { border-color: var(--primary); background: var(--bg-hover); }
-  .tree-row.drag-over { border-top: 2px solid var(--primary); border-radius: 0; }
-  .tree-row .t-thumb {
-    width: 26px; height: 38px; flex: none; border-radius: 3px; overflow: hidden;
-    background: #f5f6f8; border: 1px solid var(--border); position: relative;
+  .tree-row .t-chev {
+    width: 16px; height: 16px; flex: none; display: flex;
+    align-items: center; justify-content: center;
+    color: var(--text-muted); border-radius: var(--radius-sm);
   }
-  .tree-row .t-thumb .tt-bar { height: 7px; background: var(--primary); opacity: .85; }
-  .tree-row .t-thumb .tt-line { height: 3px; margin: 3px 3px 0; border-radius: 2px; background: #d9dee5; }
-  .tree-row .t-info { flex: 1; min-width: 0; }
+  .tree-row .t-chev:hover { background: var(--bg-muted); }
+  .tree-row .t-chev svg { transition: transform var(--transition-fast); }
+  .tree-row .t-chev.open svg { transform: rotate(90deg); }
+  .tree-row .t-icon {
+    width: 16px; height: 16px; flex: none; display: flex;
+    align-items: center; justify-content: center; color: var(--text-muted);
+  }
   .tree-row .t-name {
-    font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1; min-width: 0; font-size: 12.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .tree-row .t-badge { font-size: 10px; margin-top: 1px; }
-  .badge-html  { color: var(--fw-html);  background: var(--fw-html-bg); }
-  .badge-jsx   { color: var(--fw-react); background: var(--fw-react-bg); }
-  .badge-vue   { color: var(--fw-vue);   background: var(--fw-vue-bg); }
+  .tree-row.module .t-name { font-weight: 600; }
+  .tree-row .t-badge { flex: none; font-size: 10px; }
   .tree-row .t-badge span {
     display: inline-block; padding: 0 5px; border-radius: var(--radius-full);
   }
+  .badge-html  { color: var(--fw-html);  background: var(--fw-html-bg); }
+  .badge-jsx   { color: var(--fw-react); background: var(--fw-react-bg); }
+  .badge-tsx   { color: var(--fw-react); background: var(--fw-react-bg); }
+  .badge-vue   { color: var(--fw-vue);   background: var(--fw-vue-bg); }
+  .badge-ext   { color: var(--text-muted); background: var(--bg-muted); }
   .tree-row .t-more {
     flex: none; opacity: 0; padding: 1px 7px; font-size: 13px;
     border-radius: var(--radius-md); background: transparent;
     border: 1px solid var(--border-strong);
   }
   .tree-row:hover .t-more { opacity: 1; }
-  .tree-empty { padding: 24px 10px; text-align: center; color: var(--text-muted); font-size: 12px; }
+  .tree-empty {
+    padding: 24px 10px; text-align: center; color: var(--text-muted);
+    font-size: 12px; line-height: 1.7;
+  }
+  .tree-empty button { margin-top: 10px; }
 </style>
 <style>
   /* ── 右侧画布:点状网格 + 屏幕卡片(绝对定位拖拽) ── */
   #canvas-pane { flex: 1; position: relative; display: flex; flex-direction: column; min-width: 0; }
   #screen-canvas {
-    flex: 1; overflow: auto; position: relative;
+    /* 无滚动条:平移/缩放走 transform,视窗尺寸变化只裁切不重排卡片 */
+    flex: 1; overflow: hidden; position: relative;
     background-color: var(--bg-canvas);
   }
   #screen-canvas.grid-on {
@@ -288,7 +297,7 @@
     user-select: none; padding: 2px 0;
   }
 
-  /* 视口 pill:390 / 768 / 1280 切换卡片预设宽 */
+  /* 视口 pill:390 / 768 / 1280 — 单页视图大卡的预设宽 */
   #viewport-pill {
     position: absolute; right: 12px; top: 12px; z-index: 30;
     display: flex; gap: 2px; padding: 3px;
@@ -301,7 +310,7 @@
   }
   #viewport-pill button.on { background: var(--primary); color: var(--primary-fg); font-weight: 600; }
 
-  /* 屏幕卡片:标题栏(名称+编辑)+ iframe/代码 内容区 */
+  /* 屏幕卡片:标题栏(名称+⋯)+ 预览内容区 */
   .screen-card {
     position: absolute; display: flex; flex-direction: column;
     background: var(--bg-surface); border: 1.5px solid var(--border-strong);
@@ -315,6 +324,7 @@
     border-bottom: 1px solid var(--border); cursor: grab;
   }
   .screen-card .card-head:active { cursor: grabbing; }
+  .screen-card.focus .card-head { cursor: default; }
   .screen-card .card-name {
     flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -334,60 +344,42 @@
     background: var(--code-bg); color: var(--code-fg);
     font: 11px/1.6 Consolas, Menlo, monospace; white-space: pre; tab-size: 2;
   }
+  /* 全览卡占位(不写 iframe:同屏只允许一张卡写 srcdoc) */
+  .card-ph {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px; padding: 8px;
+    background: var(--bg-canvas); color: var(--text-muted);
+    font-size: 11.5px; text-align: center; cursor: pointer;
+  }
+  .card-ph .ph-name {
+    font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .canvas-empty {
     position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
-    text-align: center; color: var(--text-muted); pointer-events: none;
+    text-align: center; color: var(--text-muted);
   }
   .canvas-empty .big { font-size: 15px; margin-bottom: 6px; color: var(--text-secondary); }
+  .canvas-empty button { pointer-events: auto; margin-top: 10px; }
 
-  /* ── 「生成应用」弹层 ── */
-  #gen-overlay {
-    position: fixed; inset: 0; z-index: 100; display: none;
-    align-items: center; justify-content: center; background: var(--overlay-bg);
-  }
-  #gen-overlay.open { display: flex; }
-  #gen-dialog {
-    width: min(560px, 92vw); background: var(--bg-surface-raised);
-    border: 1px solid var(--border-strong); border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xl); padding: 18px;
-  }
-  #gen-dialog h3 { font-size: 15px; margin-bottom: 4px; }
-  #gen-dialog .hint { font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; }
-  #gen-prompt { width: 100%; height: 110px; resize: vertical; }
-  #gen-dialog .row { display: flex; gap: 10px; margin: 10px 0; }
-  #gen-dialog .row > div { flex: 1; }
-  #gen-dialog .field-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
-  #gen-dialog select { width: 100%; }
-  #gen-progress { height: 6px; border-radius: 3px; background: var(--track-bg); overflow: hidden; margin: 8px 0 4px; }
-  #gen-progress-fill { height: 100%; width: 0; background: var(--primary); transition: width .25s; }
-  #gen-msg { font-size: 11.5px; color: var(--text-secondary); min-height: 17px; }
-  #gen-msg.err { color: var(--err-fg); }
-  #gen-dialog .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-
-  /* ── 全屏播放层 ── */
-  #play-overlay {
-    position: fixed; inset: 0; z-index: 90; display: none;
-    flex-direction: column; background: var(--overlay-bg);
-  }
-  #play-overlay.open { display: flex; }
-  #play-head {
-    flex: none; display: flex; align-items: center; gap: 10px;
-    padding: 8px 14px; background: var(--bg-surface); border-bottom: 1px solid var(--border);
-  }
-  #play-title { font-weight: 600; }
-  #play-pos { color: var(--text-muted); font-size: 12px; }
-  #play-head .spacer { flex: 1; }
-  #play-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 16px; }
-  #play-frame {
-    height: 100%; aspect-ratio: 390 / 844; max-width: 100%;
+  /* ── 单页视图工具条(B2 按钮占位) ── */
+  #focus-toolbar {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    z-index: 30; display: none; align-items: center; gap: 8px;
+    /* 窄屏(380px)画布区很窄:限宽+换行,避免工具条被窗口裁切 */
+    max-width: calc(100% - 16px); flex-wrap: wrap; justify-content: center;
+    padding: 6px 12px; background: var(--bg-surface-raised);
     border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
-    background: #fff; box-shadow: var(--shadow-xl);
+    box-shadow: var(--shadow-md);
   }
+  #focus-toolbar.show { display: flex; }
+  #focus-toolbar button { padding: 4px 10px; font-size: 12px; }
+  #focus-toolbar .hint { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
   /* ── 提示条 ── */
   #toast {
     position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-    z-index: 120; padding: 7px 16px; border-radius: var(--radius-full);
+    z-index: 200; padding: 7px 16px; border-radius: var(--radius-full);
     background: var(--bg-surface-raised); color: var(--text);
     border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg);
     font-size: 12px; opacity: 0; pointer-events: none;
@@ -396,9 +388,166 @@
   #toast.show { opacity: 1; }
   #toast.err { border-color: var(--status-red); color: var(--err-fg); }
 </style>
+<style>
+  /* ─────────────────────────────────────────────────────────────
+   * 第二阶段(B2):引用 chip 暂存区 + 技能弹窗 + 元素拾取态。
+   * ───────────────────────────────────────────────────────────── */
+
+  /* 引用 chip 暂存区:贴面板底部,横排可换行(380px 不出横向滚动) */
+  #ref-bar {
+    flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    max-width: 100%;
+  }
+  #ref-bar[hidden] { display: none; }
+  #ref-chips {
+    flex: 1; min-width: 0; display: flex; flex-wrap: wrap;
+    align-items: center; gap: 6px;
+  }
+  .ref-chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+    padding: 3px 4px 3px 6px; border-radius: var(--radius-full);
+    background: var(--bg-subtle); border: 1px solid var(--border-strong);
+    font-size: 11.5px; min-width: 0;
+  }
+  .ref-chip .rc-kind {
+    flex: none; font-size: 10px; font-weight: 600; padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--bg-muted); color: var(--text-secondary);
+  }
+  .ref-chip.element .rc-kind { background: var(--primary-muted); color: var(--primary-text); }
+  .ref-chip .rc-text {
+    min-width: 0; max-width: 240px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .ref-chip .rc-x {
+    flex: none; padding: 0 5px; font-size: 13px; line-height: 1.4;
+    background: transparent; border: none; color: var(--text-muted);
+    border-radius: var(--radius-full);
+  }
+  .ref-chip .rc-x:hover { background: var(--bg-muted); color: var(--text); }
+  #btn-insert-chat { flex: none; }
+  /* chip 区占了底部一条,toast 抬高不盖住 chip */
+  body.chips-visible #toast { bottom: 58px; }
+
+  /* 单页视图工具条:拾取模式激活态 */
+  #btn-pick-element.on {
+    background: var(--primary); border-color: var(--primary);
+    color: var(--primary-fg); font-weight: 600;
+  }
+
+  /* ── 弹窗骨架(技能库) ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 150;
+    background: var(--overlay-bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .skill-modal {
+    width: min(620px, 100%); max-height: 85vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg-surface); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl); box-shadow: var(--shadow-xl);
+  }
+  .skill-modal .m-head {
+    flex: none; height: 48px; display: flex; align-items: center; gap: 8px;
+    padding: 0 16px; border-bottom: 1px solid var(--border);
+    font-size: 14px; font-weight: 600;
+  }
+  .skill-modal .m-head .spacer { flex: 1; }
+  .skill-modal .m-close {
+    padding: 2px 8px; font-size: 18px; line-height: 1;
+    background: transparent; border: none; color: var(--text-muted);
+  }
+  .skill-modal .m-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .skill-modal .m-foot {
+    flex: none; padding: 10px 16px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end;
+  }
+  .skills-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .skills-toolbar .spacer { flex: 1; }
+  .skills-toolbar select { font-size: 12px; }
+
+  /* 技能卡片:停用半透明;描述空则不占位;instructions 列表只显 2 行 */
+  .skill-card {
+    padding: 10px 12px; background: var(--bg-subtle);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+  }
+  .skill-card.inactive { opacity: 0.55; }
+  .skill-card .sc-head { display: flex; align-items: center; gap: 8px; }
+  .skill-card .sc-name {
+    flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sc-badge {
+    flex: none; font-size: 10px; font-weight: 600;
+    padding: 2px 6px; border-radius: var(--radius-sm);
+  }
+  .skill-switch {
+    flex: none; width: 32px; height: 18px; padding: 0; position: relative;
+    border: none; border-radius: 9px; background: var(--bg-muted);
+    transition: background var(--transition);
+  }
+  .skill-switch.on { background: var(--primary); }
+  .skill-switch i {
+    position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+    border-radius: 50%; background: #fff; transition: left var(--transition);
+  }
+  .skill-switch.on i { left: 16px; }
+  .sc-act {
+    flex: none; width: 24px; height: 24px; padding: 0;
+    background: transparent; border: none;
+    color: var(--text-muted); font-size: 13px;
+  }
+  .sc-act:hover { background: var(--bg-muted); color: var(--text); }
+  .sc-confirm {
+    flex: none; display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--text-muted);
+  }
+  .sc-confirm button { height: 20px; padding: 0 6px; font-size: 10px; }
+  .sc-confirm .yes {
+    color: var(--status-red); background: rgba(239, 68, 68, .14); border: none;
+  }
+  .skill-card .sc-desc {
+    margin: 5px 0 0; font-size: 11px; color: var(--text-muted); line-height: 1.4;
+  }
+  .skill-card .sc-instr {
+    margin: 4px 0 0; font-size: 11px; color: var(--text-secondary);
+    line-height: 1.45; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    font-family: Consolas, Menlo, monospace;
+  }
+  .skill-empty {
+    padding: 18px 0; text-align: center;
+    font-size: 12px; color: var(--text-muted);
+  }
+
+  /* 新建/编辑表单(正文字段 = instructions,直接落库) */
+  .skill-form {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 12px; background: var(--bg-subtle);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+  }
+  .skill-form .row { display: flex; gap: 8px; }
+  .skill-form input[type="text"], .skill-form select, .skill-form textarea {
+    flex: 1; min-width: 0; font-size: 12px;
+  }
+  .skill-form select { flex: none; max-width: 132px; }
+  .skill-form textarea {
+    min-height: 96px; resize: vertical; line-height: 1.5;
+    font-family: Consolas, Menlo, monospace;
+  }
+  .skill-form .acts { display: flex; gap: 8px; justify-content: flex-end; }
+  .skill-form .acts button { height: 28px; padding: 0 12px; font-size: 11.5px; }
+</style>
 </head>
 <body>
-  <!-- 顶栏:左=工作区项目名(只读);右=播放/刷新/导入/导出/生成应用 -->
+  <!-- 顶栏:左=当前项目名+路径(uigen_canvas_get 的 workspace);右=刷新/技能 -->
   <header id="top-bar">
     <div id="proj-block">
       <span id="proj-name">—</span>
@@ -406,11 +555,8 @@
     </div>
     <span class="spacer"></span>
     <span id="bridge-dot" title="桥接状态"></span>
-    <button id="btn-play-top" title="全屏顺序播放各屏">&#9654; 播放</button>
-    <button id="btn-reload" title="从磁盘重新读取 screens 清单">刷新</button>
-    <button id="btn-import" title="从本地目录导入 *.html 原型(FR-2-6)">导入</button>
-    <button id="btn-export" title="导出当前 screens 产物(FR-2-8)">导出</button>
-    <button id="btn-gen-top" class="primary" title="从需求生成多屏 UI 原型(FR-2-1)">&#9889; 生成应用</button>
+    <button id="btn-reload" title="从磁盘重新扫描原型目录">刷新</button>
+    <button id="btn-skills" title="技能库">技能</button>
   </header>
 
   <div id="layout">
@@ -419,7 +565,8 @@
       <div id="sidebar-head">
         <span>页面</span><span class="count" id="page-count">(0)</span>
         <span class="spacer"></span>
-        <button id="btn-add-page" title="新建空白页面">＋</button>
+        <button id="btn-all-pages" title="退出单页视图,回到所有页面画布">所有页面</button>
+        <button id="btn-add" title="新建页面或模块(根层级)">＋</button>
         <button id="btn-sidebar-collapse" title="收起侧栏">&#171;</button>
       </div>
       <div id="screen-tree"></div>
@@ -441,65 +588,55 @@
         <button id="btn-grid-toggle" class="on" title="点状网格开关">&#9707;</button>
       </div>
 
-      <!-- 视口 pill:切换卡片预设宽 -->
-      <div id="viewport-pill">
+      <!-- 视口 pill:单页视图大卡预设宽 -->
+      <div id="viewport-pill" title="单页视图预设宽">
         <button data-vp="390" class="on">390</button>
         <button data-vp="768">768</button>
         <button data-vp="1280">1280</button>
       </div>
+
+      <!-- 单页视图工具条:选取元素(拾取模式)/ 引用此页(进底部引用区) -->
+      <div id="focus-toolbar">
+        <button id="btn-pick-element" title="在预览里悬停高亮、点选元素生成引用">选取元素</button>
+        <button id="btn-ref-page" title="把当前页加入底部引用区">引用此页</button>
+        <span class="hint" id="focus-hint">Esc 返回所有页面</span>
+      </div>
     </section>
   </div>
 
-  <!-- 「生成应用」弹层 -->
-  <div id="gen-overlay">
-    <div id="gen-dialog">
-      <h3>生成应用</h3>
-      <div class="hint">描述需求,生成多屏 UI 原型(HTML 产物实时预览;JSX/Vue 为代码产物,实时渲染列二期)。</div>
-      <textarea id="gen-prompt" placeholder="例如:一款社区图书馆借阅 App,含首页推荐、图书列表、详情页与个人中心"></textarea>
-      <div class="row">
-        <div>
-          <div class="field-label">产物格式</div>
-          <select id="gen-format">
-            <option value="html">HTML</option>
-            <option value="jsx">JSX</option>
-            <option value="vue">Vue</option>
-          </select>
-        </div>
-        <div>
-          <div class="field-label">屏幕数</div>
-          <select id="gen-count">
-            <option>1</option><option>2</option><option selected>3</option><option>4</option>
-            <option>5</option><option>6</option><option>7</option><option>8</option>
-            <option>9</option><option>10</option>
-          </select>
-        </div>
-      </div>
-      <div id="gen-progress"><div id="gen-progress-fill"></div></div>
-      <div id="gen-msg">就绪</div>
-      <div class="dlg-actions">
-        <button id="btn-gen-cancel">关闭</button>
-        <button id="btn-gen-start" class="primary">开始生成</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 全屏播放层 -->
-  <div id="play-overlay">
-    <div id="play-head">
-      <span id="play-title">—</span>
-      <span id="play-pos">-/-</span>
-      <span class="spacer"></span>
-      <button id="btn-play-prev" title="上一屏">&#9198; 上一屏</button>
-      <button id="btn-play-toggle" class="primary">⏸ 暂停</button>
-      <button id="btn-play-next" title="下一屏">下一屏 &#9197;</button>
-      <button id="btn-play-close" title="退出播放 (Esc)">&#10005; 退出</button>
-    </div>
-    <div id="play-stage">
-      <iframe id="preview-frame" title="原型播放预览"></iframe>
-    </div>
+  <!-- 引用 chip 暂存区:页面/模块/元素引用在此堆积,「插入到对话」一次性送出 -->
+  <div id="ref-bar" hidden>
+    <div id="ref-chips"></div>
+    <button id="btn-insert-chat" class="primary" title="把全部引用拼成尾注插入对话输入框(不发送)">插入到对话</button>
   </div>
 
   <div id="toast"></div>
+
+  <!-- 技能库弹窗:卡片列表 + 分类筛选 + 启停/新建/编辑/删除(全部走 uigen_* 技能工具) -->
+  <div id="skills-modal" class="modal-overlay" hidden>
+    <div class="skill-modal" role="dialog" aria-label="技能库">
+      <div class="m-head">
+        <span>技能</span><span class="spacer"></span>
+        <button id="skills-close" class="m-close" title="关闭">×</button>
+      </div>
+      <div class="m-body">
+        <div class="skills-toolbar">
+          <select id="skill-cat" title="按分类筛选"></select>
+          <span class="spacer"></span>
+          <button id="btn-new-skill" class="primary">＋ 新建技能</button>
+        </div>
+        <div id="skill-form-slot"></div>
+        <div id="skill-list"></div>
+      </div>
+      <div class="m-foot"><button id="skills-close-foot">关闭</button></div>
+    </div>
+  </div>
+
+  <!-- 单页视图预览 iframe 模板:进单页时克隆挂载,启动时不出现(不写 srcdoc)。
+       一律不带 sandbox 属性——宿主插件沙箱 WebView 对嵌套 sandbox iframe 会崩。 -->
+  <template id="focus-frame-tpl">
+    <iframe id="preview-frame" title="原型预览"></iframe>
+  </template>
 
 <script>
 /* 内联桥副本 — 与 ui/bridge.js 逐字节一致(部署脚本同步);宿主经资源加载,独立打开走内联。 */
@@ -540,120 +677,221 @@
 
   var PROTOCOL_VERSION = "2025-06-18";
   var UI_PROTOCOL_VERSION = "2026-01-26";
-  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.3.0" };
-  var APP_INFO = { name: "hba-uigen", version: "0.3.0" };
+  var CLIENT_INFO = { name: "hba-uigen-panel", version: "0.4.0" };
+  var APP_INFO = { name: "hba-uigen", version: "0.4.0" };
 
   // -------------------------------------------------------------------------
-  // local demo backend — compact mirror of server.mjs / uigen_sidecar.py demo
+  // local demo backend — 原型库工具面的内存 mock(uigen_* 新契约),
+  // standalone 打开 panel 时走这里;宿主 MCP 可用时不经过它。
   // -------------------------------------------------------------------------
-  var DEMO_NAMES = ["首页", "列表页", "详情页", "个人中心", "设置页", "搜索页", "消息页", "订单页", "登录页", "结果页"];
+  var WORKSPACE = "/demo/workspace";
 
-  function demoScreens(prompt, format, count) {
-    var title = String(prompt || "").trim().slice(0, 12) || "UI 原型";
-    var short = String(prompt || "").trim().slice(0, 40);
-    var tabs = Math.min(count, 5);
-    var screens = [];
-    for (var i = 0; i < count; i++) {
-      var hotspots = [];
-      for (var j = 0; j < tabs; j++) {
-        hotspots.push({
-          to: "s" + (j + 1),
-          label: DEMO_NAMES[j % DEMO_NAMES.length],
-          x: Math.round((j * 390) / tabs),
-          y: 774,
-          w: Math.floor(390 / tabs),
-          h: 70
-        });
-      }
-      screens.push({
-        id: "s" + (i + 1),
-        name: DEMO_NAMES[i % DEMO_NAMES.length],
-        html: demoHtml(i, title, short, hotspots),
-        jsx: demoJsx(i, title, short),
-        vue: demoVue(i, title, short),
-        hotspots: hotspots
-      });
-    }
-    return screens;
-  }
-
-  function demoHtml(i, title, prompt, hotspots) {
-    var name = DEMO_NAMES[i % DEMO_NAMES.length];
-    var cards = [
-      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
-      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
-      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
-    ].map(function (c) {
-      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
-    }).join("\n");
-    var tabsHtml = (hotspots || []).map(function (h) {
-      return '      <a class="tab' + (h.to === "s" + (i + 1) ? " on" : "") + '" data-uigen-goto="' + h.to + '">' + h.label + "</a>";
-    }).join("\n");
+  function demoPage(title, bodyHtml) {
     return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
       "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
-      "  <title>" + name + " · " + title + "</title>\n" +
-      "  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
+      "  <title>" + title + "</title>\n  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
       "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
-      "    .app-bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
-      "    main { padding: 16px; padding-bottom: 96px; }\n    h1 { font-size: 22px; margin-bottom: 6px; }\n" +
-      "    .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }\n" +
-      "    .card { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }\n" +
-      "    .card h2 { font-size: 15px; margin-bottom: 6px; }\n    .card p { font-size: 13px; color: #4b5563; line-height: 1.6; }\n" +
-      "    .tab-bar { position: fixed; left: 0; bottom: 0; width: 390px; height: 70px; display: flex; background: #fff; border-top: 1px solid #e5e7eb; }\n" +
-      "    .tab { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; text-decoration: none; }\n" +
-      "    .tab.on { color: #2b6cb0; font-weight: 600; }\n  </style>\n</head>\n<body>\n" +
-      '  <header class="app-bar">' + title + "</header>\n  <main>\n    <h1>" + name + "</h1>\n" +
-      '    <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards + "\n  </main>\n" +
-      '  <nav class="tab-bar">\n' + tabsHtml + "\n  </nav>\n" +
-      '  \x3cscript type="application/json" id="uigen-hotspots">' + JSON.stringify(hotspots || []) + "\x3c/script>\n</body>\n</html>\n";
+      "    .bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
+      "    main { padding: 16px; }\n    h1 { font-size: 22px; margin: 12px 0 6px; }\n" +
+      "    p { font-size: 13px; color: #4b5563; line-height: 1.6; margin-bottom: 8px; }\n" +
+      "    .btn { display: inline-block; margin-top: 12px; padding: 10px 18px; border: 0; cursor: pointer; border-radius: 8px; background: #2b6cb0; color: #fff; font-size: 14px; }\n" +
+      "    .field { display: block; width: 100%; margin-top: 10px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: #fff; }\n" +
+      "  </style>\n</head>\n<body>\n  <header class=\"bar\">" + title + "</header>\n  <main>\n" +
+      bodyHtml + "\n  </main>\n</body>\n</html>\n";
   }
 
-  function demoJsx(i, title, prompt) {
-    var name = DEMO_NAMES[i % DEMO_NAMES.length];
-    var cards = [
-      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
-      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
-      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
-    ].map(function (c) {
-      return '        <div className="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
-    }).join("\n");
-    return "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default function Screen" + (i + 1) + "() {\n  return (\n" +
-      '    <div className="phone" style={{ width: 390, minHeight: 844 }}>\n' +
-      '      <header className="app-bar">' + title + "</header>\n      <main>\n        <h1>" + name + "</h1>\n" +
-      '        <p className="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
-      '\n      </main>\n      <nav className="tab-bar">{/* hotspots: see ui state */}</nav>\n    </div>\n  );\n}\n';
+  function blankPage(stem) {
+    return demoPage(stem, "    <h1>" + stem + "</h1>\n    <p>新页面,从树的 ⋯ 菜单或画布进入编辑。</p>");
   }
 
-  function demoVue(i, title, prompt) {
-    var name = DEMO_NAMES[i % DEMO_NAMES.length];
-    var cards = [
-      { t: "快速上手", d: "三步完成配置，立即体验核心流程。" },
-      { t: "核心功能", d: "围绕「" + ["浏览", "管理", "设置", "发现"][i % 4] + "」场景设计的关键能力。" },
-      { t: "帮助与支持", d: "常见问题与在线客服入口。" }
-    ].map(function (c) {
-      return '      <div class="card"><h2>' + c.t + "</h2><p>" + c.d + "</p></div>";
-    }).join("\n");
-    return "<template>\n  <div class=\"phone\">\n    <header class=\"app-bar\">" + title + "</header>\n    <main>\n      <h1>" + name + "</h1>\n" +
-      '      <p class="sub">uigen 演示生成 · 需求：' + (prompt || "(空)") + "</p>\n" + cards +
-      "\n    </main>\n    <nav class=\"tab-bar\"><!-- hotspots: see ui state --></nav>\n  </div>\n</template>\n\n\x3cscript>\n" +
-      "// uigen demo artifact — screen " + (i + 1) + ": " + name + "\nexport default {\n  name: \"Screen" + (i + 1) + "\"\n};\n\x3c/script>\n\n" +
-      "<style scoped>\n.phone { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; }\n</style>\n";
-  }
+  var DEMO_JSX = "// banner.jsx — 演示 JSX 产物(单页视图以代码形式展示)\n" +
+    "export default function Banner() {\n  return (\n" +
+    "    <div className=\"banner\">\n      <h1>促销横幅</h1>\n" +
+    "      <p>限时活动进行中 — JSX 产物在单页视图里显示源码。</p>\n" +
+    "    </div>\n  );\n}\n";
 
   function localBackend() {
-    // 磁盘即真源的内存镜像(0.3.0):screens 清单 + 产物,无版本概念。
-    var screens = [];      // [{id,name,html,jsx,vue,hotspots,order}]
+    // 虚拟工作区文件系统:key = 工作区相对 posix 路径("" = 工作区根)
+    var fsMap = null;
+    var root = "";            // 原型根(工作区相对路径;"" = 工作区根本身,与 server 缺省对齐)
+    // 布局持久化:standalone 下 mock 即"服务端",用 localStorage 模拟 canvas-layout.json
+    // 落盘,刷新面板后画布布局/卡片位置才能恢复(与宿主 MCP 模式行为对齐)。
+    var LAYOUT_KEY = "hba-uigen-local-canvas-layout";
     var canvasLayout = null;
+    try {
+      var savedLayout = global.localStorage ? global.localStorage.getItem(LAYOUT_KEY) : null;
+      if (savedLayout) canvasLayout = JSON.parse(savedLayout);
+    } catch (e) { canvasLayout = null; }
+    // 技能假数据:字段面与 server.mjs normalizeSkillRecord 对齐
+    // (id/name/description/category/scope/is_active/sort_order/instructions/examples),
+    // 8 条覆盖多分类、2 条 is_active:false,供技能弹窗走查。
+    var skills = [
+      {
+        id: "skill-landing-hero", name: "营销落地页",
+        description: "单页营销落地页骨架(Hero + 卖点 + CTA)",
+        category: "layout", scope: "global", is_active: true, sort_order: 10,
+        instructions: "# 营销落地页\n\n- 顶部大图 Hero\n- 三列卖点卡片\n- 底部 CTA 按钮",
+        examples: "", updatedAt: "2026-11-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-auth-flow", name: "登录注册流",
+        description: "登录 / 注册 / 找回密码三屏流程",
+        category: "components", scope: "global", is_active: true, sort_order: 20,
+        instructions: "# 登录注册流\n\n- login 登录屏\n- register 注册屏\n- reset 找回密码屏",
+        examples: "", updatedAt: "2026-11-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-brand-voice", name: "品牌语调",
+        description: "",
+        category: "brand", scope: "global", is_active: true, sort_order: 30,
+        instructions: "# 品牌语调\n\n- 第二人称称呼用户\n- 禁用夸张感叹号\n- 价格统一「¥ + 数字」",
+        examples: "", updatedAt: "2026-11-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-style-minimal", name: "极简风格",
+        description: "留白优先、单主色、弱阴影的视觉基调",
+        category: "style", scope: "global", is_active: true, sort_order: 40,
+        instructions: "# 极简风格\n\n- 单主色 + 中性灰\n- 卡片圆角 8-12px\n- 阴影只用一层",
+        examples: "", updatedAt: "2026-10-28T00:00:00.000Z"
+      },
+      {
+        id: "skill-constraints-a11y", name: "无障碍约束",
+        description: "对比度、焦点态与语义标签的硬性约束",
+        category: "constraints", scope: "global", is_active: true, sort_order: 50,
+        instructions: "# 无障碍约束\n\n- 正文对比度 ≥ 4.5:1,大字号 ≥ 3:1\n- 所有可交互元素必须有 :focus-visible 焦点态,焦点环颜色与主色一致且不得被 overflow 裁切\n- 图标按钮必须有 aria-label 或 title,纯装饰图标 aria-hidden=\"true\"\n- 页面结构按 header/main/footer/section 语义标签组织,标题层级 h1→h2→h3 不跳级\n- 表单控件必须有关联 label,错误提示用 aria-describedby 关联并 role=\"alert\"\n- 触控目标不小于 44×44px,间距不小于 8px 以防误触\n- 动画遵循 prefers-reduced-motion,开启减弱动效时仅保留不超过 100ms 的透明度过渡\n- 颜色不作为传达信息的唯一手段,状态同时给出文字或图标",
+        examples: "", updatedAt: "2026-10-20T00:00:00.000Z"
+      },
+      {
+        id: "skill-general-copy", name: "文案规范",
+        description: "界面文案的长度、标点与术语口径",
+        category: "general", scope: "global", is_active: true, sort_order: 60,
+        instructions: "# 文案规范\n\n- 按钮文案 ≤ 6 字\n- 中文标点用全角,数字/英文半角\n- 术语首次出现给一句话解释",
+        examples: "", updatedAt: "2026-10-15T00:00:00.000Z"
+      },
+      {
+        id: "skill-legacy-grid", name: "旧版九宫格",
+        description: "已停用的九宫格模板,默认不注入提示词",
+        category: "general", scope: "global", is_active: false, sort_order: 70,
+        instructions: "# 旧版九宫格\n\n- 3x3 图标宫格\n- 固定 88px 格宽",
+        examples: "", updatedAt: "2026-10-01T00:00:00.000Z"
+      },
+      {
+        id: "skill-motion-heavy", name: "重动效模板",
+        description: "停用:动效过多与极简基调冲突",
+        category: "style", scope: "global", is_active: false, sort_order: 80,
+        instructions: "# 重动效模板\n\n- 页面转场 300ms\n- 卡片入场逐个 stagger",
+        examples: "", updatedAt: "2026-09-20T00:00:00.000Z"
+      }
+    ];
 
-    function entryOf(s) {
-      return { id: s.id, name: s.name, files: { html: s.id + ".html" }, hotspots: s.hotspots || [], order: s.order || 0, updatedAt: "" };
+    /** name → slug(与 server.mjs slugify 同口径):小写、非字母数字转 -、空则 untitled。 */
+    function slugify(s) {
+      var slug = String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+      return slug || "untitled";
     }
-    function nextId() {
-      var n = screens.length + 1;
-      var used = {};
-      screens.forEach(function (s) { used[s.id] = true; });
-      while (used["s" + n]) n += 1;
-      return "s" + n;
+
+    function seed() {
+      var m = {};
+      function mod(p) { m[p] = { type: "module" }; }
+      function page(p, content) { m[p] = { type: "page", content: content }; }
+      mod("prototypes"); mod("assets"); mod("docs");
+      page("prototypes/home.html", demoPage("首页",
+        "    <h1>首页</h1>\n    <p>mock 原型的首页,用于 standalone 走查全览画布与单页视图。</p>\n    <button class=\"btn\" type=\"button\">主要按钮</button>"));
+      mod("prototypes/auth");
+      page("prototypes/auth/login.html", demoPage("登录",
+        "    <h1>登录</h1>\n    <p>输入用户名与密码(演示表单,无脚本)。</p>\n" +
+        "    <input class=\"field\" placeholder=\"用户名\" value=\"demo\">\n" +
+        "    <input class=\"field\" placeholder=\"密码\" type=\"password\" value=\"****\">\n" +
+        "    <span class=\"btn\">登录</span>"));
+      page("prototypes/auth/register.html", demoPage("注册",
+        "    <h1>注册</h1>\n    <p>创建账号(演示表单,无脚本)。</p>\n" +
+        "    <input class=\"field\" placeholder=\"邮箱\" value=\"demo@example.com\">\n" +
+        "    <span class=\"btn\">下一步</span>"));
+      mod("prototypes/shop"); mod("prototypes/shop/catalog");
+      page("prototypes/shop/catalog/list.html", demoPage("商品列表",
+        "    <h1>商品列表</h1>\n    <p>目录页:列表项 1 / 2 / 3(演示)。</p>\n" +
+        "    <p>· 无线耳机 — ¥299</p>\n    <p>· 机械键盘 — ¥499</p>\n    <p>· 显示器支架 — ¥199</p>"));
+      page("prototypes/shop/catalog/detail.html", demoPage("商品详情",
+        "    <h1>商品详情</h1>\n    <p>无线耳机 — ¥299。详情页用于验证单页视图预览。</p>\n" +
+        "    <span class=\"btn\">加入购物车</span>"));
+      mod("prototypes/playground");
+      page("prototypes/playground/banner.jsx", DEMO_JSX);
+      mod("prototypes/drafts");   // 空模块
+      fsMap = m;
+    }
+    seed();
+
+    function absPath(rel) { return rel ? WORKSPACE + "/" + rel : WORKSPACE; }
+
+    /** 直接子节点(按磁盘字典序);dirRel="" 表示工作区根。 */
+    function childrenOf(dirRel) {
+      var prefix = dirRel ? dirRel + "/" : "";
+      var out = [];
+      Object.keys(fsMap).forEach(function (k) {
+        if (k === dirRel || k.indexOf(prefix) !== 0) return;
+        var rest = k.slice(prefix.length);
+        if (rest.indexOf("/") >= 0) return;
+        out.push({ name: rest, path: k, node: fsMap[k] });
+      });
+      out.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+      return out;
+    }
+
+    function extOf(name) {
+      var i = name.lastIndexOf(".");
+      return i > 0 ? name.slice(i + 1).toLowerCase() : "";
+    }
+
+    /** 树节点 id 相对原型根;name 页面取 stem(徽标另显扩展名)。 */
+    function buildTree(dirRel, idPrefix) {
+      return childrenOf(dirRel).map(function (ch) {
+        var id = idPrefix ? idPrefix + "/" + ch.name : ch.name;
+        if (ch.node.type === "module") {
+          return { id: id, name: ch.name, type: "module", children: buildTree(ch.path, id) };
+        }
+        var ext = extOf(ch.name);
+        var stem = ext ? ch.name.slice(0, ch.name.length - ext.length - 1) : ch.name;
+        return { id: id, name: stem, type: "page", framework: ext || "html" };
+      });
+    }
+
+    function countStats(dirRel) {
+      var modules = 0, pages = 0;
+      (function walk(d) {
+        childrenOf(d).forEach(function (ch) {
+          if (ch.node.type === "module") { modules += 1; walk(ch.path); } else { pages += 1; }
+        });
+      })(dirRel);
+      return { modules: modules, pages: pages };
+    }
+
+    /** id(相对原型根) → 文件系统绝对 key。 */
+    function resolveId(id) {
+      id = String(id == null ? "" : id).trim().replace(/\\/g, "/").replace(/^\/+/, "");
+      if (!id || id === "." || id.split("/").some(function (s) { return s === ".."; })) {
+        throw new Error("非法 id: " + id);
+      }
+      var full = root ? root + "/" + id : id;
+      if (!Object.prototype.hasOwnProperty.call(fsMap, full)) throw new Error("节点不存在: " + id);
+      return full;
+    }
+
+    function isPageFull(full) {
+      var name = full.slice(full.lastIndexOf("/") + 1);
+      var ext = extOf(name);
+      return ext === "html" || ext === "htm" || ext === "jsx" || ext === "tsx" || ext === "vue";
+    }
+
+    function moveSubtree(fromFull, toFull) {
+      var keys = Object.keys(fsMap).filter(function (k) {
+        return k === fromFull || k.indexOf(fromFull + "/") === 0;
+      });
+      keys.sort(function (a, b) { return b.length - a.length; }); // 长键先挪,避免前缀撞车
+      keys.forEach(function (k) {
+        var nk = toFull + k.slice(fromFull.length);
+        fsMap[nk] = fsMap[k];
+        delete fsMap[k];
+      });
     }
 
     return {
@@ -661,80 +899,170 @@
         return new Promise(function (resolve, reject) {
           setTimeout(function () {
             try {
-              if (name === "uigen_generate") {
-                var prompt = String((args && args.prompt) || "").trim();
-                if (!prompt) return reject(new Error("prompt is required"));
-                var format = (args && args.format) || "html";
-                var count = Math.min(10, Math.max(1, parseInt(args && args.screenCount, 10) || 3));
-                if (emitProgress) emitProgress({ progress: 0, total: count + 2, message: "准备生成(本地演示)" });
-                screens = demoScreens(prompt, format, count).map(function (s, i) { s.order = i; return s; });
-                if (emitProgress) {
-                  for (var i = 0; i < count; i++) emitProgress({ progress: i + 1, total: count + 2, message: "生成屏幕 " + (i + 1) + "/" + count });
-                }
-                if (emitProgress) emitProgress({ progress: count + 2, total: count + 2, message: "完成" });
+              args = args || {};
+              if (name === "uigen_rescan" || name === "uigen_list_pages") {
+                resolve({ ok: true, root: absPath(root), tree: buildTree(root, ""), stats: countStats(root) });
+              } else if (name === "uigen_get_page") {
+                var full = resolveId(args.id);
+                if (!isPageFull(full)) return reject(new Error("不是页面: " + args.id));
+                var name1 = full.slice(full.lastIndexOf("/") + 1);
+                var ext1 = extOf(name1);
                 resolve({
                   ok: true,
-                  engine: "demo(panel-local)",
-                  prompt: prompt,
-                  format: format,
-                  screenCount: screens.length,
-                  screens: screens.map(function (s) { return { id: s.id, name: s.name, html: s.html, jsx: s.jsx, vue: s.vue, hotspots: s.hotspots || [] }; })
+                  id: args.id,
+                  name: ext1 ? name1.slice(0, name1.length - ext1.length - 1) : name1,
+                  type: "page",
+                  framework: ext1 || "html",
+                  content: fsMap[full].content || ""
                 });
-              } else if (name === "uigen_list_screens") {
-                var limit = Math.max(1, parseInt(args && args.limit, 10) || 100);
-                resolve({ ok: true, screens: screens.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).slice(0, limit).map(entryOf), updatedAt: "" });
-              } else if (name === "uigen_get_screen") {
-                var gid = String((args && args.id) || "");
-                var found = null;
-                screens.forEach(function (s) { if (s.id === gid) found = s; });
-                if (!found) return reject(new Error("screen not found: " + gid));
-                resolve({ ok: true, screen: { id: found.id, name: found.name, order: found.order || 0, hotspots: found.hotspots || [], files: { html: found.id + ".html" }, updatedAt: "", html: found.html, jsx: found.jsx || "", vue: found.vue || "" } });
-              } else if (name === "uigen_save_screen") {
-                var name2 = String((args && args.name) || "").trim();
-                if (!name2) return reject(new Error("name is required"));
-                var sid = String((args && args.id) || "").trim();
-                var target = null;
-                screens.forEach(function (s) { if (s.id === sid) target = s; });
-                if (sid && !target) {
-                  target = { id: sid, name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
-                  screens.push(target);
-                } else if (!sid) {
-                  target = { id: nextId(), name: name2, html: "", jsx: "", vue: "", hotspots: [], order: screens.length };
-                  screens.push(target);
+              } else if (name === "uigen_save_page") {
+                var id2 = String(args.id == null ? "" : args.id).trim().replace(/\\/g, "/").replace(/^\/+/, "");
+                if (!id2 || id2.split("/").some(function (s) { return s === ".." || s === "."; })) {
+                  return reject(new Error("非法 id: " + args.id));
                 }
-                target.name = name2;
-                if (args && typeof args.html === "string") target.html = args.html;
-                if (args && typeof args.jsx === "string") target.jsx = args.jsx;
-                if (args && typeof args.vue === "string") target.vue = args.vue;
-                if (args && Array.isArray(args.hotspots)) target.hotspots = args.hotspots;
-                if (args && typeof args.order === "number") target.order = args.order;
-                resolve({ ok: true, screen: entryOf(target) });
-              } else if (name === "uigen_delete_screen") {
-                var did = String((args && args.id) || "");
-                var at = -1;
-                screens.forEach(function (s, i) { if (s.id === did) at = i; });
-                if (at < 0) return reject(new Error("screen not found: " + did));
-                screens.splice(at, 1);
-                resolve({ ok: true, deleted: did });
-              } else if (name === "uigen_export") {
-                var files = [];
-                screens.forEach(function (s) {
-                  ["html", "jsx", "vue"].forEach(function (ext) {
-                    if (s[ext] && String(s[ext]).trim()) files.push({ name: s.id + "-" + s.name + "." + ext, bytes: String(s[ext]).length });
-                  });
+                var parentRel = id2.indexOf("/") < 0 ? "" : id2.slice(0, id2.lastIndexOf("/"));
+                var parentFull = root ? (parentRel ? root + "/" + parentRel : root) : parentRel;
+                var newName = id2.slice(id2.lastIndexOf("/") + 1);
+                var existing = null;
+                try { existing = resolveId(id2); } catch (e) { existing = null; }
+
+                if (args.name !== undefined && args.name !== null && String(args.name).trim()) {
+                  // 重命名:page 换 stem 保扩展名;module 换目录名
+                  if (!existing) return reject(new Error("节点不存在: " + id2));
+                  var target = String(args.name).trim().replace(/\\/g, "/");
+                  if (!target || target.indexOf("/") >= 0 || target === "." || target === "..") {
+                    return reject(new Error("非法名称: " + args.name));
+                  }
+                  var baseName = existing.slice(existing.lastIndexOf("/") + 1);
+                  var oldExt = extOf(baseName);
+                  var isPage = isPageFull(existing);
+                  if (isPage) {
+                    var givenExt = extOf(target);
+                    if (givenExt) target = target.slice(0, target.length - givenExt.length - 1);
+                    if (!target) return reject(new Error("名称不能为空"));
+                    target = target + "." + (oldExt || "html");
+                  }
+                  var toFull = (existing.lastIndexOf("/") < 0 ? "" : existing.slice(0, existing.lastIndexOf("/") + 1)) + target;
+                  if (toFull !== existing && fsMap[toFull]) return reject(new Error("已存在同名节点: " + target));
+                  moveSubtree(existing, toFull);
+                  var newId = (root && toFull.indexOf(root + "/") === 0)
+                    ? toFull.slice(root.length + 1) : toFull;
+                  resolve({ ok: true, id: newId });
+                  return;
+                }
+
+                if (existing) {
+                  if (args.content !== undefined && typeof args.content === "string") {
+                    fsMap[existing].content = args.content;
+                  }
+                  resolve({ ok: true, id: id2 });
+                  return;
+                }
+                // 新建:有页面扩展名 → 页面(默认内容);无扩展名 → 模块(mkdir)
+                var ext2 = extOf(newName);
+                var isPageNew = ext2 === "html" || ext2 === "htm" || ext2 === "jsx" || ext2 === "tsx" || ext2 === "vue";
+                if (parentRel || root) {
+                  if (!fsMap[parentFull] || fsMap[parentFull].type !== "module") {
+                    return reject(new Error("父模块不存在: " + (parentRel || "/")));
+                  }
+                }
+                if (isPageNew) {
+                  var stem2 = newName.slice(0, newName.length - ext2.length - 1);
+                  fsMap[root ? root + "/" + id2 : id2] = {
+                    type: "page",
+                    content: typeof args.content === "string" ? args.content
+                      : (ext2 === "jsx" || ext2 === "tsx" ? "// " + newName + "\nexport default function Page() {\n  return null;\n}\n"
+                        : ext2 === "vue" ? "<template>\n  <div>" + stem2 + "</div>\n</template>\n"
+                        : blankPage(stem2))
+                  };
+                } else {
+                  fsMap[root ? root + "/" + id2 : id2] = { type: "module" };
+                }
+                resolve({ ok: true, id: id2 });
+              } else if (name === "uigen_delete_page") {
+                var full3 = resolveId(args.id);
+                var kids = Object.keys(fsMap).filter(function (k) { return k.indexOf(full3 + "/") === 0; });
+                if (kids.length && !args.recursive) {
+                  return reject(new Error("模块非空,需要 recursive:true"));
+                }
+                delete fsMap[full3];
+                kids.forEach(function (k) { delete fsMap[k]; });
+                resolve({ ok: true, deleted: String(args.id) });
+              } else if (name === "uigen_list_skills") {
+                // 与 server toolListSkills 同口径:缺省只回启用项,includeInactive 回全部
+                resolve({
+                  ok: true,
+                  skills: skills.filter(function (s) { return args.includeInactive || s.is_active !== false; })
+                    .map(function (s) {
+                      return {
+                        id: s.id, name: s.name, description: s.description,
+                        category: s.category, scope: s.scope, is_active: s.is_active,
+                        sort_order: s.sort_order, instructions: s.instructions, examples: s.examples
+                      };
+                    })
                 });
-                resolve({ ok: true, targetDir: "(panel-local, 未写盘)", screens: screens.length, files: files });
-              } else if (name === "uigen_import_dir") {
-                reject(new Error("panel-local 模式不支持目录导入,请在 VCode 宿主内使用"));
+              } else if (name === "uigen_get_skill") {
+                var found = null;
+                skills.forEach(function (s) { if (s.id === String(args.id)) found = s; });
+                if (!found) return reject(new Error("skill not found: " + args.id));
+                resolve({
+                  ok: true, id: found.id, name: found.name, description: found.description,
+                  category: found.category, scope: found.scope, is_active: found.is_active,
+                  sort_order: found.sort_order, instructions: found.instructions, examples: found.examples
+                });
+              } else if (name === "uigen_save_skill") {
+                // 与 server toolSaveSkill 同口径:name + instructions 每次必填,
+                // 更新时未传字段保留存储值(is_active 切换只回传整条记录改开关)。
+                var skillName = String(args.name || "").trim();
+                var instructions = typeof args.instructions === "string" ? args.instructions : "";
+                if (!skillName) return reject(new Error("name is required"));
+                if (!instructions.trim()) {
+                  return reject(new Error("instructions is required and must be non-empty"));
+                }
+                var sid = args.id ? String(args.id) : "";
+                var target2 = null;
+                skills.forEach(function (s) { if (s.id === sid) target2 = s; });
+                if (sid && !target2) return reject(new Error("skill not found: " + sid));
+                if (!target2) {
+                  var base = "skill-" + slugify(skillName);
+                  var newId = base, suffix = 1, used = {};
+                  skills.forEach(function (s) { used[s.id] = true; });
+                  while (used[newId]) { suffix += 1; newId = base + "-" + suffix; }
+                  target2 = {
+                    id: newId, scope: "global", category: "general", description: "",
+                    is_active: true, sort_order: 0, examples: ""
+                  };
+                  skills.push(target2);
+                }
+                target2.name = skillName;
+                if (typeof args.description === "string") target2.description = args.description;
+                target2.instructions = instructions;
+                if (typeof args.category === "string" && args.category) target2.category = args.category;
+                if (typeof args.is_active === "boolean") target2.is_active = args.is_active;
+                if (Number.isFinite(args.sort_order)) target2.sort_order = Math.trunc(args.sort_order);
+                target2.updatedAt = new Date().toISOString();
+                resolve({ ok: true, id: target2.id });
+              } else if (name === "uigen_delete_skill") {
+                var at = -1;
+                skills.forEach(function (s, i) { if (s.id === String(args.id)) at = i; });
+                if (at < 0) return reject(new Error("skill not found: " + args.id));
+                var gone = skills.splice(at, 1)[0];
+                resolve({ ok: true, deleted: gone.id });
               } else if (name === "uigen_canvas_save") {
-                var layout = args && args.layoutJson;
+                var layout = args.layoutJson;
                 if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
                   return reject(new Error("layoutJson must be an object"));
                 }
                 canvasLayout = layout;
+                try {
+                  if (global.localStorage) global.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+                } catch (e) { /* 存储不可用时退回内存态 */ }
                 resolve({ ok: true, updatedAt: new Date().toISOString(), bytes: 0, file: "(panel-local, 未写盘)" });
               } else if (name === "uigen_canvas_get") {
-                resolve({ ok: true, layout: canvasLayout, updatedAt: "", workspace: null });
+                resolve({
+                  ok: true, layout: canvasLayout, updatedAt: "",
+                  workspace: { name: "demo-workspace", root: WORKSPACE }
+                });
               } else {
                 reject(new Error("unknown tool: " + name));
               }
@@ -898,7 +1226,7 @@
     return bridge;
   }
 
-  var api = { create: createUiGenBridge, version: "0.3.0" };
+  var api = { create: createUiGenBridge, version: "0.4.0" };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   global.UiGenBridge = api;
 })(typeof window !== "undefined" ? window : globalThis);
@@ -908,23 +1236,35 @@
   "use strict";
 
   // ==================================================================
-  // state
+  // state — HBA 原型库浏览器:左树 + 右全览画布,点页面进单页视图
   // ==================================================================
   var VP = { 390: { w: 390, h: 844 }, 768: { w: 768, h: 1024 }, 1280: { w: 1280, h: 800 } };
+  var CARD_W = 320, CARD_H = 240;   // 全览卡固定尺寸(对齐 HBA ScreenNode 默认 320×240)
+  var EMPTY_COPY = "项目里还没有原型页面(html/jsx/tsx/vue),在对话里让 UI 原型智能体创建吧。";
 
   var state = {
-    screens: [],          // [{id,name,html,jsx,vue,hotspots}] — 磁盘 screens/ 的内存镜像
-    selected: -1,
-    format: "html",       // 卡片内容形态:html=实时预览 / jsx|vue=代码
+    tree: [],                 // uigen_* 返回的嵌套节点(服务端已排好序,不二次排序)
+    stats: null,
+    focusId: "",              // 单页视图页 id;"" = 所有页面全览
+    collapsed: {},            // 模块 id -> true;折叠状态仅本会话内存
     viewport: 390,
     zoom: 1,
     grid: true,
     sidebarCollapsed: false,
-    cards: {},            // screenId -> {x,y,w}
-    playing: false,
-    playIndex: -1,
-    playTimer: null
+    cards: {}                 // 页面 id -> {x,y,w}(全览卡位置,持久化)
   };
+  var pan = { x: 0, y: 0 };   // 画布平移量(屏幕 px);视口态,不入 canvas-layout 持久化
+  var pageCache = {};         // 页面 id → content(uigen_get_page 结果)
+
+  // B2 状态:引用 chip 暂存区 / 元素拾取 / 技能弹窗
+  var refChips = [];          // [{type:'page'|'module'|'element', id, name, label?, ref?}]
+  var pick = { on: false, frame: null, doc: null, hover: null, styleEl: null };
+  var skillUi = {
+    open: false, skills: [], filter: "all", loading: false,
+    showNew: false, editingId: null, deletingId: null,
+    newForm: null, editForm: null
+  };
+  var addInFlight = false;    // 「插入到对话」并发守卫
 
   var $ = function (id) { return document.getElementById(id); };
   var bridge = window.UiGenBridge.create({ connectTimeoutMs: 10000 });
@@ -959,7 +1299,8 @@
     toastTimer = setTimeout(function () { el.className = ""; }, 2600);
   }
 
-  // 沙箱铁律:写入 iframe 前剥离 <script>,预览里跳转由播放层接管
+  // 沙箱铁律:写入 iframe 前剥离 <script>;iframe 一律不带 sandbox 属性
+  // (宿主插件沙箱 WebView 对嵌套 sandbox iframe 会崩——历史教训)
   function stripScripts(html) {
     return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, "");
   }
@@ -970,32 +1311,89 @@
     });
   }
 
-  function currentScreen() { return state.screens[state.selected] || null; }
+  /** id 末段扩展名(小写,无点);无扩展名返回 ""。 */
+  function extOf(id) {
+    var base = String(id || "").split("/").pop() || "";
+    var i = base.lastIndexOf(".");
+    return i > 0 ? base.slice(i + 1).toLowerCase() : "";
+  }
+
+  function stemOf(id) {
+    var base = String(id || "").split("/").pop() || "";
+    var ext = extOf(id);
+    return ext ? base.slice(0, base.length - ext.length - 1) : base;
+  }
+
+  function isHtmlExt(ext) { return !ext || ext === "html" || ext === "htm"; }
+
+  function badgeClass(ext) {
+    if (ext === "html" || ext === "htm") return "badge-html";
+    if (ext === "jsx") return "badge-jsx";
+    if (ext === "tsx") return "badge-tsx";
+    if (ext === "vue") return "badge-vue";
+    return "badge-ext";
+  }
+
+  // ==================================================================
+  // 树模型 — 服务端 tree 已按磁盘字典序排好,按序挂 children 不二次排序
+  // ==================================================================
+  function findNode(id, nodes) {
+    nodes = nodes || state.tree;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.id === id) return n;
+      if (n.type === "module" && n.children && n.children.length) {
+        var hit = findNode(id, n.children);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  /** 全部页面(树序,平铺)。 */
+  function flattenPages(nodes, out) {
+    nodes = nodes || state.tree;
+    out = out || [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.type === "page") out.push(n);
+      else if (n.type === "module" && n.children && n.children.length) flattenPages(n.children, out);
+    }
+    return out;
+  }
+
+  /** 树 → 可视行(折叠模块的子行不出现)。 */
+  function flattenRows(nodes, depth, out) {
+    nodes = nodes || state.tree;
+    depth = depth || 0;
+    out = out || [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var isModule = n.type === "module";
+      var hasChildren = isModule && !!(n.children && n.children.length);
+      var expanded = hasChildren && !state.collapsed[n.id];
+      out.push({ node: n, depth: depth, isModule: isModule, hasChildren: hasChildren, expanded: expanded });
+      if (expanded) flattenRows(n.children, depth + 1, out);
+    }
+    return out;
+  }
 
   // ==================================================================
   // canvas layout persistence — uigen_canvas_save / uigen_canvas_get
-  // 形状:{ version, zoom, grid, viewport, sidebarCollapsed, cards, ui }
-  // ui = 项目级共享的面板 UI 状态(选中屏/格式/需求草稿),同项目所有
-  // 会话/窗口的原型面板共用一份,打开面板即恢复(B 方案)。
+  // 形状:{ version, zoom, grid, viewport, sidebarCollapsed, cards }
+  // (原型根死绑工作区,无 rootDir 选择;打开面板即恢复画布状态。)
   // ==================================================================
   var saveTimer = null;
   var layoutLoaded = false;
-  var pendingUi = null;    // applyLayout 暂存 layout.ui,boot 末尾统一恢复
 
   function layoutSnapshot() {
-    var sel = currentScreen();
     return {
       version: 1,
       zoom: state.zoom,
       grid: state.grid,
       viewport: state.viewport,
       sidebarCollapsed: state.sidebarCollapsed,
-      cards: state.cards,
-      ui: {
-        selectedScreenId: sel ? sel.id : "",
-        format: state.format,
-        prompt: $("gen-prompt").value
-      }
+      cards: state.cards
     };
   }
 
@@ -1018,85 +1416,53 @@
     if (VP[layout.viewport]) state.viewport = layout.viewport;
     if (typeof layout.sidebarCollapsed === "boolean") state.sidebarCollapsed = layout.sidebarCollapsed;
     if (layout.cards && typeof layout.cards === "object") state.cards = layout.cards;
-    if (layout.ui && typeof layout.ui === "object") pendingUi = layout.ui;
   }
 
-  // ------------------------------------------------------------------
-  // 磁盘即真源:面板数据源 = screens 清单(uigen_list_screens) + 逐屏
-  // 产物(uigen_get_screen)。生成/增删改后统一走 reloadScreens()。
-  // ------------------------------------------------------------------
-  function reloadScreens(preferredId) {
-    return bridge.callTool("uigen_list_screens", { limit: 200 }).then(function (res) {
-      var entries = (res && res.ok && Array.isArray(res.screens)) ? res.screens : [];
-      if (!entries.length) {
-        state.screens = [];
-        state.selected = -1;
-        renderTree();
-        renderCards();
-        return [];
-      }
-      return Promise.all(entries.map(function (e) {
-        return bridge.callTool("uigen_get_screen", { id: e.id }).then(function (r) {
-          if (r && r.ok && r.screen) return r.screen;
-          return { id: e.id, name: e.name, html: "", jsx: "", vue: "", hotspots: e.hotspots || [] };
-        }).catch(function () {
-          return { id: e.id, name: e.name, html: "", jsx: "", vue: "", hotspots: e.hotspots || [] };
-        });
-      })).then(function (screens) {
-        state.screens = screens;
-        var want = preferredId || "";
-        state.selected = 0;
-        if (want) {
-          for (var i = 0; i < screens.length; i++) {
-            if (screens[i].id === want) { state.selected = i; break; }
-          }
-        }
-        renderTree();
-        renderCards();
-        return screens;
-      });
-    });
+  // ==================================================================
+  // 数据载入 — 启动即 uigen_list_pages()(根=工作区根),增删改/资源推送
+  // 走 refreshTree(),刷新按钮走 uigen_rescan()
+  // ==================================================================
+  function applyTree(res) {
+    state.tree = (res && Array.isArray(res.tree)) ? res.tree : [];
+    state.stats = (res && res.stats) ? res.stats : null;
+    if (state.focusId && !findNode(state.focusId)) state.focusId = "";  // 聚焦页被删 → 退出
+    renderAll();
   }
 
-  /** 恢复共享面板状态的 ui 部分:格式/需求草稿直接应用,随后从磁盘读回
-   *  screens 并按 selectedScreenId 选中。不清 state.cards——恢复的就是这张画布。 */
-  function restorePendingUi() {
-    var ui = pendingUi;
-    pendingUi = null;
-    var sel = "";
-    if (ui && typeof ui === "object") {
-      if (ui.format && FORMAT_CYCLE.indexOf(ui.format) >= 0) state.format = ui.format;
-      if (typeof ui.prompt === "string" && ui.prompt) $("gen-prompt").value = ui.prompt;
-      if (typeof ui.selectedScreenId === "string") sel = ui.selectedScreenId;
+  /** 服务端部分校验错误以 {ok:false,error} 返回(不 reject),统一转异常。 */
+  function okOrThrow(res) {
+    if (res && res.ok === false) throw new Error(res.error || "操作失败");
+    return res;
+  }
+
+  function refreshTree() {
+    pageCache = {};
+    return bridge.callTool("uigen_list_pages", {}).then(okOrThrow).then(applyTree);
+  }
+
+  function loadPageContent(id) {
+    if (Object.prototype.hasOwnProperty.call(pageCache, id)) {
+      return Promise.resolve(pageCache[id]);
     }
-    reloadScreens(sel).catch(function () { /* 读盘失败维持空画布 */ });
+    return bridge.callTool("uigen_get_page", { id: id }).then(function (res) {
+      var content = (res && typeof res.content === "string") ? res.content : "";
+      pageCache[id] = content;
+      return content;
+    }).catch(function () { return ""; });
   }
 
   // ==================================================================
-  // bridge wiring
+  // 顶栏 — 当前项目名 + 路径(uigen_canvas_get 返回的 workspace 信息)
   // ==================================================================
-  bridge.onProgress(function (p) {
-    try {
-      var total = p.total || 1;
-      var done = typeof p.progress === "number" ? p.progress : 0;
-      $("gen-progress-fill").style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
-      if (p.message) $("gen-msg").textContent = p.message;
-    } catch (e) { /* progress render must never break the panel */ }
-  });
-
-  // 宿主推送 state.json 变更(生成/导入/落盘)→ 从磁盘重载清单
-  var reloadTimer = null;
-  bridge.onResourceUpdate(function () {
-    if (reloadTimer) clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(function () {
-      var sel = currentScreen();
-      reloadScreens(sel ? sel.id : "").catch(function () { /* 重载失败保留现状 */ });
-    }, 200);
-  });
+  function setWorkspace(ws) {
+    $("proj-name").textContent = (ws && ws.name) ? ws.name : "—";
+    $("proj-path").textContent = (ws && ws.root) ? ws.root : "";
+    $("proj-path").title = (ws && ws.root) || "";
+  }
 
   // ==================================================================
-  // 页面树(左 220px)— 移植 HBA screen-tree 的行模型:平铺顺序即层级,
-  // 拖拽 before/after 重排;⋯ 菜单=重命名/删除;＋ 新建页面。
+  // 页面树(左 220px)— 模块(目录)可展开/折叠,页面点击进单页视图;
+  // 行尾 ⋯ = 新建/重命名/删除;树顶「所有页面」退出单页视图。
   // ==================================================================
   var moreMenu = null;   // 当前打开的 ⋯ 菜单元素
 
@@ -1105,150 +1471,37 @@
     moreMenu = null;
   }
 
-  /** 排序落盘:把当前顺序逐屏写回 index.json(order 字段)。 */
-  function persistOrder() {
-    var ops = state.screens.map(function (s, idx) {
-      return bridge.callTool("uigen_save_screen", { id: s.id, name: s.name || s.id, order: idx })
-        .catch(function () { return null; });
-    });
-    Promise.all(ops).catch(function () { /* 单屏失败不打扰排序 */ });
-  }
-
-  function renderTree() {
-    var tree = $("screen-tree");
-    tree.textContent = "";
-    $("page-count").textContent = "(" + state.screens.length + ")";
-    if (!state.screens.length) {
-      var empty = document.createElement("div");
-      empty.className = "tree-empty";
-      empty.textContent = "暂无页面。点右上「生成应用」或 ＋ 新建。";
-      tree.appendChild(empty);
-      return;
-    }
-    state.screens.forEach(function (s, i) {
-      var row = document.createElement("div");
-      row.className = "tree-row" + (i === state.selected ? " on" : "");
-      row.draggable = true;
-      row.dataset.index = String(i);
-
-      var thumb = document.createElement("div");
-      thumb.className = "t-thumb";
-      thumb.innerHTML = '<div class="tt-bar"></div><div class="tt-line"></div><div class="tt-line" style="width:60%"></div>';
-
-      var info = document.createElement("div");
-      info.className = "t-info";
-      var nameEl = document.createElement("div");
-      nameEl.className = "t-name";
-      nameEl.textContent = s.name || s.id;
-      var badge = document.createElement("div");
-      badge.className = "t-badge";
-      badge.innerHTML = '<span class="badge-html">HTML/TW</span>';
-      info.appendChild(nameEl);
-      info.appendChild(badge);
-
-      var more = document.createElement("button");
-      more.className = "t-more";
-      more.textContent = "⋯";
-      more.title = "页面操作";
-      more.addEventListener("click", function (ev) {
-        ev.stopPropagation();
-        openMoreMenu(more, i);
-      });
-
-      row.appendChild(thumb);
-      row.appendChild(info);
-      row.appendChild(more);
-
-      row.addEventListener("click", function () { selectScreen(i); });
-
-      // 拖拽重排:落在行上=插到该行位置
-      row.addEventListener("dragstart", function (ev) {
-        ev.dataTransfer.setData("text/plain", String(i));
-        ev.dataTransfer.effectAllowed = "move";
-      });
-      row.addEventListener("dragover", function (ev) {
-        ev.preventDefault();
-        ev.dataTransfer.dropEffect = "move";
-        row.classList.add("drag-over");
-      });
-      row.addEventListener("dragleave", function () { row.classList.remove("drag-over"); });
-      row.addEventListener("drop", function (ev) {
-        ev.preventDefault();
-        row.classList.remove("drag-over");
-        var from = parseInt(ev.dataTransfer.getData("text/plain"), 10);
-        if (isNaN(from) || from === i) return;
-        var moved = state.screens.splice(from, 1)[0];
-        state.screens.splice(i, 0, moved);
-        if (state.selected === from) state.selected = i;
-        else if (from < state.selected && i >= state.selected) state.selected -= 1;
-        else if (from > state.selected && i <= state.selected) state.selected += 1;
-        renderTree();
-        renderCards();
-        persistOrder();
-        toast("已调整「" + (moved.name || moved.id) + "」顺序(已落盘)");
-      });
-
-      tree.appendChild(row);
-    });
-  }
-
-  function openMoreMenu(anchor, index) {
+  /** 通用浮层菜单:items = [{label,fn,danger} | {sep:true}],贴锚点弹出并夹取视口。 */
+  function openMenu(anchor, items) {
     closeMoreMenu();
     var menu = document.createElement("div");
     menu.className = "dropdown-menu open";
-    menu.style.position = "fixed";
-    menu.style.minWidth = "140px";
     var r = anchor.getBoundingClientRect();
-    menu.style.top = (r.bottom + 4) + "px";
-    menu.style.left = (r.left - 100) + "px";
-    menu.style.right = "auto";
+    var estH = items.length * 30 + 14;
+    var top = r.bottom + 4;
+    if (top + estH > window.innerHeight - 8) top = Math.max(8, r.top - estH - 4);
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - 165));
+    menu.style.top = top + "px";
+    menu.style.left = left + "px";
 
-    function item(label, fn) {
+    items.forEach(function (it) {
+      if (it.sep) {
+        var sep = document.createElement("div");
+        sep.className = "menu-sep";
+        menu.appendChild(sep);
+        return;
+      }
       var el = document.createElement("div");
-      el.className = "v-item";
-      el.textContent = label;
+      el.className = "v-item" + (it.danger ? " danger" : "");
+      el.textContent = it.label;
       el.addEventListener("click", function (ev) {
         ev.stopPropagation();
         closeMoreMenu();
-        fn();
+        it.fn();
       });
       menu.appendChild(el);
-    }
-    item("重命名", function () {
-      var s = state.screens[index];
-      var name = window.prompt("页面名称:", s.name || s.id);
-      if (name == null) return;
-      name = name.trim();
-      if (!name || name === s.name) return;
-      // 磁盘即真源:重命名落盘(index.json 条目),成功后更新本地视图
-      bridge.callTool("uigen_save_screen", { id: s.id, name: name }).then(function (res) {
-        if (res && res.ok) {
-          s.name = name;
-          renderTree();
-          renderCards();
-          toast("已重命名为「" + name + "」(已落盘)");
-        } else {
-          toast("重命名失败:" + (res && res.error ? res.error : "未知错误"), true);
-        }
-      }).catch(function (e) { toast("重命名失败:" + e.message, true); });
     });
-    item("删除页面", function () {
-      var s = state.screens[index];
-      if (!window.confirm("删除页面「" + (s.name || s.id) + "」?(将删除磁盘文件与清单条目)")) return;
-      bridge.callTool("uigen_delete_screen", { id: s.id }).then(function (res) {
-        if (res && res.ok) {
-          state.screens.splice(index, 1);
-          delete state.cards[s.id];
-          if (state.selected >= state.screens.length) state.selected = state.screens.length - 1;
-          renderTree();
-          renderCards();
-          scheduleSaveLayout();
-          toast("已删除「" + (s.name || s.id) + "」(已落盘)");
-        } else {
-          toast("删除失败:" + (res && res.error ? res.error : "未知错误"), true);
-        }
-      }).catch(function (e) { toast("删除失败:" + e.message, true); });
-    });
+
     document.body.appendChild(menu);
     moreMenu = menu;
     setTimeout(function () {
@@ -1256,184 +1509,1097 @@
     }, 0);
   }
 
-  function addPage() {
-    var n = state.screens.length + 1;
-    var blank =
-      '<!doctype html>\n<html lang="zh-CN">\n<head>\n  <meta charset="utf-8">\n' +
-      '  <title>页面 ' + n + '</title>\n  <style>\n' +
-      '    body { width: 390px; min-height: 844px; margin: 0; font-family: system-ui, sans-serif;\n' +
-      '           background: #f5f6f8; color: #1f2329; display: flex; align-items: center;\n' +
-      '           justify-content: center; }\n    p { color: #9aa3af; }\n  </style>\n</head>\n' +
-      '<body>\n  <p>空白页面 ' + n + '</p>\n</body>\n</html>\n';
-    // 磁盘即真源:新建页直接写 screens/<id>.html + index.json
-    bridge.callTool("uigen_save_screen", { name: "页面 " + n, html: blank }).then(function (res) {
-      if (res && res.ok && res.screen) {
-        var scr = res.screen;
-        state.screens.push({ id: scr.id, name: scr.name, html: blank, jsx: "", vue: "", hotspots: scr.hotspots || [] });
-        selectScreen(state.screens.length - 1);
-        scheduleSaveLayout();
-        toast("已新建「" + scr.name + "」(" + scr.id + ",已落盘)");
-      } else {
-        toast("新建失败:" + (res && res.error ? res.error : "未知错误"), true);
+  var CHEV_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+  var FOLDER_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>';
+
+  function renderTree() {
+    var tree = $("screen-tree");
+    tree.textContent = "";
+    $("page-count").textContent = "(" + flattenPages().length + ")";
+    $("btn-all-pages").classList.toggle("on", !!state.focusId);
+
+    if (!state.tree.length) {
+      var empty = document.createElement("div");
+      empty.className = "tree-empty";
+      empty.textContent = EMPTY_COPY;
+      tree.appendChild(empty);
+      return;
+    }
+
+    flattenRows().forEach(function (row) {
+      var n = row.node;
+      var el = document.createElement("div");
+      el.className = "tree-row" + (row.isModule ? " module" : "") +
+        (state.focusId === n.id ? " on" : "");
+      el.dataset.id = n.id;                 // id 含 "/",一律走 dataset,不拼选择器
+      el.style.paddingLeft = (8 + row.depth * 12) + "px";
+
+      var chev = document.createElement("span");
+      chev.className = "t-chev" + (row.expanded ? " open" : "");
+      if (row.isModule && row.hasChildren) {
+        chev.innerHTML = CHEV_SVG;
+        chev.title = row.expanded ? "折叠" : "展开";
+        chev.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          toggleCollapse(n.id);
+        });
       }
+      el.appendChild(chev);
+
+      if (row.isModule) {
+        var icon = document.createElement("span");
+        icon.className = "t-icon";
+        icon.innerHTML = FOLDER_SVG;
+        el.appendChild(icon);
+      }
+
+      var nameEl = document.createElement("span");
+      nameEl.className = "t-name";
+      nameEl.textContent = n.name || n.id;
+      nameEl.title = n.id;
+      el.appendChild(nameEl);
+
+      if (!row.isModule) {
+        var ext = extOf(n.id) || (typeof n.framework === "string" ? n.framework.toLowerCase() : "") || "html";
+        var badge = document.createElement("span");
+        badge.className = "t-badge";
+        badge.innerHTML = '<span class="' + badgeClass(ext) + '">' + esc(ext) + "</span>";
+        el.appendChild(badge);
+      }
+
+      var more = document.createElement("button");
+      more.className = "t-more";
+      more.textContent = "⋯";
+      more.title = row.isModule ? "模块操作" : "页面操作";
+      more.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        openNodeMenu(more, n);
+      });
+      el.appendChild(more);
+
+      el.addEventListener("click", function () {
+        if (row.isModule) toggleCollapse(n.id);
+        else focusPage(n.id);
+      });
+
+      tree.appendChild(el);
+    });
+  }
+
+  function toggleCollapse(id) {
+    state.collapsed[id] = !state.collapsed[id];
+    renderTree();
+  }
+
+  function openNodeMenu(anchor, n) {
+    var items = [];
+    // 引用入口:按行类型给「引用此页 / 引用此模块」,进底部 chip 暂存区
+    items.push({
+      label: n.type === "module" ? "引用此模块" : "引用此页",
+      fn: function () {
+        addRefChip({
+          type: n.type === "module" ? "module" : "page",
+          id: n.id,
+          name: nodePathLabel(n.id)
+        });
+        toast("已加入引用,可在底部「插入到对话」");
+      }
+    });
+    items.push({ sep: true });
+    if (n.type === "module") {
+      items.push({ label: "新建页面", fn: function () { createNode(n.id, "page"); } });
+      items.push({ label: "新建子模块", fn: function () { createNode(n.id, "module"); } });
+      items.push({ sep: true });
+    }
+    items.push({ label: "重命名", fn: function () { renameNode(n); } });
+    items.push({ sep: true });
+    items.push({
+      label: n.type === "module" ? "删除模块" : "删除页面",
+      danger: true,
+      fn: function () { deleteNode(n); }
+    });
+    openMenu(anchor, items);
+  }
+
+  function badName(name) {
+    return !name || name === "." || name === ".." || name.indexOf("/") >= 0 || name.indexOf("\\") >= 0;
+  }
+
+  /** 新建:页面落父模块下(无扩展名自动补 .html);模块 = mkdir。 */
+  function createNode(parentId, type) {
+    var name = window.prompt(type === "module" ? "模块名称:" : "页面名称(可不带扩展名):", "");
+    if (name == null) return;
+    name = name.trim();
+    if (!name) return;
+    if (badName(name)) { toast("名称不能含路径分隔符", true); return; }
+    var id;
+    if (type === "module") {
+      id = parentId ? parentId + "/" + name : name;
+    } else {
+      if (!/\.(html?|jsx|tsx|vue)$/i.test(name)) name += ".html";
+      id = parentId ? parentId + "/" + name : name;
+    }
+    if (findNode(id)) { toast("已存在同名节点:" + id, true); return; }
+    bridge.callTool("uigen_save_page", { id: id }).then(okOrThrow).then(function (res) {
+      if (parentId) delete state.collapsed[parentId];   // 新节点可能落在折叠模块里
+      var newId = (res && res.id) ? res.id : id;
+      return refreshTree().then(function () {
+        toast("已新建「" + name + "」");
+        if (type === "page") focusPage(newId);
+      });
     }).catch(function (e) { toast("新建失败:" + e.message, true); });
   }
 
-  // ==================================================================
-  // 画布卡片 — 绝对定位 + 标题栏拖拽移动 + 简单缩放
-  // ==================================================================
-  function defaultCardPos(i, w) {
-    var vp = VP[state.viewport];
-    var perRow = Math.max(1, Math.floor(1500 / (w + 60)));
-    var col = i % perRow;
-    var row = Math.floor(i / perRow);
-    return { x: 60 + col * (w + 60), y: 60 + row * (vp.h * (w / vp.w) + 90), w: w };
+  /** 重命名:page 改 stem 保扩展名,module 改目录名(语义在服务端)。 */
+  function renameNode(n) {
+    var isModule = n.type === "module";
+    var cur = isModule ? n.id.split("/").pop() : stemOf(n.id);
+    var name = window.prompt(isModule ? "模块新名称:" : "页面新名称(不含扩展名):", cur);
+    if (name == null) return;
+    name = name.trim();
+    if (!name || name === cur) return;
+    if (badName(name)) { toast("名称不能含路径分隔符", true); return; }
+    var oldId = n.id;
+    bridge.callTool("uigen_save_page", { id: oldId, name: name }).then(okOrThrow).then(function (res) {
+      var newId = (res && res.id) ? res.id : oldId;
+      if (state.focusId === oldId) state.focusId = newId;
+      if (state.cards[oldId]) {
+        state.cards[newId] = state.cards[oldId];
+        delete state.cards[oldId];
+      }
+      if (state.collapsed[oldId]) {
+        state.collapsed[newId] = true;
+        delete state.collapsed[oldId];
+      }
+      return refreshTree().then(function () {
+        toast("已重命名为「" + name + "」");
+        scheduleSaveLayout();
+      });
+    }).catch(function (e) { toast("重命名失败:" + e.message, true); });
   }
 
-  function cardFor(screen, i) {
-    var c = state.cards[screen.id];
-    if (!c || typeof c.x !== "number" || typeof c.w !== "number") {
-      c = defaultCardPos(i, VP[state.viewport].w);
-      state.cards[screen.id] = c;
+  /** 删除:非空模块自动带 recursive:true,确认文案里说明会删子内容。 */
+  function deleteNode(n) {
+    var isModule = n.type === "module";
+    var nonEmpty = isModule && n.children && n.children.length > 0;
+    var msg;
+    if (isModule) {
+      msg = nonEmpty
+        ? "删除模块「" + (n.name || n.id) + "」?其下的子模块与页面会一并删除。"
+        : "删除空模块「" + (n.name || n.id) + "」?";
+    } else {
+      msg = "删除页面「" + (n.name || n.id) + "」?(将删除磁盘文件)";
     }
+    if (!window.confirm(msg)) return;
+    var args = { id: n.id };
+    if (nonEmpty) args.recursive = true;
+    bridge.callTool("uigen_delete_page", args).then(okOrThrow).then(function () {
+      if (state.focusId === n.id || state.focusId.indexOf(n.id + "/") === 0) state.focusId = "";
+      Object.keys(state.cards).forEach(function (k) {
+        if (k === n.id || k.indexOf(n.id + "/") === 0) delete state.cards[k];
+      });
+      return refreshTree().then(function () {
+        toast("已删除「" + (n.name || n.id) + "」");
+        scheduleSaveLayout();
+      });
+    }).catch(function (e) { toast("删除失败:" + e.message, true); });
+  }
+
+  // ==================================================================
+  // 单页视图 — HBA focusScreen 语义的简化版:画布只显示该页一张大卡,
+  // 其余卡隐藏;Esc /「所有页面」/ 点树里其他页退出或切换。
+  // ==================================================================
+  function focusPage(id) {
+    var n = findNode(id);
+    if (!n || n.type !== "page") return;
+    if (state.focusId === id) return;
+    state.focusId = id;
+    pan.x = 0;   // 只动视口保证大卡可见;卡片坐标不碰
+    pan.y = 0;
+    renderTree();
+    renderCards();
+  }
+
+  function exitFocus() {
+    if (!state.focusId) return;
+    state.focusId = "";
+    renderTree();
+    renderCards();
+  }
+
+  function updateFocusUi() {
+    $("focus-toolbar").classList.toggle("show", !!state.focusId);
+    $("btn-all-pages").classList.toggle("on", !!state.focusId);
+  }
+
+  // ==================================================================
+  // B2-1 元素选取 —— srcdoc iframe 与父页同源,父页直接给 contentDocument
+  // 挂监听,绝不向 iframe 注入 script(宿主插件 WebView 崩溃守卫)。
+  // 快照与尾注口径逐字复刻 HBA ui-gen/chat/elementRef.ts,结构路径复刻
+  // preview/sandbox-utils.ts 的 domPath(同名兄弟 total>1 才带序号,从 1 起)。
+  // ==================================================================
+
+  /** 元素 CSS 选择器:#id 优先 → tag.c1.c2.c3(最多 3 类)→ 裸 tag。 */
+  function elementCssSelector(el) {
+    if (el.htmlId) return "#" + el.htmlId;
+    var classes = el.className.trim().split(/\s+/).filter(Boolean).slice(0, 3);
+    if (classes.length > 0) return el.tagName + classes.map(function (c) { return "." + c; }).join("");
+    return el.tagName;
+  }
+
+  /** 元素定位串:结构路径 > CSS 选择器 > #id > 裸 tag。 */
+  function elementLocator(ref) {
+    if (ref.path) return ref.path;
+    if (ref.selector) return ref.selector;
+    if (ref.htmlId) return "#" + ref.htmlId;
+    return ref.tagName;
+  }
+
+  /** 元素标签:`button「提交订单」`;无可见文本退化为裸 tag。 */
+  function elementLabel(ref) {
+    return ref.text ? ref.tagName + "「" + ref.text + "」" : ref.tagName;
+  }
+
+  /** 消息尾注:`[引用元素: button「提交订单」@ body>section(2)>form>button(1)]`。 */
+  function elementReferenceNote(ref) {
+    var locator = elementLocator(ref);
+    return locator
+      ? "[引用元素: " + elementLabel(ref) + "@ " + locator + "]"
+      : "[引用元素: " + elementLabel(ref) + "]";
+  }
+
+  /** chip 定位短形式 = elementCssSelector 口径(与属性面板同一串)。 */
+  function elementSelectorShortForm(ref) {
+    if (ref.selector) return ref.selector;
+    if (ref.htmlId) return "#" + ref.htmlId;
+    return ref.tagName;
+  }
+
+  /** chip 文案:`@首页 · button「提交订单」`;无文本时退到选择器短形式。 */
+  function elementReferenceChipLabel(ref) {
+    if (ref.text) return "@" + ref.screenName + " · " + elementLabel(ref);
+    var short = elementSelectorShortForm(ref);
+    return short && short !== ref.tagName
+      ? "@" + ref.screenName + " · " + short
+      : "@" + ref.screenName + " · " + ref.tagName;
+  }
+
+  /** 结构路径(复刻 sandbox-utils domPath):body>section(2)>form>button(1)。
+   *  doc 必须显式传 iframe 文档 —— 函数定义在父页,全局 document 会指到父文档。 */
+  function domPath(el, doc) {
+    var parts = [];
+    var cur = el;
+    while (cur && cur.nodeType === 1 && parts.length < 8) {
+      var tag = cur.tagName ? cur.tagName.toLowerCase() : "";
+      if (cur === doc.body) { parts.unshift("body"); break; }
+      var parent = cur.parentElement;
+      if (parent) {
+        var idx = 0, total = 0;
+        for (var i = 0; i < parent.children.length; i++) {
+          if (parent.children[i].tagName === cur.tagName) {
+            total++;
+            if (parent.children[i] === cur) idx = total;
+          }
+        }
+        if (total > 1) tag += "(" + idx + ")";
+      }
+      parts.unshift(tag);
+      cur = parent;
+    }
+    return parts.join(">");
+  }
+
+  /** DOM → 纯数据快照(复刻 buildElementReference):text 空白归一截 40 字,
+   *  tagName 小写;刻意不落 data-os-id(运行时编号,随重排漂移)。 */
+  function buildElementReference(screenId, screenName, el, doc) {
+    var tagName = (el.tagName || "div").toLowerCase();
+    var htmlId = el.id || "";
+    var className = (el.className && typeof el.className === "string") ? el.className.trim() : "";
+    var text = String(el.textContent == null ? "" : el.textContent)
+      .replace(/\s+/g, " ").trim().slice(0, 40);
+    var path = domPath(el, doc);
+    var ref = {
+      screenId: screenId,
+      screenName: screenName,
+      tagName: tagName,
+      text: text,
+      selector: elementCssSelector({ tagName: tagName, htmlId: htmlId, className: className })
+    };
+    if (path) ref.path = path;
+    if (htmlId) ref.htmlId = htmlId;
+    return ref;
+  }
+
+  var PICK_HOVER_CLASS = "hba-pick-hover";
+
+  function pickIsSkippable(el) {
+    return !el || el.nodeType !== 1 || !pick.doc ||
+      el === pick.doc.body || el === pick.doc.documentElement;
+  }
+
+  function clearPickHover() {
+    if (!pick.hover) return;
+    try { pick.hover.classList.remove(PICK_HOVER_CLASS); } catch (e) { /* 目标可能已卸载 */ }
+    pick.hover = null;
+  }
+
+  function pickOver(ev) {
+    var el = ev.target;
+    if (pickIsSkippable(el)) { clearPickHover(); return; }
+    if (el === pick.hover) return;
+    clearPickHover();
+    pick.hover = el;
+    try { el.classList.add(PICK_HOVER_CLASS); } catch (e) { /* 个别目标不支持 classList */ }
+  }
+
+  function pickOut(ev) {
+    if (!ev.relatedTarget) clearPickHover();   // 指针离开预览文档
+  }
+
+  function pickClick(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();            // 吞掉页内链接/按钮的默认行为
+    var el = ev.target;
+    if (pickIsSkippable(el)) return;           // body/html 空白:留在拾取模式
+    var screenId = state.focusId;
+    var ref = buildElementReference(screenId, nodePathLabel(screenId), el, pick.doc);
+    clearPickHover();
+    closeElementPicker();
+    addRefChip({
+      type: "element", id: screenId, name: nodePathLabel(screenId),
+      label: elementReferenceChipLabel(ref), ref: ref
+    });
+    toast("已引用元素:" + elementLabel(ref));
+  }
+
+  /** 进入/退出拾取模式(工具条按钮;Esc 也走这里,退出拾取不退单页视图)。 */
+  function openElementPicker() {
+    if (!state.focusId) { toast("先进入单页视图再选取元素", true); return; }
+    if (pick.on) { closeElementPicker(); return; }
+    var card = document.querySelector("#canvas-grid .screen-card.focus");
+    var frame = card ? card.querySelector("iframe") : null;
+    if (!frame) { toast("当前页面没有可选取的预览(代码视图)", true); return; }
+    var doc = null;
+    try { doc = frame.contentDocument; } catch (e) { doc = null; }
+    if (!doc) { toast("预览尚未就绪,请稍后再试", true); return; }
+    if (doc.readyState === "complete" && doc.body) { startPick(frame, doc); return; }
+    frame.addEventListener("load", function onLoad() {
+      frame.removeEventListener("load", onLoad);
+      if (pick.on || !state.focusId || !frame.isConnected) return;
+      var d = null;
+      try { d = frame.contentDocument; } catch (e) { d = null; }
+      if (d) startPick(frame, d);
+    });
+    toast("预览加载中,稍候自动进入拾取…");
+  }
+
+  function startPick(frame, doc) {
+    if (!doc || !doc.body) { toast("预览尚未就绪,请稍后再试", true); return; }
+    pick.on = true;
+    pick.frame = frame;
+    pick.doc = doc;
+    pick.hover = null;
+    // 高亮用临时 style 元素 + 类名(不改页面 inline style,退出即摘除)
+    var style = doc.createElement("style");
+    style.id = "__hba_pick_style";
+    style.textContent = "." + PICK_HOVER_CLASS +
+      "{outline:2px solid #f59e0b !important;outline-offset:1px !important;}";
+    (doc.head || doc.documentElement).appendChild(style);
+    pick.styleEl = style;
+    doc.addEventListener("mouseover", pickOver, true);
+    doc.addEventListener("mouseout", pickOut, true);
+    doc.addEventListener("click", pickClick, true);
+    frame.style.cursor = "crosshair";
+    var btn = $("btn-pick-element");
+    btn.classList.add("on");
+    btn.textContent = "退出拾取";
+    $("focus-hint").textContent = "Esc 退出拾取";
+  }
+
+  function closeElementPicker() {
+    if (!pick.on) return;
+    clearPickHover();
+    var doc = pick.doc, frame = pick.frame;
+    if (doc) {
+      doc.removeEventListener("mouseover", pickOver, true);
+      doc.removeEventListener("mouseout", pickOut, true);
+      doc.removeEventListener("click", pickClick, true);
+      if (pick.styleEl && pick.styleEl.parentNode) pick.styleEl.parentNode.removeChild(pick.styleEl);
+    }
+    if (frame) frame.style.cursor = "";
+    pick.on = false; pick.doc = null; pick.frame = null; pick.styleEl = null;
+    var btn = $("btn-pick-element");
+    btn.classList.remove("on");
+    btn.textContent = "选取元素";
+    $("focus-hint").textContent = "Esc 返回所有页面";
+  }
+
+  // ==================================================================
+  // B2-2 引用 chip + 插入到会话 —— 尾注模板逐字复刻 HBA UiGenChatPanel
+  // (screenReferenceNote / elementReferenceNote / appendNotes 口径),
+  // 显示名带祖先链(screen-tree nodePathLabel,「 > 」连接)。
+  // ==================================================================
+
+  function findNodeWithPath(id, nodes, chain) {
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.id === id) return { node: n, chain: chain };
+      if (n.type === "module" && n.children && n.children.length) {
+        var hit = findNodeWithPath(id, n.children, chain.concat([n.name || n.id]));
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  /** 引用目标的显示名:`模块A > 页面名`(根层级就是自身名),与侧栏一致。 */
+  function nodePathLabel(id) {
+    var hit = findNodeWithPath(id, state.tree, []);
+    return hit ? hit.chain.concat([hit.node.name || hit.node.id]).join(" > ") : String(id || "");
+  }
+
+  /** 选中节点引用尾注:type='module' → [引用模块: …],否则 [引用页面: …]。 */
+  function screenReferenceNote(name, screenId, type) {
+    return type === "module"
+      ? "[引用模块: " + name + " (" + screenId + ")]"
+      : "[引用页面: " + name + " (" + screenId + ")]";
+  }
+
+  function addRefChip(chip) {
+    if (chip.type === "element") {
+      refChips = refChips.filter(function (c) { return c.type !== "element"; });  // 再拾取即替换
+    } else if (refChips.some(function (c) { return c.type === chip.type && c.id === chip.id; })) {
+      toast("该引用已在列表中");
+      return;
+    }
+    refChips.push(chip);
+    renderRefChips();
+  }
+
+  function removeRefChip(index) {
+    refChips.splice(index, 1);
+    renderRefChips();
+  }
+
+  function renderRefChips() {
+    var box = $("ref-chips");
+    box.textContent = "";
+    var has = refChips.length > 0;
+    $("ref-bar").hidden = !has;
+    document.body.classList.toggle("chips-visible", has);
+    refChips.forEach(function (c, i) {
+      var el = document.createElement("span");
+      el.className = "ref-chip " + c.type;
+      var kind = document.createElement("span");
+      kind.className = "rc-kind";
+      kind.textContent = c.type === "page" ? "页" : c.type === "module" ? "模块" : "元素";
+      var txt = document.createElement("span");
+      txt.className = "rc-text";
+      txt.textContent = c.type === "element" ? c.label : c.name;
+      txt.title = c.type === "element" ? c.label : c.name + " (" + c.id + ")";
+      var x = document.createElement("button");
+      x.className = "rc-x";
+      x.textContent = "×";
+      x.title = "移除";
+      x.addEventListener("click", function () { removeRefChip(i); });
+      el.appendChild(kind);
+      el.appendChild(txt);
+      el.appendChild(x);
+      box.appendChild(el);
+    });
+  }
+
+  /** 全部 chip → 尾注文本:每条独占一行、整行 trim 去重(appendNotes 口径)。
+   *  有元素引用时页面尾注用元素所属页、元素尾注紧随其后,再补其余页面/模块。 */
+  function buildRefPayload() {
+    var notes = [], seen = {};
+    function push(note) {
+      if (!note || seen[note]) return;
+      seen[note] = true;
+      notes.push(note);
+    }
+    var elem = null, pages = [], mods = [];
+    refChips.forEach(function (c) {
+      if (c.type === "element") elem = c;
+      else if (c.type === "page") pages.push(c);
+      else mods.push(c);
+    });
+    if (elem) push(screenReferenceNote(elem.name, elem.id, "page"));
+    pages.forEach(function (c) { push(screenReferenceNote(c.name, c.id, "page")); });
+    if (elem) push(elementReferenceNote(elem.ref));
+    mods.forEach(function (c) { push(screenReferenceNote(c.name, c.id, "module")); });
+    return notes.join("\n");
+  }
+
+  /** 工具条「引用此页」:当前单页进 chip 暂存区。 */
+  function insertPageRef() {
+    var n = findNode(state.focusId);
+    if (!n || n.type !== "page") return;
+    addRefChip({ type: "page", id: n.id, name: nodePathLabel(n.id) });
+    toast("已加入引用,可在底部「插入到对话」");
+  }
+
+  // ---- 插入到对话:三级降级(照抄 hba-run insertSelectionToInput) ----
+  //   1) ui/insert-input-text —— 文本进输入框,用户改完自己发;
+  //   2) ui/update-model-context —— 以插件上下文附在输入区;
+  //   3) 剪贴板兜底(独立模式直接走这条)。
+  //   composer 未就绪(-32601 非「方法不存在」)→ 等待重试 10s/500ms;
+  //   通道方法不存在 → 该通道作废直接降级;成功后清空 chip 区。
+  var ADD_WAIT_TIMEOUT_MS = 10000;
+  var ADD_WAIT_STEP_MS = 500;
+
+  function isBridgeUnsupported(e) {
+    return /method not found|not available|不支持/i.test(String((e && e.message) || ""));
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* 剪贴板不可用不致命 */ }
+    ta.remove();
+  }
+
+  function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function () { fallbackCopy(text); });
+      }
+    } catch (e) { /* 继续走降级 */ }
+    fallbackCopy(text);
+    return Promise.resolve();
+  }
+
+  function clearRefChips() {
+    refChips = [];
+    renderRefChips();
+  }
+
+  async function insertRefsToChat() {
+    var payload = buildRefPayload();
+    if (!payload) { toast("还没有引用,先添加页面/模块/元素", true); return; }
+    if (window.parent === window || bridge.mode === "standalone") {
+      // 独立模式没有宿主可以代发,降级为复制到剪贴板
+      await copyText(payload);
+      clearRefChips();
+      toast("独立模式:无法添加到对话,已复制到剪贴板");
+      return;
+    }
+    if (addInFlight) { toast("正在添加到对话,请稍候…"); return; }
+    addInFlight = true;
+    try {
+      var insertOk = true, contextOk = true, waited = false;
+      var deadline = Date.now() + ADD_WAIT_TIMEOUT_MS;
+      for (;;) {
+        if (insertOk) {
+          try {
+            await bridge.request("ui/insert-input-text", { text: payload }, 3000);
+            clearRefChips();
+            toast("已添加到对话");
+            return;
+          } catch (e) {
+            if (isBridgeUnsupported(e)) insertOk = false;
+          }
+        }
+        if (contextOk) {
+          try {
+            await bridge.request("ui/update-model-context", {
+              content: [{ type: "text", text: payload }]
+            }, 3000);
+            clearRefChips();
+            toast("已添加到对话输入区(宿主不支持直插文本,以插件上下文附上)");
+            return;
+          } catch (e) {
+            if (isBridgeUnsupported(e)) contextOk = false;
+          }
+        }
+        if (!insertOk && !contextOk) {
+          await copyText(payload);
+          clearRefChips();
+          toast("宿主不支持添加到对话,已复制到剪贴板");
+          return;
+        }
+        if (Date.now() >= deadline) {
+          await copyText(payload);
+          clearRefChips();
+          toast("等待输入框就绪超时,已复制到剪贴板");
+          return;
+        }
+        if (!waited) {
+          waited = true;
+          toast("输入框尚未就绪,等待后自动添加…");
+        }
+        await new Promise(function (r) { setTimeout(r, ADD_WAIT_STEP_MS); });
+      }
+    } finally {
+      addInFlight = false;
+    }
+  }
+
+  // ==================================================================
+  // B2-3 技能弹窗 —— 语义照抄 HBA ModelSettingsModal 技能页:卡片列表
+  // (name/description/category 徽标,停用 opacity 0.55)+ 分类筛选 +
+  // 启停(uigen_save_skill 只翻 is_active)/新建/编辑(uigen_get_skill
+  // 回填,正文字段直传 instructions,规避 HBA body/instructions 错位)/
+  // 删除(行内二次确认)。列表 uigen_list_skills({includeInactive:true})。
+  // ==================================================================
+  var SKILL_CATS = [
+    { v: "all", label: "全部" },
+    { v: "general", label: "通用" },
+    { v: "brand", label: "品牌" },
+    { v: "style", label: "风格" },
+    { v: "components", label: "组件" },
+    { v: "constraints", label: "约束" },
+    { v: "layout", label: "布局" }
+  ];
+  var SKILL_CAT_COLORS = {
+    brand: "#f59e0b", style: "#8b5cf6", components: "#3b82f6",
+    constraints: "#ef4444", general: "#6b7280", layout: "#10b981"
+  };
+
+  function skillCatLabel(v) {
+    for (var i = 0; i < SKILL_CATS.length; i++) if (SKILL_CATS[i].v === v) return SKILL_CATS[i].label;
+    return v;
+  }
+
+  function emptySkillForm() {
+    return { name: "", description: "", instructions: "", category: "general" };
+  }
+
+  function openSkillsModal() {
+    skillUi.open = true;
+    skillUi.filter = "all";
+    $("skill-cat").value = "all";
+    $("skills-modal").hidden = false;
+    reloadSkills();
+  }
+
+  function closeSkillsModal() {
+    if (!skillUi.open) return;
+    skillUi.open = false;
+    $("skills-modal").hidden = true;
+    skillUi.showNew = false;
+    skillUi.editingId = null;
+    skillUi.deletingId = null;
+    skillUi.newForm = null;
+    skillUi.editForm = null;
+    $("skill-form-slot").textContent = "";
+    $("skill-list").textContent = "";
+  }
+
+  function reloadSkills() {
+    skillUi.loading = true;
+    renderSkills();
+    bridge.callTool("uigen_list_skills", { includeInactive: true }).then(okOrThrow).then(function (res) {
+      skillUi.skills = (res && Array.isArray(res.skills)) ? res.skills : [];
+      skillUi.loading = false;
+      renderSkills();
+    }).catch(function (e) {
+      skillUi.loading = false;
+      renderSkills();
+      toast("读取技能失败:" + e.message, true);
+    });
+  }
+
+  /** 新建/编辑表单:正文字段 = instructions(直传 uigen_save_skill)。 */
+  function skillFormEl(form, mode) {
+    var el = document.createElement("div");
+    el.className = "skill-form";
+    var opts = SKILL_CATS.filter(function (c) { return c.v !== "all"; }).map(function (c) {
+      return '<option value="' + c.v + '"' + (form.category === c.v ? " selected" : "") + ">" + c.label + "</option>";
+    }).join("");
+    el.innerHTML =
+      '<div class="row">' +
+        '<input type="text" class="f-name" placeholder="技能名称" value="' + esc(form.name) + '">' +
+        '<select class="f-cat">' + opts + "</select>" +
+      "</div>" +
+      '<input type="text" class="f-desc" placeholder="简短描述(可选)" value="' + esc(form.description) + '">' +
+      '<textarea class="f-instr" placeholder="该技能激活时,会注入到每次生成的提示词片段…">' + esc(form.instructions) + "</textarea>" +
+      '<div class="acts"><button class="cancel" type="button">取消</button>' +
+      '<button class="save primary" type="button">' + (mode === "new" ? "创建" : "保存") + "</button></div>";
+
+    function current() { return mode === "new" ? skillUi.newForm : skillUi.editForm; }
+    var saveBtn = el.querySelector(".save");
+    function sync() {
+      var f = current();
+      saveBtn.disabled = !f || !f.name.trim() || !f.instructions.trim();
+    }
+    [["f-name", "name"], ["f-desc", "description"], ["f-instr", "instructions"]].forEach(function (pair) {
+      el.querySelector("." + pair[0]).addEventListener("input", function (ev) {
+        current()[pair[1]] = ev.target.value;
+        sync();
+      });
+    });
+    el.querySelector(".f-cat").addEventListener("change", function (ev) {
+      current().category = ev.target.value;
+    });
+    el.querySelector(".cancel").addEventListener("click", function () {
+      if (mode === "new") { skillUi.showNew = false; skillUi.newForm = null; }
+      else { skillUi.editingId = null; skillUi.editForm = null; }
+      renderSkills();
+    });
+    saveBtn.addEventListener("click", function () {
+      if (mode === "new") createSkill();
+      else saveSkillEdit(skillUi.editingId);
+    });
+    sync();
+    return el;
+  }
+
+  function skillCardEl(s) {
+    if (skillUi.editingId === s.id && skillUi.editForm) return skillFormEl(skillUi.editForm, "edit");
+    var cat = s.category || "general";
+    var color = SKILL_CAT_COLORS[cat] || SKILL_CAT_COLORS.general;
+    var confirmHtml = skillUi.deletingId === s.id
+      ? '<span class="sc-confirm">删除?<button class="yes" type="button">是</button>' +
+        '<button class="no" type="button">否</button></span>'
+      : '<button class="sc-act del" type="button" title="删除">×</button>';
+    var card = document.createElement("div");
+    card.className = "skill-card" + (s.is_active ? "" : " inactive");
+    card.innerHTML =
+      '<div class="sc-head">' +
+        '<span class="sc-name">' + esc(s.name) + "</span>" +
+        '<span class="sc-badge" style="color:' + color + ";background:" + color + '22">' +
+          esc(skillCatLabel(cat)) + "</span>" +
+        '<button class="skill-switch' + (s.is_active ? " on" : "") + '" type="button" title="' +
+          (s.is_active ? "停用技能" : "启用技能") + '"><i></i></button>' +
+        '<button class="sc-act edit" type="button" title="编辑">✎</button>' +
+        confirmHtml +
+      "</div>" +
+      (s.description ? '<p class="sc-desc">' + esc(s.description) + "</p>" : "") +
+      '<p class="sc-instr">' + esc(s.instructions || "") + "</p>";
+
+    card.querySelector(".skill-switch").addEventListener("click", function () { toggleSkill(s); });
+    card.querySelector(".edit").addEventListener("click", function () { startEditSkill(s); });
+    var del = card.querySelector(".del");
+    if (del) del.addEventListener("click", function () { skillUi.deletingId = s.id; renderSkills(); });
+    var yes = card.querySelector(".yes");
+    if (yes) yes.addEventListener("click", function () { deleteSkill(s.id); });
+    var no = card.querySelector(".no");
+    if (no) no.addEventListener("click", function () { skillUi.deletingId = null; renderSkills(); });
+    return card;
+  }
+
+  function renderSkills() {
+    var slot = $("skill-form-slot");
+    slot.textContent = "";
+    if (skillUi.showNew && skillUi.newForm) slot.appendChild(skillFormEl(skillUi.newForm, "new"));
+    var list = $("skill-list");
+    list.textContent = "";
+    if (skillUi.loading) {
+      var loading = document.createElement("p");
+      loading.className = "skill-empty";
+      loading.textContent = "加载中…";
+      list.appendChild(loading);
+      return;
+    }
+    var items = skillUi.skills.filter(function (s) {
+      return skillUi.filter === "all" || (s.category || "general") === skillUi.filter;
+    });
+    if (!items.length) {
+      var empty = document.createElement("p");
+      empty.className = "skill-empty";
+      empty.textContent = skillUi.skills.length ? "该分类下暂无技能。" : "暂无技能,可在上方创建。";
+      list.appendChild(empty);
+      return;
+    }
+    items.forEach(function (s) { list.appendChild(skillCardEl(s)); });
+  }
+
+  /** 启停:整条回传只翻 is_active(name/instructions 是服务端每次必填)。 */
+  function toggleSkill(s) {
+    bridge.callTool("uigen_save_skill", {
+      id: s.id, name: s.name, description: s.description || "",
+      instructions: s.instructions || "", category: s.category || "general",
+      is_active: !s.is_active
+    }).then(okOrThrow).then(function () {
+      toast(s.is_active ? "已停用「" + s.name + "」" : "已启用「" + s.name + "」");
+      return reloadSkills();
+    }).catch(function (e) { toast("保存失败:" + e.message, true); });
+  }
+
+  function startEditSkill(s) {
+    skillUi.showNew = false;
+    skillUi.newForm = null;
+    skillUi.deletingId = null;
+    skillUi.editingId = s.id;
+    var initial = {
+      name: s.name || "", description: s.description || "",
+      instructions: s.instructions || "", category: s.category || "general"
+    };
+    skillUi.editForm = { name: initial.name, description: initial.description, instructions: initial.instructions, category: initial.category };
+    renderSkills();
+    // 编辑回填走 uigen_get_skill 全量记录;用户已开始输入则不覆盖
+    bridge.callTool("uigen_get_skill", { id: s.id }).then(okOrThrow).then(function (rec) {
+      if (!rec || skillUi.editingId !== s.id || !skillUi.editForm) return;
+      if (JSON.stringify(skillUi.editForm) !== JSON.stringify(initial)) return;
+      skillUi.editForm = {
+        name: rec.name || "", description: rec.description || "",
+        instructions: rec.instructions || "", category: rec.category || "general"
+      };
+      renderSkills();
+    }).catch(function () { /* 回填失败保留列表数据 */ });
+  }
+
+  function createSkill() {
+    var f = skillUi.newForm;
+    if (!f || !f.name.trim() || !f.instructions.trim()) { toast("名称与正文不能为空", true); return; }
+    var name = f.name.trim();
+    bridge.callTool("uigen_save_skill", {
+      name: name, description: f.description || "",
+      instructions: f.instructions, category: f.category || "general"
+    }).then(okOrThrow).then(function () {
+      toast("已创建「" + name + "」");
+      skillUi.showNew = false;
+      skillUi.newForm = null;
+      return reloadSkills();
+    }).catch(function (e) { toast("创建失败:" + e.message, true); });
+  }
+
+  function saveSkillEdit(id) {
+    var f = skillUi.editForm;
+    if (!id || !f || !f.name.trim() || !f.instructions.trim()) { toast("名称与正文不能为空", true); return; }
+    var name = f.name.trim();
+    bridge.callTool("uigen_save_skill", {
+      id: id, name: name, description: f.description || "",
+      instructions: f.instructions, category: f.category || "general"
+    }).then(okOrThrow).then(function () {
+      toast("已保存「" + name + "」");
+      skillUi.editingId = null;
+      skillUi.editForm = null;
+      return reloadSkills();
+    }).catch(function (e) { toast("保存失败:" + e.message, true); });
+  }
+
+  function deleteSkill(id) {
+    bridge.callTool("uigen_delete_skill", { id: id }).then(okOrThrow).then(function () {
+      toast("已删除技能");
+      skillUi.deletingId = null;
+      if (skillUi.editingId === id) { skillUi.editingId = null; skillUi.editForm = null; }
+      return reloadSkills();
+    }).catch(function (e) { toast("删除失败:" + e.message, true); });
+  }
+
+  /** 单页大卡在世界坐标里的落点:居中偏左,可滚动查看。 */
+  function focusPos() {
+    var vp = VP[state.viewport];
+    var canvas = $("screen-canvas");
+    var viewW = (canvas.clientWidth || 800) / state.zoom;
+    var x = Math.max(40, Math.round((viewW - vp.w) / 2) - 60);
+    return { x: x, y: 60 };
+  }
+
+  // ==================================================================
+  // 画布卡片 — 全览:固定 320×240 占位卡(不写 iframe,点击进单页);
+  // 单页:一张视口尺寸大卡,内容异步取回后写 srcdoc(剥 script、无 sandbox)。
+  // ==================================================================
+  function defaultCardPos(i) {
+    return { x: 40 + (i % 4) * 360, y: 40 + Math.floor(i / 4) * 360, w: CARD_W };
+  }
+
+  function cardFor(id, i) {
+    var c = state.cards[id];
+    if (!c || typeof c.x !== "number" || typeof c.y !== "number") {
+      c = defaultCardPos(i);
+      state.cards[id] = c;
+    }
+    c.w = CARD_W;   // 全览卡恒为 320 宽(旧布局里的视口宽不沿用)
     return c;
   }
 
+  function canvasEmpty(big) {
+    var empty = document.createElement("div");
+    empty.className = "canvas-empty";
+    var bigEl = document.createElement("div");
+    bigEl.className = "big";
+    bigEl.textContent = big;
+    empty.appendChild(bigEl);
+    return empty;
+  }
+
   function renderCards() {
+    closeElementPicker();   // 画布重绘 = iframe 重建,拾取态随之失效
     var world = $("canvas-grid");
     world.textContent = "";
-    if (!state.screens.length) {
-      var empty = document.createElement("div");
-      empty.className = "canvas-empty";
-      empty.innerHTML = '<div class="big">画布为空</div>点右上「生成应用」从需求生成多屏原型';
-      world.appendChild(empty);
+    updateFocusUi();
+
+    var pages = flattenPages();
+    if (!pages.length) {
+      world.appendChild(canvasEmpty(EMPTY_COPY));
+      applyZoom();
       return;
     }
-    state.screens.forEach(function (s, i) {
-      var c = cardFor(s, i);
-      var vp = VP[state.viewport];
-      var scale = c.w / vp.w;
-      var bodyH = Math.round(vp.h * scale);
-
-      var card = document.createElement("div");
-      card.className = "screen-card" + (i === state.selected ? " selected" : "");
-      card.dataset.index = String(i);
-      card.style.left = c.x + "px";
-      card.style.top = c.y + "px";
-      card.style.width = c.w + "px";
-      card.style.height = (34 + bodyH) + "px";
-
-      var head = document.createElement("div");
-      head.className = "card-head";
-      var nameEl = document.createElement("span");
-      nameEl.className = "card-name";
-      nameEl.textContent = (s.name || s.id);
-      var edit = document.createElement("button");
-      edit.className = "card-edit";
-      edit.textContent = "✎";
-      edit.title = "重命名";
-      edit.addEventListener("click", function (ev) {
-        ev.stopPropagation();
-        var name = window.prompt("页面名称:", s.name || s.id);
-        if (name == null || !name.trim() || name.trim() === s.name) return;
-        name = name.trim();
-        bridge.callTool("uigen_save_screen", { id: s.id, name: name }).then(function (res) {
-          if (res && res.ok) {
-            s.name = name;
-            renderTree();
-            renderCards();
-            toast("已重命名为「" + name + "」(已落盘)");
-          } else {
-            toast("重命名失败:" + (res && res.error ? res.error : "未知错误"), true);
-          }
-        }).catch(function (e) { toast("重命名失败:" + e.message, true); });
-      });
-      head.appendChild(nameEl);
-      head.appendChild(edit);
-
-      var body = document.createElement("div");
-      body.className = "card-body";
-      body.style.height = bodyH + "px";
-
-      if (state.format === "html") {
-        // HTML 产物:iframe 实时预览。未选中不写 srcdoc(沙箱崩溃教训),
-        // 写入前剥离 <script>。iframe 一律不带 sandbox 属性。
-        var frame = document.createElement("iframe");
-        frame.title = (s.name || s.id) + " 预览";
-        if (i === state.selected) {
-          try { frame.srcdoc = stripScripts(s.html); } catch (e) { /* 预览失败不拖垮面板 */ }
-        }
-        body.appendChild(frame);
-      } else {
-        // JSX/Vue:显示代码产物(实时渲染列二期)
-        var pre = document.createElement("pre");
-        pre.className = "card-code";
-        pre.textContent = s[state.format] || "(" + state.format.toUpperCase() + " 产物为空)";
-        body.appendChild(pre);
+    if (state.focusId) {
+      var fnode = findNode(state.focusId);
+      if (fnode && fnode.type === "page") {
+        world.appendChild(renderFocusCard(fnode));
+        applyZoom();
+        return;
       }
-
-      card.appendChild(head);
-      card.appendChild(body);
-      card.addEventListener("mousedown", function () { selectScreen(i); });
-
-      // 标题栏拖拽移动(按 zoom 折算位移);stopPropagation 防止拖拽起点触发
-      // 卡片重渲染销毁 DOM 节点;未移动时 mouseup 补一次选中。
-      head.addEventListener("mousedown", function (ev) {
-        if (ev.button !== 0) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        var startX = ev.clientX, startY = ev.clientY;
-        var origX = c.x, origY = c.y;
-        var moved = false;
-        function onMove(mev) {
-          moved = true;
-          c.x = Math.max(0, Math.round(origX + (mev.clientX - startX) / state.zoom));
-          c.y = Math.max(0, Math.round(origY + (mev.clientY - startY) / state.zoom));
-          card.style.left = c.x + "px";
-          card.style.top = c.y + "px";
-        }
-        function onUp() {
-          document.removeEventListener("mousemove", onMove);
-          document.removeEventListener("mouseup", onUp);
-          if (moved) scheduleSaveLayout();
-          else selectScreen(i);
-        }
-        document.addEventListener("mousemove", onMove);
-        document.addEventListener("mouseup", onUp);
-      });
-
-      world.appendChild(card);
-    });
+      state.focusId = "";
+    }
+    pages.forEach(function (p, i) { world.appendChild(overviewCard(p, i)); });
     applyZoom();
   }
 
-  // ==================================================================
-  // 选中/预览 — 仅选中卡片写 srcdoc;未选中 iframe 保持空白
-  // ==================================================================
-  function selectScreen(i) {
-    if (i < 0 || i >= state.screens.length) {
-      if (state.selected !== -1) {
-        state.selected = -1;
-        renderTree();
-        renderCards();
-        scheduleSaveLayout();
+  function overviewCard(page, i) {
+    var c = cardFor(page.id, i);
+    var ext = extOf(page.id) || "html";
+
+    var card = document.createElement("div");
+    card.className = "screen-card";
+    card.dataset.id = page.id;
+    card.style.left = c.x + "px";
+    card.style.top = c.y + "px";
+    card.style.width = CARD_W + "px";
+    card.style.height = CARD_H + "px";
+
+    var head = document.createElement("div");
+    head.className = "card-head";
+    var nameEl = document.createElement("span");
+    nameEl.className = "card-name";
+    nameEl.textContent = page.name || page.id;
+    nameEl.title = page.id;
+    var edit = document.createElement("button");
+    edit.className = "card-edit";
+    edit.textContent = "✎";
+    edit.title = "重命名";
+    edit.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      renameNode(page);
+    });
+    head.appendChild(nameEl);
+    head.appendChild(edit);
+
+    var body = document.createElement("div");
+    body.className = "card-body";
+    // 全览卡只显示名称占位:同屏只允许一张卡写 iframe.srcdoc(崩溃守卫)
+    var ph = document.createElement("div");
+    ph.className = "card-ph";
+    var phName = document.createElement("span");
+    phName.className = "ph-name";
+    phName.textContent = page.name || page.id;
+    var phBadge = document.createElement("span");
+    phBadge.className = "t-badge";
+    phBadge.innerHTML = '<span class="' + badgeClass(ext) + '">' + esc(ext) + "</span>";
+    var phHint = document.createElement("span");
+    phHint.textContent = "单击打开";
+    ph.appendChild(phName);
+    ph.appendChild(phBadge);
+    ph.appendChild(phHint);
+    ph.addEventListener("click", function () { focusPage(page.id); });
+    body.appendChild(ph);
+
+    card.appendChild(head);
+    card.appendChild(body);
+
+    // 标题栏拖拽移动(按 zoom 折算位移);未移动时视为点击 → 进单页
+    head.addEventListener("mousedown", function (ev) {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var startX = ev.clientX, startY = ev.clientY;
+      var origX = c.x, origY = c.y;
+      var moved = false;
+      function onMove(mev) {
+        moved = true;
+        c.x = Math.max(0, Math.round(origX + (mev.clientX - startX) / state.zoom));
+        c.y = Math.max(0, Math.round(origY + (mev.clientY - startY) / state.zoom));
+        card.style.left = c.x + "px";
+        card.style.top = c.y + "px";
       }
-      return;
-    }
-    if (state.selected === i) return;   // 已选中:不重建 DOM(保 iframe/拖拽态)
-    state.selected = i;
-    renderTree();
-    renderCards();
-    if (state.playing) syncPlayTo(i);
-    scheduleSaveLayout();
+      function onUp() {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        if (moved) scheduleSaveLayout();
+        else focusPage(page.id);
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+
+    return card;
+  }
+
+  function renderFocusCard(page) {
+    var vp = VP[state.viewport];
+    var pos = focusPos();
+    var ext = extOf(page.id);
+
+    var card = document.createElement("div");
+    card.className = "screen-card selected focus";
+    card.dataset.id = page.id;
+    card.style.left = pos.x + "px";
+    card.style.top = pos.y + "px";
+    card.style.width = vp.w + "px";
+    card.style.height = (34 + vp.h) + "px";
+
+    var head = document.createElement("div");
+    head.className = "card-head";
+    var nameEl = document.createElement("span");
+    nameEl.className = "card-name";
+    nameEl.textContent = page.name || page.id;
+    nameEl.title = page.id;
+    var more = document.createElement("button");
+    more.className = "card-edit";
+    more.textContent = "⋯";
+    more.title = "页面操作";
+    more.style.opacity = "1";
+    more.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      openNodeMenu(more, page);
+    });
+    head.appendChild(nameEl);
+    head.appendChild(more);
+
+    var body = document.createElement("div");
+    body.className = "card-body";
+    var loading = document.createElement("div");
+    loading.className = "card-ph";
+    loading.style.cursor = "default";
+    loading.textContent = "加载中…";
+    body.appendChild(loading);
+
+    card.appendChild(head);
+    card.appendChild(body);
+
+    // 内容异步取回后才写 srcdoc(启动时绝不写);仅此一张卡写,iframe 无 sandbox
+    var wantedId = page.id;
+    loadPageContent(wantedId).then(function (content) {
+      if (state.focusId !== wantedId || !card.isConnected) return;
+      body.textContent = "";
+      if (isHtmlExt(ext)) {
+        var frame = $("focus-frame-tpl").content.firstElementChild.cloneNode(true);
+        frame.title = (page.name || page.id) + " 预览";
+        try { frame.srcdoc = stripScripts(content); } catch (e) { /* 预览失败不拖垮面板 */ }
+        body.appendChild(frame);
+      } else {
+        var pre = document.createElement("pre");
+        pre.className = "card-code";
+        pre.textContent = content || "(" + ext.toUpperCase() + " 产物为空)";
+        body.appendChild(pre);
+      }
+    });
+
+    return card;
   }
 
   // ==================================================================
-  // 缩放 / 网格 / 视口
+  // 缩放 / 平移 / 网格 / 视口 —— 画布 = transform: translate + scale,
+  // 无滚动容器;卡片是绝对坐标,视窗/缩放/平移只改视口变换,绝不重排。
   // ==================================================================
   function applyZoom() {
     var world = $("canvas-grid");
-    world.style.transform = "scale(" + state.zoom + ")";
+    // translate 在前:平移量是屏幕像素,与 zoom 无关(Figma 式跟手拖动)
+    world.style.transform =
+      "translate(" + pan.x + "px," + pan.y + "px) scale(" + state.zoom + ")";
     $("zoom-label").textContent = Math.round(state.zoom * 100) + "%";
   }
 
@@ -1443,36 +2609,53 @@
     scheduleSaveLayout();
   }
 
-  function zoomFit() {
-    var vp = VP[state.viewport];
+  /** 以视口内某点为锚缩放:该点下的世界坐标保持不动(Ctrl+滚轮用)。 */
+  function zoomAt(clientX, clientY, next) {
     var canvas = $("screen-canvas");
+    var rect = canvas.getBoundingClientRect();
+    var mx = clientX - rect.left, my = clientY - rect.top;
+    var z = Math.min(2, Math.max(0.25, next));
+    var wx = (mx - pan.x) / state.zoom;
+    var wy = (my - pan.y) / state.zoom;
+    state.zoom = z;
+    pan.x = mx - wx * z;
+    pan.y = my - wy * z;
+    applyZoom();
+    scheduleSaveLayout();
+  }
+
+  function zoomFit() {
+    var canvas = $("screen-canvas");
+    pan.x = 0;      // 适配 = 回到原点再算缩放(平移不是持久化布局)
+    pan.y = 0;
     var pad = 120;
     var maxX = 0, maxY = 0;
-    state.screens.forEach(function (s, i) {
-      var c = cardFor(s, i);
-      var bodyH = vp.h * (c.w / vp.w);
-      maxX = Math.max(maxX, c.x + c.w + 40);
-      maxY = Math.max(maxY, c.y + bodyH + 80);
-    });
-    if (!state.screens.length) { setZoom(1); return; }
+    if (state.focusId) {
+      var vp = VP[state.viewport];
+      var pos = focusPos();
+      maxX = pos.x + vp.w + 40;
+      maxY = pos.y + vp.h + 80;
+    } else {
+      var pages = flattenPages();
+      if (!pages.length) { setZoom(1); return; }
+      pages.forEach(function (p, i) {
+        var c = cardFor(p.id, i);
+        maxX = Math.max(maxX, c.x + CARD_W + 40);
+        maxY = Math.max(maxY, c.y + CARD_H + 80);
+      });
+    }
     var zx = (canvas.clientWidth - pad) / maxX;
     var zy = (canvas.clientHeight - pad) / maxY;
     setZoom(Math.min(zx, zy, 1));
-    canvas.scrollTo({ left: 0, top: 0 });
   }
 
   function setViewport(vp) {
     if (!VP[vp]) return;
     state.viewport = vp;
-    // 切换预设宽:所有卡片 w 重置为新视口宽,坐标保留
-    state.screens.forEach(function (s) {
-      var c = state.cards[s.id];
-      if (c) c.w = VP[vp].w;
-    });
     Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
       b.classList.toggle("on", String(vp) === b.dataset.vp);
     });
-    renderCards();
+    renderCards();   // 全览卡固定 320×240 不变;单页大卡换预设宽
     scheduleSaveLayout();
   }
 
@@ -1481,137 +2664,6 @@
     $("screen-canvas").classList.toggle("grid-on", state.grid);
     $("btn-grid-toggle").classList.toggle("on", state.grid);
     scheduleSaveLayout();
-  }
-
-  // ==================================================================
-  // 「生成应用」弹层 (FR-2-1)
-  // ==================================================================
-  function openGenDialog() {
-    $("gen-overlay").classList.add("open");
-    $("gen-msg").textContent = "就绪";
-    $("gen-msg").className = "";
-    $("gen-progress-fill").style.width = "0%";
-    setTimeout(function () { $("gen-prompt").focus(); }, 0);
-  }
-  function closeGenDialog() { $("gen-overlay").classList.remove("open"); }
-
-  async function doGenerate() {
-    var prompt = $("gen-prompt").value.trim();
-    if (!prompt) { $("gen-msg").textContent = "请先输入需求描述"; $("gen-msg").className = "err"; return; }
-    var format = $("gen-format").value;
-    var screenCount = parseInt($("gen-count").value, 10) || 3;
-    $("btn-gen-start").disabled = true;
-    $("gen-msg").className = "";
-    $("gen-msg").textContent = "生成中…";
-    $("gen-progress-fill").style.width = "0%";
-    try {
-      var res = await bridge.callTool("uigen_generate", {
-        prompt: prompt, format: format, screenCount: screenCount
-      });
-      if (res && res.ok && Array.isArray(res.screens) && res.screens.length) {
-        state.screens = res.screens;      // 服务端已直接写盘(screens/ + index.json)
-        state.cards = {};                 // 新一轮生成重新排布
-        state.selected = 0;
-        $("gen-progress-fill").style.width = "100%";
-        $("gen-msg").textContent = "完成 · 引擎 " + (res.engine || "?") + " · " + res.screens.length + " 屏已写盘";
-        renderTree();
-        renderCards();
-        closeGenDialog();
-        toast("已生成 " + res.screens.length + " 屏(已写盘)");
-        scheduleSaveLayout();
-      } else {
-        $("gen-msg").textContent = "生成失败:" + (res && res.error ? res.error : "未知错误");
-        $("gen-msg").className = "err";
-      }
-    } catch (e) {
-      $("gen-msg").textContent = "生成失败:" + e.message;
-      $("gen-msg").className = "err";
-    } finally {
-      $("btn-gen-start").disabled = false;
-    }
-  }
-
-  // ==================================================================
-  // 导入 / 导出 (FR-2-6 / FR-2-8)
-  // ==================================================================
-  async function doImport() {
-    var dir = window.prompt("要导入的本地目录(含 *.html):");
-    if (!dir) return;
-    try {
-      var res = await bridge.callTool("uigen_import_dir", { dir: dir });
-      if (res && res.ok) {
-        toast("已导入 " + res.imported + " 个原型到 screens/(已落盘)");
-        await reloadScreens();
-        scheduleSaveLayout();
-      } else {
-        toast("导入失败:" + (res && res.error ? res.error : "未知错误"), true);
-      }
-    } catch (e) {
-      toast("导入失败:" + e.message, true);
-    }
-  }
-
-  async function doExport() {
-    if (!state.screens.length) { toast("screens/ 为空,无产物可导出", true); return; }
-    try {
-      var res = await bridge.callTool("uigen_export", {});
-      if (res && res.ok) {
-        toast("已导出 " + (res.files || []).length + " 个文件 → " + res.targetDir);
-      } else {
-        toast("导出失败:" + (res && res.error ? res.error : "未知错误"), true);
-      }
-    } catch (e) {
-      toast("导出失败:" + e.message, true);
-    }
-  }
-
-  // ==================================================================
-  // 全屏顺序播放 (FR-2-5 改造) — 沿用步进逻辑,壳换成全屏 overlay
-  // ==================================================================
-  function playFrame() { return $("preview-frame"); }
-
-  function renderPlayScreen(i) {
-    var s = state.screens[i];
-    if (!s) return;
-    $("play-title").textContent = s.name || s.id;
-    $("play-pos").textContent = (i + 1) + "/" + state.screens.length;
-    var frame = playFrame();
-    try {
-      frame.srcdoc = stripScripts(s.html) || "<!doctype html><html><body>该屏幕没有 HTML 产物</body></html>";
-    } catch (e) { /* 播放预览失败不拖垮面板 */ }
-  }
-
-  function syncPlayTo(i) {
-    state.playIndex = i;
-    renderPlayScreen(i);
-  }
-
-  function playStep(delta) {
-    if (!state.screens.length) return;
-    var next = state.playIndex + delta;
-    if (next < 0) next = state.screens.length - 1;
-    if (next >= state.screens.length) next = 0;
-    syncPlayTo(next);
-  }
-
-  function setPlaying(on) {
-    state.playing = on;
-    $("btn-play-toggle").textContent = on ? "⏸ 暂停" : "▶ 继续";
-    if (state.playTimer) { clearInterval(state.playTimer); state.playTimer = null; }
-    if (on) state.playTimer = setInterval(function () { playStep(1); }, 2200);
-  }
-
-  function openPlay() {
-    if (!state.screens.length) { toast("没有可播放的屏幕", true); return; }
-    $("play-overlay").classList.add("open");
-    syncPlayTo(state.selected >= 0 ? state.selected : 0);
-    setPlaying(true);
-  }
-
-  function closePlay() {
-    setPlaying(false);
-    $("play-overlay").classList.remove("open");
-    try { playFrame().removeAttribute("srcdoc"); } catch (e) { /* noop */ }
   }
 
   // ==================================================================
@@ -1628,60 +2680,51 @@
   }
 
   // ==================================================================
-  // 格式切换 — html=iframe 实时预览;jsx/vue=代码(实时渲染列二期)
-  // ==================================================================
-  var FORMAT_CYCLE = ["html", "jsx", "vue"];
-  function cycleFormat() {
-    var idx = FORMAT_CYCLE.indexOf(state.format);
-    state.format = FORMAT_CYCLE[(idx + 1) % FORMAT_CYCLE.length];
-    renderCards();
-    toast("卡片内容:" + state.format.toUpperCase() + (state.format !== "html" ? "(实时渲染列二期)" : ""));
-    scheduleSaveLayout();
-  }
-
-  // ==================================================================
-  // 顶栏项目信息 — uigen_canvas_get 返回的 workspace;拿不到显示 —
-  // ==================================================================
-  function setWorkspace(ws) {
-    if (ws && ws.name) {
-      $("proj-name").textContent = ws.name;
-      $("proj-path").textContent = ws.root || "";
-      $("proj-path").title = ws.root || "";
-    } else {
-      $("proj-name").textContent = "—";
-      $("proj-path").textContent = "";
-    }
-  }
-
-  // ==================================================================
   // 事件绑定
   // ==================================================================
-  $("btn-gen-top").addEventListener("click", openGenDialog);
-  $("btn-gen-cancel").addEventListener("click", closeGenDialog);
-  $("btn-gen-start").addEventListener("click", doGenerate);
-  // 需求草稿随画布布局一起进共享面板状态(防抖保存)
-  $("gen-prompt").addEventListener("input", scheduleSaveLayout);
-  $("gen-overlay").addEventListener("click", function (ev) {
-    if (ev.target === $("gen-overlay")) closeGenDialog();
+  $("btn-skills").addEventListener("click", openSkillsModal);
+  $("skills-close").addEventListener("click", closeSkillsModal);
+  $("skills-close-foot").addEventListener("click", closeSkillsModal);
+  $("skills-modal").addEventListener("click", function (ev) {
+    if (ev.target === $("skills-modal")) closeSkillsModal();   // 点遮罩关闭
+  });
+  SKILL_CATS.forEach(function (c) {
+    var o = document.createElement("option");
+    o.value = c.v;
+    o.textContent = c.label;
+    $("skill-cat").appendChild(o);
+  });
+  $("skill-cat").value = "all";
+  $("skill-cat").addEventListener("change", function (ev) {
+    skillUi.filter = ev.target.value;
+    renderSkills();
+  });
+  $("btn-new-skill").addEventListener("click", function () {
+    skillUi.editingId = null;
+    skillUi.editForm = null;
+    skillUi.deletingId = null;
+    skillUi.showNew = true;
+    skillUi.newForm = emptySkillForm();
+    renderSkills();
+    var input = $("skill-form-slot").querySelector(".f-name");
+    if (input) input.focus();
   });
 
   $("btn-reload").addEventListener("click", function () {
-    var sel = currentScreen();
-    reloadScreens(sel ? sel.id : "").then(function (screens) {
-      toast("已从磁盘读取 " + (screens ? screens.length : 0) + " 屏");
-    }).catch(function (e) { toast("读盘失败:" + e.message, true); });
+    pageCache = {};
+    bridge.callTool("uigen_rescan", {}).then(okOrThrow).then(function (res) {
+      applyTree(res);
+      toast("已重新扫描 " + flattenPages().length + " 个页面");
+    }).catch(function (e) { toast("扫描失败:" + e.message, true); });
   });
 
-  $("btn-import").addEventListener("click", doImport);
-  $("btn-export").addEventListener("click", doExport);
-
-  $("btn-play-top").addEventListener("click", openPlay);
-  $("btn-play-close").addEventListener("click", closePlay);
-  $("btn-play-prev").addEventListener("click", function () { playStep(-1); });
-  $("btn-play-next").addEventListener("click", function () { playStep(1); });
-  $("btn-play-toggle").addEventListener("click", function () { setPlaying(!state.playing); });
-
-  $("btn-add-page").addEventListener("click", addPage);
+  $("btn-all-pages").addEventListener("click", exitFocus);
+  $("btn-add").addEventListener("click", function () {
+    openMenu($("btn-add"), [
+      { label: "新建页面", fn: function () { createNode("", "page"); } },
+      { label: "新建模块", fn: function () { createNode("", "module"); } }
+    ]);
+  });
   $("btn-sidebar-collapse").addEventListener("click", toggleSidebar);
   $("btn-sidebar-open").addEventListener("click", toggleSidebar);
 
@@ -1690,38 +2733,83 @@
   $("btn-zoom-fit").addEventListener("click", zoomFit);
   $("btn-grid-toggle").addEventListener("click", toggleGrid);
 
+  // 空白处按住拖 = 平移画布;卡片上的拖拽/点击各自处理(stopPropagation 或
+  // closest 判掉),点卡片仍是进单页视图 —— 手势互不串。
+  $("screen-canvas").addEventListener("mousedown", function (ev) {
+    if (ev.button !== 0) return;
+    var t = ev.target;
+    if (t.closest && (t.closest(".screen-card") || t.closest("button"))) return;
+    ev.preventDefault();
+    var startX = ev.clientX, startY = ev.clientY;
+    var origX = pan.x, origY = pan.y;
+    function onMove(mev) {
+      pan.x = origX + (mev.clientX - startX);
+      pan.y = origY + (mev.clientY - startY);
+      applyZoom();
+    }
+    function onUp() {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  });
+
+  // 滚轮 = 平移(横竖都跟手);Ctrl/⌘+滚轮 = 以光标为锚缩放。
+  // 两者都 preventDefault:画布无滚动容器,任何情况不出滚动条。
+  $("screen-canvas").addEventListener("wheel", function (ev) {
+    ev.preventDefault();
+    if (ev.ctrlKey || ev.metaKey) {
+      zoomAt(ev.clientX, ev.clientY, state.zoom * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+      return;
+    }
+    pan.x -= ev.deltaX;
+    pan.y -= ev.deltaY;
+    applyZoom();
+  }, { passive: false });
+
   Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
     b.addEventListener("click", function () { setViewport(parseInt(b.dataset.vp, 10)); });
   });
 
-  // 双击卡片内容区循环切换 html → jsx → vue
-  $("canvas-grid").addEventListener("dblclick", function (ev) {
-    var card = ev.target.closest ? ev.target.closest(".screen-card") : null;
-    if (card) cycleFormat();
+  $("btn-pick-element").addEventListener("click", openElementPicker);
+  $("btn-ref-page").addEventListener("click", insertPageRef);
+  $("btn-insert-chat").addEventListener("click", insertRefsToChat);
+
+  // Esc 层级:拾取 → 弹窗/菜单 → 单页视图(依次退出)
+  document.addEventListener("keydown", function (ev) {
+    var t = ev.target;
+    if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.tagName === "SELECT")) return;
+    if (ev.key !== "Escape") return;
+    if (pick.on) { closeElementPicker(); return; }        // 1) 退拾取,留在单页视图
+    if (skillUi.open) { closeSkillsModal(); return; }     // 2) 关技能弹窗
+    if (moreMenu) { closeMoreMenu(); return; }
+    if (state.focusId) exitFocus();                       // 3) 退单页视图回全览
   });
 
-  document.addEventListener("keydown", function (ev) {
-    if (ev.target && (ev.target.tagName === "TEXTAREA" || ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT")) return;
-    if (ev.key === "Escape") {
-      if ($("play-overlay").classList.contains("open")) closePlay();
-      else if ($("gen-overlay").classList.contains("open")) closeGenDialog();
-      return;
-    }
-    if ($("play-overlay").classList.contains("open")) {
-      if (ev.key === "ArrowRight") { ev.preventDefault(); playStep(1); }
-      else if (ev.key === "ArrowLeft") { ev.preventDefault(); playStep(-1); }
-      else if (ev.key === " ") { ev.preventDefault(); setPlaying(!state.playing); }
-    }
+  // ==================================================================
+  // 资源更新推送 → 200ms 防抖重载树(磁盘即真源)
+  // ==================================================================
+  var reloadTimer = null;
+  bridge.onResourceUpdate(function () {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(function () {
+      refreshTree().catch(function () { /* 重载失败保留现状 */ });
+    }, 200);
   });
 
   // ==================================================================
   // boot — 先握手;渲染错误不得阻塞握手
   // ==================================================================
+  function renderAll() {
+    renderTree();
+    renderCards();
+  }
+
   applySidebar();
   $("screen-canvas").classList.toggle("grid-on", state.grid);
   try {
-    renderTree();
-    renderCards();
+    renderAll();
   } catch (e) { /* 初始渲染失败不阻塞握手 */ }
 
   bridge.connect().then(function (mode) {
@@ -1732,7 +2820,8 @@
       bridge.callTool("uigen_canvas_get", {}).then(function (res) {
         try {
           if (res && res.ok) {
-            setWorkspace(res.workspace);
+            // 服务端字段 workspace:{root,name}(内容即 workspaceInfo)
+            setWorkspace(res.workspaceInfo || res.workspace);
             if (res.layout) {
               applyLayout(res.layout);
               applySidebar();
@@ -1740,13 +2829,18 @@
               Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
                 b.classList.toggle("on", String(state.viewport) === b.dataset.vp);
               });
-              renderCards();
+              applyZoom();
             }
           }
           layoutLoaded = true;   // 读回后才允许防抖保存,避免启动即覆盖
-          restorePendingUi();    // 再恢复选中屏/格式/需求草稿 + 从磁盘读 screens
+          renderAll();
+          // 启动即扫工作区(根=工作区根);失败保留空态
+          refreshTree().catch(function () { /* 读树失败不拖垮面板 */ });
         } catch (e) { /* 布局恢复失败忽略 */ }
-      }).catch(function () { layoutLoaded = true; restorePendingUi(); });
+      }).catch(function () {
+        layoutLoaded = true;
+        refreshTree().catch(function () { /* 读树失败不拖垮面板 */ });
+      });
     } catch (e) { /* 连接后初始化失败不拖垮面板 */ }
   });
 })();
