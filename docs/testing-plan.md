@@ -5,7 +5,7 @@
 FR-3 Git 面板(源码未落地)、FR-4 运行面板(`plugins/hba-run/`)、FR-5 终端整合(宿主侧,源码未落地)。
 
 本文件为测试策略总纲:TC 映射表、测试金字塔、性能/稳定性基准、Agent 驱动验收七步流程、发布门禁。
-执行型自动化在 `tests/`(node:test / pytest)、`scripts/poc/`(POC 脚本)、`e2e/`(Playwright 骨架)。
+执行型自动化在 `tests/`(node:test)、`scripts/poc/`(POC 脚本)、`e2e/`(Playwright 骨架)。
 
 ## 0. 状态口径
 
@@ -23,11 +23,11 @@ FR-3 Git 面板(源码未落地)、FR-4 运行面板(`plugins/hba-run/`)、FR-5 
 | TC-AGT-02 | P0 | 派发与结果回注(子会话产出回注主会话) | Playwright E2E | `e2e/specs/agents.spec.ts` | **待宿主集成** | 步骤/断言完整;依赖宿主子智能体派发与消息流 testid |
 | TC-AGT-03 | P1 | 并行子智能体无串扰 | Playwright E2E | `e2e/specs/agents.spec.ts` | **待宿主集成** | 双路派发 + 交叉断言(回注互不包含对方标识) |
 | TC-AGT-04 | P0 | 只读智能体写操作被拒 | 静态白名单(node:test)+ Playwright 运行时断言 | `tests/agents/validate-agents.mjs` + `e2e/specs/agents.spec.ts` | **待宿主集成** | reviewer 无 Write/Edit 的静态校验已绿;运行时拒绝行为待宿主 |
-| TC-UIP-01 | P0 | 需求生成 HTML 原型(390px 预览渲染正确) | node:test + pytest(MCP/侧车链路) | `tests/uigen/test-server.mjs`、`tests/uigen/test_sidecar.py` | **已自动化可跑** | 生成 HTML 完整文档、`width=390`、热点几何断言全绿;预览 iframe 渲染断言在 `e2e/specs/ui-proto.spec.ts`(待宿主) |
-| TC-UIP-02 | P0 | JSX/Vue 产物 | node:test 产物断言 | `tests/uigen/test-server.mjs` | **已自动化可跑** | `.jsx` 含 `export default`、`.vue` 含 `<template>` SFC、导出 3×html/3×jsx/3×vue 全绿 |
-| TC-UIP-03 | P1 | 演示播放(顺序/暂停/步进) | Playwright E2E | `e2e/specs/ui-proto.spec.ts` | **待宿主集成** | 播放/暂停/步进三态断言骨架 |
-| TC-UIP-04 | P1 | 本地目录导入 | node:test + pytest 导入链路 | `tests/uigen/test-server.mjs`、`tests/uigen/test_sidecar.py` | **已自动化可跑** | `uigen_import_dir` 过滤非 html、屏幕命名、回读产物断言全绿;GUI 导入按钮在 e2e 骨架 |
-| TC-UIP-05 | P1 | 历史版本回滚 | 版本数据层(node:test)+ Playwright 回滚动作 | `tests/uigen/test-server.mjs` + `e2e/specs/ui-proto.spec.ts` | **待宿主集成** | `uigen_list_versions`/`uigen_get_version` 已绿;回滚动作与画布恢复待宿主 |
+| TC-UIP-01 | P0 | 面板死绑工作区、扫描建树正确(白名单扩展名、剪枝、空目录模块、>500KB 跳过) | node:test 扫描/对账断言 | `tests/uigen/test-server.mjs` | **已自动化可跑** | 原型根=工作区根、树形/`stats`、`index.json` 对账断言全绿;面板树渲染在 e2e 骨架(待宿主) |
+| TC-UIP-02 | P0 | 单页浏览与页面读写(get/save/delete、缺省占位、重命名换 id、路径安全) | node:test MCP 契约 + 磁盘回读 | `tests/uigen/test-server.mjs` | **已自动化可跑** | 新建页缺省写空 HTML 占位、`..` 逃逸拒绝、utf-8 失败回退 latin-1 断言全绿;单页 iframe 渲染在 e2e 骨架(待宿主) |
+| TC-UIP-03 | P1 | 页面/模块/元素引用插入对话输入框(三级降级) | Playwright E2E | `e2e/specs/ui-proto.spec.ts` | **待宿主集成** | `ui/insert-input-text`→`ui/update-model-context`→剪贴板降级链断言;e2e 骨架待按新面板口径接线 |
+| TC-UIP-04 | P1 | 技能库(16 个内置技能播种、CRUD、重启后用户启停保留) | node:test 数据层 + YAML 往返 | `tests/uigen/test-server.mjs` | **已自动化可跑** | 播种 16/16、slug id、instructions 落盘、重启后 `is_active` 保留断言全绿;技能管理 GUI 待宿主 |
+| TC-UIP-05 | P1 | 画布布局持久化与预览崩溃守卫 | node:test 数据层 + Playwright | `tests/uigen/test-server.mjs` + `e2e/specs/ui-proto.spec.ts` | **待宿主集成** | `uigen_canvas_save/get` 落盘已绿;iframe 无 sandbox/启动不写 srcdoc/预览剥 script 的 GUI 断言待宿主 |
 | TC-GIT-01 | P0 | 差异视图与仓库状态一致 | Playwright E2E | `e2e/specs/git-panel.spec.ts` | **待源码** | FR-3 Git 面板源码未落地;状态/差异一致性断言按契约预写 |
 | TC-GIT-02 | P1 | worktree 会话创建 | Playwright E2E | `e2e/specs/git-panel.spec.ts` | **待源码** | 同上;创建→新会话→工作目录含 worktree 路径断言 |
 | TC-RUN-01 | P0 | 运行配置增删改(持久化重开可见) | node:test MCP 契约 + 磁盘持久化 | `tests/run/test-server.mjs` | **已自动化可跑** | CRUD/复制/删除 + `.hba/run.json` 落盘断言全绿;面板重开可见在 `e2e/specs/run-panel.spec.ts`(待宿主) |
@@ -38,7 +38,7 @@ FR-3 Git 面板(源码未落地)、FR-4 运行面板(`plugins/hba-run/`)、FR-5 
 | TC-PERF-02 | P1 | 面板首帧 ≤500ms | Playwright 计时断言 | `e2e/specs/perf.spec.ts` | **待宿主集成** | `Date.now()` 包裹打开→首帧,阈值 500ms 断言骨架 |
 | TC-STB-01 | P0 | 杀进程恢复 100 次成功率 ≥99% | POC 驱动器(启动→随机 kill→重启→校验恢复标记) | `scripts/poc/stability-poc.mjs` | **待宿主集成** | 驱动器已自测(dry-run 10/10,成功率 100%,负向检测有效);对 `zcode` 真实进程跑 `--times 100` 待宿主 |
 | TC-STB-02 | P1 | 断网 30s 内恢复 | Playwright(`context.setOffline`) | `e2e/specs/stability.spec.ts` | **待宿主集成** | 断网态提示 + 30s 恢复计时断言骨架 |
-| TC-REG-01 | P0 | 冒烟回归连续 2 轮全绿 | node:test + pytest 全量冒烟 ×2 | `tests/`(3 个 node 文件 + 1 个 pytest 文件) | **已自动化可跑** | **实测 2 轮全绿**:每轮 node:test 22/22 + pytest 7/7 |
+| TC-REG-01 | P0 | 冒烟回归连续 2 轮全绿 | node:test 全量冒烟 ×2 | `tests/`(3 个 node 文件) | **已自动化可跑** | **实测 2 轮全绿**:每轮 28/28(uigen 15 + run 12 + agents 校验器 1,内含 139 断言) |
 
 **状态统计:已自动化可跑 8 条 | 待宿主集成 9 条 | 待源码 3 条(合计 20 条)**
 
@@ -50,12 +50,12 @@ FR-3 Git 面板(源码未落地)、FR-4 运行面板(`plugins/hba-run/`)、FR-5 
 |---|---|---|---|---|---|
 | L1 | 单元 / 静态校验 | 纯函数、定义文件合法性、夹具完整性 | node:test、`node scripts/poc/session-fixtures.mjs --verify`(零依赖) | TC-AGT-01;`tests/agents/validate-agents.mjs`、`scripts/poc/session-fixtures.mjs` | ~40% |
 | L2 | 服务 / 接口契约 | 插件 server 的 MCP JSON-RPC 契约(tools/resources/schemas/错误码) | node:test 拉起真实 `server.mjs` 走 stdio | TC-RUN-01/02、TC-UIP-02/04;`tests/run/test-server.mjs`、`tests/uigen/test-server.mjs` | ~25% |
-| L3 | 集成链路 | 插件↔侧车↔磁盘存储全链路(生成、导出、导入、进程树、持久化) | node:test + pytest | TC-UIP-01/04、TC-RUN-01/02;`tests/uigen/test_sidecar.py` | ~15% |
+| L3 | 集成链路 | 插件↔磁盘存储全链路(扫描对账、页面读写、技能播种、进程树、持久化) | node:test | TC-UIP-01/02/04、TC-RUN-01/02;`tests/uigen/test-server.mjs`、`tests/run/test-server.mjs` | ~15% |
 | L4 | E2E GUI 黑盒 | 真实宿主 `zcode --web` 上的用户可见行为(含反向断言) | Playwright(@playwright/test) | TC-AGT-02/03/04、TC-UIP-03/05、TC-GIT-01/02、TC-RUN-03、TC-TRM-01、TC-PERF-02、TC-STB-02;`e2e/specs/*.spec.ts` | ~15% |
 | L5 | 非功能 + 人工 | 性能、稳定性、视觉走查、UAT | POC 脚本 + 人工 | TC-PERF-01、TC-STB-01、TC-REG-01;`scripts/poc/*` | ~5% |
 
 要点:
-- L1–L3 零外部依赖(node:test / pytest),提交即跑,是 CI 回归的主体;
+- L1–L3 零外部依赖(node:test),提交即跑,是 CI 回归的主体;
 - L4 只覆盖"GUI 才能判定"的行为,禁止把接口断言搬进 E2E(慢、脆、贵);
 - L5 的性能/稳定性先用 POC 脚本在合成数据上立基线,再由 E2E 在真实宿主上复测同一口径。
 
@@ -68,7 +68,7 @@ FR-3 Git 面板(源码未落地)、FR-4 运行面板(`plugins/hba-run/`)、FR-5 
 | 面板首帧 | TC-PERF-02 | ≤500ms | `e2e/specs/perf.spec.ts`(打开→双 rAF→计时) | 待宿主 | — |
 | 杀进程恢复 | TC-STB-01 | 100 次成功率 ≥99% | `scripts/poc/stability-poc.mjs --times 100`(启动→随机 kill→重启→恢复标记) | dry-run 自测 10/10=100%(恢复 41–415ms);负向(无标记)正确判 FAIL | 驱动器就绪,真实目标待宿主 |
 | 断网恢复 | TC-STB-02 | 30s 内恢复 | `e2e/specs/stability.spec.ts`(`context.setOffline`) | 待宿主 | — |
-| 冒烟回归 | TC-REG-01 | 连续 2 轮全绿 | `node --test tests/...` + `python tests/uigen/test_sidecar.py` | **2 轮全绿**:每轮 22/22 + 7/7 | PASS |
+| 冒烟回归 | TC-REG-01 | 连续 2 轮全绿 | `node --test tests/...` | **2 轮全绿**:每轮 28/28 | PASS |
 
 性能报告样例:`scripts/poc/sample-report.json`(含基线对比块:旧值 2000ms / 新值 8.665ms / 达标判定 PASS,
 四个场景 full-load-cold、full-load-warm、paged-load-cold、first-paint 的 P50/P95 全量数据)。
@@ -80,9 +80,9 @@ FR-3 Git 面板(源码未落地)、FR-4 运行面板(`plugins/hba-run/`)、FR-5 
 | # | 步骤 | 执行者 | 动作 | 入口条件 | 出口(放行)条件 |
 |---|---|---|---|---|---|
 | 1 | 开发自测 | coder | 跑受影响测试子集 + `scripts/poc` 自检(`--verify`、`--dry-run`);禁止为变绿改已有断言 | 代码改动完成 | 子集全绿;失败可见(不静默吞错);报告改动文件与影响面 |
-| 2 | CI 回归 | planner/CI | 全量 `tests/`(node:test + pytest)跑 2 轮(TC-REG-01) | 步骤 1 放行 | 连续 2 轮 0 失败 |
+| 2 | CI 回归 | planner/CI | 全量 `tests/`(node:test)跑 2 轮(TC-REG-01) | 步骤 1 放行 | 连续 2 轮 0 失败 |
 | 3 | GUI 黑盒 | browser-tester | 启动 `zcode --web`,按 TC 清单跑 `e2e/specs/*.spec.ts`,记录 attach 计时值 | 步骤 2 放行 + 宿主 testid 接线 | P0 E2E 全过;失败输出复现步骤与截图/trace |
-| 4 | 视觉走查 | ui-prototype + browser-tester | 390px 预览、演示播放、热点跳转、面板布局人工/Agent 目检,截图归档 | 步骤 3 放行 | 无明显错位/截断;截图入档 |
+| 4 | 视觉走查 | ui-prototype + browser-tester | 页面树、单页预览、引用插入、技能库面板布局人工/Agent 目检,截图归档 | 步骤 3 放行 | 无明显错位/截断;截图入档 |
 | 5 | 性能稳定 | browser-tester | 跑 `msg-list-perf`、`stability-poc --times 100`、`e2e` perf/stability | 步骤 4 放行 | 基准表全部达标(≤2s、≤500ms、≥99%、30s) |
 | 6 | 报告缺陷 | reviewer | 汇总失败为缺陷单(S1 阻断/S2 严重/S3 一般/S4 建议),含复现步骤、期望/实际、日志 | 步骤 5 出现失败 | 缺陷入库并分级;无 S1/S2 未决 |
 | 7 | 人工 UAT | 人工 | 按 TC 清单抽验 P0 全部 + P1 抽样,对照门禁清单签字 | 步骤 6 放行 | 门禁 4 项全达成,发布放行 |
@@ -116,7 +116,6 @@ node scripts/poc/stability-poc.mjs --dry-run --times 10 --concurrency 2
 
 # L1–L3 回归(TC-REG-01 冒烟,连跑 2 轮)
 node --test tests/run/test-server.mjs tests/uigen/test-server.mjs tests/agents/validate-agents.mjs
-python tests/uigen/test_sidecar.py
 # ↑ 重复执行 2 遍,均 exit 0 即 TC-REG-01 达标
 
 # L4 E2E(待宿主:先 npm i -D @playwright/test && npx playwright install chromium)

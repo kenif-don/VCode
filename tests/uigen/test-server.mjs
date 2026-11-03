@@ -2,11 +2,15 @@
  * test-server.mjs — end-to-end test of plugins/hba-uigen/server.mjs over a
  * real MCP stdio JSON-RPC 2.0 pipe. Zero dependencies (node:test).
  *
- * 0.3.0: 磁盘即真源 —— 无版本概念。断言围绕 screens/ + index.json:
- *   generate 直接写盘;list/get/save/delete_screen 管理单屏;
- *   export/import_dir 语义为 screens 目录;canvas 布局不变。
+ * 0.3.x 原型库浏览器 —— 磁盘即真源,root 恒为工作区根(面板死绑当前项目,
+ * 无"更换目录"概念,启动即可扫,无需绑定)。断言围绕:
+ *   启动即扫工作区根 → 扫描建树(目录=模块、html/jsx/tsx/vue=页面)
+ *   → list/rescan 对账 → 单页 get/save/delete(重命名 id 变化、路径安全);
+ *   技能库:启动播种 16 个 seed、CRUD、重启播种保留用户 is_active;
+ *   YAML 往返与对账对齐走导出的纯函数(子进程 import server.mjs 验证);
+ *   canvas 布局持久化(无 ui 绑定字段,旧数据读到即忽略);resources 面照常。
  *
- * Run:  node --test tests/uigen/test-server.mjs
+ * Run:  node tests/uigen/test-server.mjs   (等价: node --test tests/uigen/test-server.mjs)
  */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -14,17 +18,55 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const SERVER = path.join(ROOT, "plugins", "hba-uigen", "server.mjs");
+const SEED_DIR = path.join(ROOT, "plugins", "hba-uigen", "skills", "seed");
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "uigen-server-test-"));
 const storeDir = path.join(tmpRoot, "store");
-const exportDir = path.join(tmpRoot, "export");
-const importDir = path.join(tmpRoot, "import");
+const wsDir = path.join(tmpRoot, "ws");
 fs.mkdirSync(storeDir, { recursive: true });
+fs.mkdirSync(wsDir, { recursive: true });
+
+// ---------------------------------------------------------------------------
+// 扫描 fixture —— 在任何扫描发生前建好(扩展名白名单 / 剪枝 / 超大文件 /
+// 空目录 / 层级 / 隐藏文件不剪 都在这棵树里)
+// ---------------------------------------------------------------------------
+const writeFixture = (rel, data) => {
+  const p = path.join(wsDir, rel);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, data);
+};
+const HTML = (tag) => `<!doctype html><html><body>${tag}</body></html>\n`;
+
+writeFixture("home.html", HTML("home"));
+writeFixture("about.htm", HTML("about"));
+writeFixture("notes.txt", "not a page — 白名单外静默忽略");
+writeFixture(".hidden.html", HTML("hidden-file")); // 隐藏文件不剪
+writeFixture(".config/x.html", HTML("hidden-dir")); // 隐藏目录剪掉
+writeFixture("node_modules/lib.html", HTML("dep")); // 剪枝目录
+writeFixture("big/oversized.html", Buffer.alloc(500 * 1024 + 1, 0x61)); // >500KB 跳过
+fs.mkdirSync(path.join(wsDir, "emptydir"), { recursive: true }); // 空目录也算 module
+writeFixture("app/login.html", HTML("login"));
+writeFixture("app/register.tsx", "export default function Register() { return null; }\n");
+writeFixture("app/.git/x.html", HTML("vcs")); // 剪枝目录
+writeFixture("app/sub/deep.vue", "<template><div>deep</div></template>\n");
+
+// seed 元信息(从 seed 文件原文抽 id / is_active,断言与播种结果对齐)
+const seedFiles = fs.readdirSync(SEED_DIR).filter((n) => n.endsWith(".yaml")).sort();
+const seedMeta = seedFiles.map((f) => {
+  const text = fs.readFileSync(path.join(SEED_DIR, f), "utf8");
+  const id = /^id:\s*(\S+)/m.exec(text);
+  return { file: f, id: id && id[1], active: /is_active:\s*true/.test(text) };
+});
+assert.equal(seedFiles.length, 16, "fixture: 16 seed files present");
+assert.ok(
+  seedMeta.every((m) => m.id),
+  "fixture: every seed declares an id"
+);
 
 // ---------------------------------------------------------------------------
 // minimal MCP stdio client
@@ -36,7 +78,7 @@ class McpClient {
       env: {
         ...process.env,
         UIGEN_STORE_DIR: storeDir,
-        UIGEN_FORCE_DEMO: "1", // deterministic demo mode for tests
+        ZCODE_WORKSPACE_ROOT: wsDir,
       },
     });
     this.pending = new Map();
@@ -88,364 +130,665 @@ class McpClient {
     return this.request("tools/call", { name, arguments: args, ...extraParams });
   }
 
+  async initialize() {
+    const msg = await this.request("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "test-client", version: "0.0.1" },
+    });
+    this.notify("notifications/initialized", {});
+    return msg;
+  }
+
   close() {
     try { this.child.stdin.end(); } catch { /* already closed */ }
     try { this.child.kill(); } catch { /* already dead */ }
   }
 }
 
-const client = new McpClient();
+const clients = [];
+function spawnClient() {
+  const c = new McpClient();
+  clients.push(c);
+  return c;
+}
+
+const client = spawnClient();
 after(() => {
-  client.close();
+  for (const c of clients) c.close();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 // helpers over the on-disk layout
-const screensDirOnDisk = () => path.join(storeDir, "screens");
 const indexOnDisk = () => JSON.parse(fs.readFileSync(path.join(storeDir, "index.json"), "utf8"));
+const canvasOnDisk = () => JSON.parse(fs.readFileSync(path.join(storeDir, "canvas-layout.json"), "utf8"));
+const skillFile = (id) => path.join(storeDir, "skills", `${id}.yaml`);
+
+/** 深度优先在树里找节点。 */
+function findNode(tree, id) {
+  for (const n of tree) {
+    if (n.id === id) return n;
+    const hit = findNode(n.children || [], id);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
-// tests
+// tests —— 顺序即状态机:握手 → 工具面 → 播种 → 技能 CRUD → 重启播种语义
+// → YAML 往返/对账对齐 → 启动即扫工作区根 → 扫描断言 → 对账 → 单页读写删
+// → 编码回退 → canvas → resources → 错误面
 // ---------------------------------------------------------------------------
 
 test("initialize handshake", async () => {
-  const msg = await client.request("initialize", {
-    protocolVersion: "2025-06-18",
-    capabilities: {},
-    clientInfo: { name: "test-client", version: "0.0.1" },
-  });
+  const msg = await client.initialize();
   assert.equal(msg.jsonrpc, "2.0");
   assert.equal(msg.result.protocolVersion, "2025-06-18");
   assert.equal(msg.result.serverInfo.name, "hba-uigen");
   assert.equal(msg.result.serverInfo.version, "0.3.0");
   assert.ok(msg.result.capabilities.tools, "capabilities.tools declared");
   assert.ok(msg.result.capabilities.resources, "capabilities.resources declared");
-  client.notify("notifications/initialized", {});
 });
 
-test("tools/list exposes the 9 screens-era tools with schemas", async () => {
+test("tools/list exposes the 11 prototype-library tools with schemas", async () => {
   const msg = await client.request("tools/list", {});
   const tools = msg.result.tools;
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "uigen_canvas_get",
     "uigen_canvas_save",
-    "uigen_delete_screen",
-    "uigen_export",
+    "uigen_delete_page",
+    "uigen_delete_skill",
+    "uigen_get_page",
+    "uigen_get_skill",
+    "uigen_list_pages",
+    "uigen_list_skills",
+    "uigen_rescan",
+    "uigen_save_page",
+    "uigen_save_skill",
+  ]);
+  // 生成/导入导出/目录绑定时代工具必须退场
+  for (const gone of [
     "uigen_generate",
-    "uigen_get_screen",
+    "uigen_export",
     "uigen_import_dir",
     "uigen_list_screens",
     "uigen_save_screen",
-  ]);
-  // 版本时代工具必须退场
-  assert.ok(!names.includes("uigen_list_versions"));
-  assert.ok(!names.includes("uigen_get_version"));
+    "uigen_delete_screen",
+    "uigen_set_root",
+    "uigen_browse_dirs",
+  ]) {
+    assert.ok(!names.includes(gone), `${gone} retired`);
+  }
   for (const t of tools) {
     assert.equal(t.inputSchema.type, "object", `${t.name} inputSchema is an object schema`);
     assert.ok(t.description && t.description.length > 5, `${t.name} has a description`);
     assert.ok(t._meta && t._meta.ui && t._meta.ui.resourceUri === "ui://hba-uigen/panel.html", `${t.name} carries _meta.ui`);
   }
-  const gen = tools.find((t) => t.name === "uigen_generate");
-  assert.deepEqual(gen.inputSchema.required, ["prompt"]);
-  assert.deepEqual(gen.inputSchema.properties.format.enum, ["html", "jsx", "vue"]);
-  assert.equal(gen.inputSchema.properties.screenCount.minimum, 1);
-  assert.equal(gen.inputSchema.properties.screenCount.maximum, 10);
-  const get = tools.find((t) => t.name === "uigen_get_screen");
-  assert.deepEqual(get.inputSchema.required, ["id"]);
-  const del = tools.find((t) => t.name === "uigen_delete_screen");
-  assert.deepEqual(del.inputSchema.required, ["id"]);
-  const save = tools.find((t) => t.name === "uigen_save_screen");
-  assert.deepEqual(save.inputSchema.required, ["name"]);
-  const imp = tools.find((t) => t.name === "uigen_import_dir");
-  assert.deepEqual(imp.inputSchema.required, ["dir"]);
-  const canvas = tools.find((t) => t.name === "uigen_canvas_save");
-  assert.equal(canvas.inputSchema.properties.layoutJson.type, "object");
+  const req = (n) => tools.find((t) => t.name === n).inputSchema.required || [];
+  assert.deepEqual(req("uigen_get_page"), ["id"]);
+  assert.deepEqual(req("uigen_save_page"), ["id"]);
+  assert.deepEqual(req("uigen_delete_page"), ["id"]);
+  assert.deepEqual(req("uigen_get_skill"), ["id"]);
+  assert.deepEqual(req("uigen_delete_skill"), ["id"]);
+  assert.deepEqual(req("uigen_save_skill"), ["name", "description", "instructions"]);
+  assert.deepEqual(req("uigen_canvas_save"), ["layoutJson"]);
+  assert.deepEqual(req("uigen_list_pages"), []);
+  assert.deepEqual(req("uigen_list_skills"), []);
+  const save = tools.find((t) => t.name === "uigen_save_page").inputSchema.properties;
+  assert.ok(save.content && save.name, "save_page exposes content + name");
+  const del = tools.find((t) => t.name === "uigen_delete_page").inputSchema.properties;
+  assert.equal(del.recursive.type, "boolean");
+  const ls = tools.find((t) => t.name === "uigen_list_skills").inputSchema.properties;
+  assert.equal(ls.includeInactive.type, "boolean");
 });
 
-test("uigen_generate writes screens/ + index.json directly (disk is truth)", async () => {
-  const before = client.notifications.filter((n) => n.method === "notifications/progress").length;
-  const msg = await client.callTool(
-    "uigen_generate",
-    { prompt: "社区图书馆借阅 App,含首页推荐、图书列表、详情页与个人中心", format: "html", screenCount: 3 },
-    { _meta: { progressToken: "test-token-1" } }
+test("startup seeding writes all 16 HBA skills into <store>/skills/", async () => {
+  const files = fs.readdirSync(path.join(storeDir, "skills")).filter((n) => n.endsWith(".yaml"));
+  assert.equal(files.length, 16, "16 skill YAML files on disk after startup");
+
+  const all = await client.callTool("uigen_list_skills", { includeInactive: true });
+  const allRes = all.result.structuredContent;
+  assert.equal(allRes.ok, true);
+  assert.equal(allRes.skills.length, 16, "includeInactive returns every seeded skill");
+  // 排序:sort_order 升序
+  const orders = allRes.skills.map((s) => s.sort_order);
+  assert.deepEqual(orders, [...orders].sort((a, b) => a - b), "sort_order ascending");
+
+  // is_active 逐个与 seed 原文一致(motion 等 false 的播种首次写入按 seed 值)
+  for (const meta of seedMeta) {
+    const rec = allRes.skills.find((s) => s.id === meta.id);
+    assert.ok(rec, `${meta.id} present`);
+    assert.equal(rec.is_active, meta.active, `${meta.id} is_active matches seed (${meta.active})`);
+    assert.ok(rec.name && rec.description && rec.instructions, `${meta.id} has name/description/instructions`);
+  }
+
+  const active = await client.callTool("uigen_list_skills", {});
+  const actRes = active.result.structuredContent;
+  assert.equal(actRes.ok, true);
+  assert.equal(
+    actRes.skills.length,
+    seedMeta.filter((m) => m.active).length,
+    "default list = active-only (AI consumption)"
   );
-  assert.equal(msg.result.isError, false);
-  const res = msg.result.structuredContent;
-  assert.ok(res, "structuredContent present");
-  assert.equal(res.ok, true);
-  assert.match(String(res.engine), /^demo/);
-  assert.equal(res.screenCount, 3);
-  assert.equal(res.screens.length, 3);
-  // 0.3.0:不再有版本字段
-  assert.ok(!("versionId" in res), "no versionId in generate result");
-  for (const s of res.screens) {
-    assert.ok(s.id && s.name, `screen ${s.id} has id and name`);
-    assert.ok(s.html.includes("<!doctype html>"), `${s.id}.html is a full document`);
-    assert.ok(s.html.includes("width=390"), `${s.id}.html targets the 390px viewport`);
-    assert.ok(s.jsx.includes("export default"), `${s.id}.jsx is a component`);
-    assert.ok(s.vue.includes("<template>") && s.vue.includes("export default"), `${s.id}.vue is an SFC`);
-    assert.ok(Array.isArray(s.hotspots) && s.hotspots.length >= 1, `${s.id} has jump hotspots`);
-    for (const h of s.hotspots) {
-      assert.ok(h.to && typeof h.x === "number" && typeof h.w === "number", `${s.id} hotspot is geometric`);
-    }
-    // 磁盘布局:screens/<id>.html(+同名 .jsx/.vue 邻放)
-    for (const ext of ["html", "jsx", "vue"]) {
-      const f = path.join(screensDirOnDisk(), `${s.id}.${ext}`);
-      assert.ok(fs.existsSync(f), `${s.id}.${ext} written to screens/`);
-    }
-  }
-  // index.json 清单
-  const idx = indexOnDisk();
-  assert.equal(idx.version, 1);
-  assert.ok(idx.updatedAt, "index.json updatedAt stamped");
-  assert.equal(idx.screens.length, 3);
-  assert.deepEqual(idx.screens.map((e) => e.id), ["s1", "s2", "s3"]);
-  assert.deepEqual(idx.screens.map((e) => e.order), [0, 1, 2]);
-  for (const e of idx.screens) {
-    assert.ok(e.name, "entry has name");
-    assert.equal(e.files.html, `${e.id}.html`, "entry files map points at html artifact");
-    assert.ok(Array.isArray(e.hotspots), "entry has hotspots");
-    assert.ok(e.updatedAt, "entry updatedAt stamped");
-  }
-  // 不再有 versions.json / 版本目录
-  assert.ok(!fs.existsSync(path.join(storeDir, "versions.json")), "no versions.json anymore");
-  const dirs = fs.readdirSync(storeDir, { withFileTypes: true }).filter((d) => d.isDirectory());
-  assert.deepEqual(dirs.map((d) => d.name), ["screens"], "only screens/ dir at store root");
-  const progressAfter = client.notifications.filter(
-    (n) => n.method === "notifications/progress" && n.params.progressToken === "test-token-1"
+  assert.ok(actRes.skills.every((s) => s.is_active === true), "default list never leaks inactive skills");
+  assert.ok(
+    !actRes.skills.some((s) => s.id === "skill-motion"),
+    "motion (is_active:false in seed) excluded by default"
   );
-  assert.ok(progressAfter.length >= 3, `progress notifications emitted (got ${progressAfter.length})`);
-  assert.ok(progressAfter.every((n) => typeof n.params.message === "string"), "progress carries messages");
 });
 
-test("uigen_list_screens returns the manifest in order", async () => {
-  const msg = await client.callTool("uigen_list_screens", { limit: 10 });
-  const res = msg.result.structuredContent;
-  assert.equal(res.ok, true);
-  assert.ok(Array.isArray(res.screens));
-  assert.equal(res.screens.length, 3);
-  assert.deepEqual(res.screens.map((s) => s.id), ["s1", "s2", "s3"], "ordered by order field");
-  for (const s of res.screens) {
-    assert.ok(s.name && s.files && s.files.html, `${s.id} manifest entry complete`);
-    assert.ok(!("html" in s) && !("jsx" in s), "manifest entries are lightweight (no artifacts)");
-  }
-  assert.ok(res.updatedAt, "manifest updatedAt reported");
-});
-
-test("uigen_get_screen returns full artifacts of one screen", async () => {
-  const msg = await client.callTool("uigen_get_screen", { id: "s1" });
-  const res = msg.result.structuredContent;
-  assert.equal(res.ok, true);
-  assert.equal(res.screen.id, "s1");
-  assert.ok(res.screen.html.length > 200, "html artifact read from disk");
-  assert.ok(res.screen.jsx.includes("export default"), "jsx artifact read from disk");
-  assert.ok(res.screen.vue.includes("<template>"), "vue artifact read from disk");
-  assert.ok(Array.isArray(res.screen.hotspots), "hotspots from manifest");
-  const missing = await client.callTool("uigen_get_screen", { id: "nope" });
-  assert.equal(missing.result.structuredContent.ok, false);
-  assert.equal(missing.result.isError, true);
-});
-
-test("uigen_save_screen creates, renames and edits on disk (FR-2 close)", async () => {
-  // 新建(不带 id,服务端分配)
-  const created = await client.callTool("uigen_save_screen", { name: "关于页", html: "<!doctype html><html><body>关于</body></html>" });
+test("skill CRUD: slug ids, instructions on disk, validation", async () => {
+  // 新建 → id = skill-<slug>
+  const created = await client.callTool("uigen_save_skill", {
+    name: "Test Skill One",
+    description: "d1",
+    instructions: "line one\nline two",
+  });
   const cRes = created.result.structuredContent;
   assert.equal(cRes.ok, true);
-  const newId = cRes.screen.id;
-  assert.ok(newId && newId !== "s1", `server assigned a free id (${newId})`);
-  assert.equal(cRes.screen.name, "关于页");
-  assert.ok(fs.existsSync(path.join(screensDirOnDisk(), `${newId}.html`)), "new screen html on disk");
-  assert.ok(indexOnDisk().screens.some((e) => e.id === newId), "new entry in index.json");
+  assert.equal(cRes.id, "skill-test-skill-one");
+  assert.ok(fs.existsSync(skillFile("skill-test-skill-one")), "skill YAML written");
+  // instructions 落盘:块标量 + 正文都在文件里
+  const onDisk = fs.readFileSync(skillFile("skill-test-skill-one"), "utf8");
+  assert.ok(onDisk.includes("instructions: |"), "instructions serialized as block scalar");
+  assert.ok(onDisk.includes("line one") && onDisk.includes("line two"), "instructions body on disk");
 
-  // 带 id 新建(面板显式指定)
-  const explicit = await client.callTool("uigen_save_screen", { id: "panel-add-1", name: "面板新建", html: "<html></html>" });
-  assert.equal(explicit.result.structuredContent.ok, true);
-  assert.equal(explicit.result.structuredContent.screen.id, "panel-add-1");
-  assert.ok(fs.existsSync(path.join(screensDirOnDisk(), "panel-add-1.html")));
+  const got = await client.callTool("uigen_get_skill", { id: "skill-test-skill-one" });
+  const gRes = got.result.structuredContent;
+  assert.equal(gRes.ok, true);
+  assert.equal(gRes.instructions, "line one\nline two");
+  assert.equal(gRes.description, "d1");
+  assert.equal(gRes.is_active, true, "new skill defaults to active");
 
-  // 重命名 = 落盘到 index.json 条目
-  const renamed = await client.callTool("uigen_save_screen", { id: "s1", name: "首页(改)" });
-  assert.equal(renamed.result.structuredContent.ok, true);
-  assert.equal(renamed.result.structuredContent.screen.name, "首页(改)");
-  assert.equal(indexOnDisk().screens.find((e) => e.id === "s1").name, "首页(改)", "rename persisted in index.json");
-  // 重命名不清产物
-  assert.ok(fs.readFileSync(path.join(screensDirOnDisk(), "s1.html"), "utf8").includes("<!doctype html>"), "artifacts survive rename");
+  // 同名再建 → 冲突加序号
+  const dup = await client.callTool("uigen_save_skill", {
+    name: "Test Skill One",
+    description: "d1",
+    instructions: "again",
+  });
+  assert.equal(dup.result.structuredContent.id, "skill-test-skill-one-2");
 
-  // 产物编辑:只给 html,jsx/vue 保留
-  const edited = await client.callTool("uigen_save_screen", { id: "s1", name: "首页(改)", html: "<!doctype html><html><body>编辑后</body></html>" });
-  assert.equal(edited.result.structuredContent.ok, true);
-  const onDisk = fs.readFileSync(path.join(screensDirOnDisk(), "s1.html"), "utf8");
-  assert.ok(onDisk.includes("编辑后"), "html edit written to disk");
-  assert.ok(fs.existsSync(path.join(screensDirOnDisk(), "s1.jsx")), "sibling jsx kept when not patched");
+  // 更新:带 id 不换 id,只改给的字段
+  const updated = await client.callTool("uigen_save_skill", {
+    id: "skill-test-skill-one",
+    name: "Test Skill One",
+    description: "d2",
+    instructions: "do more things",
+  });
+  assert.equal(updated.result.structuredContent.id, "skill-test-skill-one");
+  const afterUpdate = await client.callTool("uigen_get_skill", { id: "skill-test-skill-one" });
+  assert.equal(afterUpdate.result.structuredContent.description, "d2");
+  assert.equal(afterUpdate.result.structuredContent.sort_order, 0, "omitted sort_order keeps stored value");
 
-  // order 落盘
-  const reordered = await client.callTool("uigen_save_screen", { id: "s2", name: "列表页", order: 99 });
-  assert.equal(reordered.result.structuredContent.screen.order, 99);
-  assert.equal(indexOnDisk().screens.find((e) => e.id === "s2").order, 99, "order persisted");
+  // instructions 必填非空
+  const empty = await client.callTool("uigen_save_skill", {
+    name: "No Body",
+    description: "x",
+    instructions: "   ",
+  });
+  assert.equal(empty.result.structuredContent.ok, false);
+  assert.equal(empty.result.isError, true);
 
-  // 缺 name 被拒
-  const bad = await client.callTool("uigen_save_screen", { id: "s3" });
-  assert.equal(bad.result.structuredContent.ok, false);
-  assert.equal(bad.result.isError, true);
-});
+  // 不存在的 id → 更新被拒
+  const ghost = await client.callTool("uigen_save_skill", {
+    id: "skill-ghost",
+    name: "Ghost",
+    description: "x",
+    instructions: "x",
+  });
+  assert.equal(ghost.result.structuredContent.ok, false);
 
-test("uigen_delete_screen removes files + manifest entry", async () => {
-  const msg = await client.callTool("uigen_delete_screen", { id: "panel-add-1" });
-  const res = msg.result.structuredContent;
-  assert.equal(res.ok, true);
-  assert.equal(res.deleted, "panel-add-1");
-  assert.ok(!fs.existsSync(path.join(screensDirOnDisk(), "panel-add-1.html")), "html removed from disk");
-  assert.ok(!indexOnDisk().screens.some((e) => e.id === "panel-add-1"), "entry removed from index.json");
-  const missing = await client.callTool("uigen_delete_screen", { id: "ghost" });
+  // 删除 → 文件没了,get 拒绝
+  const del = await client.callTool("uigen_delete_skill", { id: "skill-test-skill-one-2" });
+  assert.equal(del.result.structuredContent.ok, true);
+  assert.equal(del.result.structuredContent.deleted, "skill-test-skill-one-2");
+  assert.ok(!fs.existsSync(skillFile("skill-test-skill-one-2")), "skill YAML removed");
+  const gone = await client.callTool("uigen_get_skill", { id: "skill-test-skill-one-2" });
+  assert.equal(gone.result.structuredContent.ok, false);
+  const missing = await client.callTool("uigen_delete_skill", { id: "skill-ghost" });
   assert.equal(missing.result.structuredContent.ok, false);
-  assert.equal(missing.result.isError, true);
+
+  const all = await client.callTool("uigen_list_skills", { includeInactive: true });
+  assert.equal(all.result.structuredContent.skills.length, 17, "16 seeds + 1 user skill");
 });
 
-test("uigen_export copies the on-disk screens to a directory (FR-2-8)", async () => {
-  const msg = await client.callTool("uigen_export", { targetDir: exportDir });
-  const res = msg.result.structuredContent;
-  assert.equal(res.ok, true);
-  assert.equal(res.targetDir, path.resolve(exportDir));
-  const names = res.files.map((f) => f.name);
-  assert.ok(names.includes("manifest.json"), "manifest written");
-  // 产物集合以 index.json 的 files 映射为准(html 必有,jsx/vue 视屏而定)
-  const idxNow = indexOnDisk();
-  const expectHtml = idxNow.screens.length;
-  const expectJsx = idxNow.screens.filter((e) => e.files.jsx).length;
-  const expectVue = idxNow.screens.filter((e) => e.files.vue).length;
-  assert.equal(names.filter((n) => n.endsWith(".html")).length, expectHtml, "one html per screen");
-  assert.equal(names.filter((n) => n.endsWith(".jsx")).length, expectJsx, "jsx exported where present");
-  assert.equal(names.filter((n) => n.endsWith(".vue")).length, expectVue, "vue exported where present");
+test("restart re-seed: content fields revert to seed, user is_active survives", async () => {
+  // 用户改掉内置技能的 is_active 与内容字段
+  const hacked = await client.callTool("uigen_save_skill", {
+    id: "skill-a11y",
+    name: "Hacked A11y",
+    description: "hacked",
+    instructions: "hacked instructions",
+    is_active: false,
+  });
+  assert.equal(hacked.result.structuredContent.ok, true);
+
+  // 重启(新 server 进程 = 重新播种)
+  const c2 = spawnClient();
+  await c2.initialize();
+
+  const all2 = await c2.callTool("uigen_list_skills", { includeInactive: true });
+  const all2Res = all2.result.structuredContent;
+  assert.equal(all2Res.skills.length, 17, "16 seeds + user skill survive restart");
+  const a11y = all2Res.skills.find((s) => s.id === "skill-a11y");
+  assert.ok(a11y, "seed skill resurrected/updated");
+  assert.equal(a11y.is_active, false, "user-toggled is_active survives re-seeding");
+  assert.equal(a11y.name, "WCAG 2.1 Accessibility", "content fields reverted to seed values");
+  assert.notEqual(a11y.description, "hacked", "user content edit reverted by seed");
+  assert.ok(a11y.instructions.startsWith("Ensure WCAG"), "instructions reverted to seed body");
+
+  // 用户自建技能不被播种动
+  const userSkill = all2Res.skills.find((s) => s.id === "skill-test-skill-one");
+  assert.ok(userSkill, "user-created skill kept across restart");
+  assert.equal(userSkill.description, "d2", "user skill content untouched by seeding");
+
+  const act2 = await c2.callTool("uigen_list_skills", {});
+  const act2Res = act2.result.structuredContent;
+  const act2Expected = all2Res.skills.filter((s) => s.is_active === true);
+  assert.deepEqual(
+    act2Res.skills.map((s) => s.id).sort(),
+    act2Expected.map((s) => s.id).sort(),
+    "default list = active subset of includeInactive"
+  );
+  assert.equal(act2Res.skills.length, act2Expected.length);
+  assert.ok(!act2Res.skills.some((s) => s.id === "skill-a11y"), "inactive seed skill hidden by default");
+
+  // 内置技能删除后,下次播种复活(HBA 语义)
+  const del = await c2.callTool("uigen_delete_skill", { id: "skill-a11y" });
+  assert.equal(del.result.structuredContent.ok, true);
+  const afterDel = await c2.callTool("uigen_list_skills", { includeInactive: true });
+  assert.equal(afterDel.result.structuredContent.skills.length, 16);
+  assert.ok(!afterDel.result.structuredContent.skills.some((s) => s.id === "skill-a11y"));
+
+  const c3 = spawnClient();
+  await c3.initialize();
+  const all3 = await c3.callTool("uigen_list_skills", { includeInactive: true });
+  const a11yBack = all3.result.structuredContent.skills.find((s) => s.id === "skill-a11y");
+  assert.ok(a11yBack, "deleted seed skill re-seeded on restart");
+  assert.equal(a11yBack.is_active, true, "fresh seed write uses the seed is_active value");
+  const act3 = await c3.callTool("uigen_list_skills", {});
+  const act3Expected = all3.result.structuredContent.skills.filter((s) => s.is_active === true);
+  assert.deepEqual(
+    act3.result.structuredContent.skills.map((s) => s.id).sort(),
+    act3Expected.map((s) => s.id).sort(),
+    "active count restored to seed baseline + user skills"
+  );
+  c2.close();
+  c3.close();
+});
+
+test("YAML round-trip on 16 seeds + alignIndexEntries (pure functions)", async () => {
+  // 子进程 import server.mjs,直接调导出的纯函数(不走 stdio RPC)
+  const script = `
+import fs from "node:fs";
+import path from "node:path";
+const m = await import(${JSON.stringify(pathToFileURL(SERVER).href)});
+const seedDir = ${JSON.stringify(SEED_DIR)};
+const out = { files: [], alignKeep: null, alignDrop: null };
+for (const f of fs.readdirSync(seedDir).filter((n) => n.endsWith(".yaml")).sort()) {
+  const text = fs.readFileSync(path.join(seedDir, f), "utf8");
+  const a = m.parseYaml(text);
+  const b = m.parseYaml(m.serializeYaml(a));
+  out.files.push({
+    f,
+    roundtrip: JSON.stringify(a) === JSON.stringify(b),
+    nonEmpty: !!(a.name && a.description && a.instructions),
+    keys: Object.keys(a).length,
+  });
+}
+// 扫描有错误 → 本轮没见到的旧条目保留;无错误 → 完整对齐
+out.alignKeep = m
+  .alignIndexEntries([{ id: "a" }, { id: "b" }], [{ id: "b" }, { id: "c" }], true)
+  .map((e) => e.id);
+out.alignDrop = m
+  .alignIndexEntries([{ id: "a" }, { id: "b" }], [{ id: "b" }, { id: "c" }], false)
+  .map((e) => e.id);
+process.stdout.write(JSON.stringify(out));
+process.exit(0);
+`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, UIGEN_STORE_DIR: storeDir, ZCODE_WORKSPACE_ROOT: wsDir },
+  });
+  const killTimer = setTimeout(() => child.kill(), 20000);
+  killTimer.unref?.();
+  let out = "";
+  let err = "";
+  child.stdout.on("data", (d) => { out += d; });
+  child.stderr.on("data", (d) => { err += d; });
+  const code = await new Promise((resolve) => child.on("close", resolve));
+  assert.equal(code, 0, `helper child failed: ${err}`);
+  const res = JSON.parse(out);
+
+  assert.equal(res.files.length, 16, "all 16 seeds parsed");
   for (const f of res.files) {
-    const p = path.join(exportDir, f.name);
-    assert.ok(fs.existsSync(p), `${f.name} exists on disk`);
-    assert.equal(fs.statSync(p).size, f.bytes, `${f.name} size matches`);
+    assert.ok(f.roundtrip, `${f.f}: parse → serialize → parse stable`);
+    assert.ok(f.nonEmpty, `${f.f}: name/description/instructions non-empty`);
+    assert.equal(f.keys, 11, `${f.f}: full skill record (11 fields)`);
   }
-  const manifest = JSON.parse(fs.readFileSync(path.join(exportDir, "manifest.json"), "utf8"));
-  assert.ok(Array.isArray(manifest.screens) && manifest.screens.length === res.screens, "manifest lists screens");
-  assert.ok(!("versionId" in manifest), "manifest has no versionId (0.3.0)");
+  // 对账对齐:错误轮保留旧条目,干净轮完整对齐
+  assert.deepEqual(res.alignKeep, ["b", "c", "a"]);
+  assert.deepEqual(res.alignDrop, ["b", "c"]);
 });
 
-test("uigen_import_dir imports local html prototypes into screens/ (FR-2-6)", async () => {
-  fs.mkdirSync(importDir, { recursive: true });
-  fs.writeFileSync(path.join(importDir, "login.html"), "<!doctype html><html><body>登录</body></html>");
-  fs.writeFileSync(path.join(importDir, "home.html"), "<!doctype html><html><body>首页</body></html>");
-  fs.writeFileSync(path.join(importDir, "notes.txt"), "not html");
-  const beforeCount = indexOnDisk().screens.length;
-  const msg = await client.callTool("uigen_import_dir", { dir: importDir });
+test("workspace root is the prototype root — scanned on demand, no binding", async () => {
+  // 启动即扫:root 恒为工作区根,无需 set_root / 任何绑定步骤
+  const msg = await client.callTool("uigen_list_pages", {});
   const res = msg.result.structuredContent;
   assert.equal(res.ok, true);
-  assert.equal(res.imported, 2);
-  assert.ok(!("versionId" in res), "import result has no versionId (0.3.0)");
-  assert.deepEqual(res.screens.map((s) => s.name).sort(), ["home", "login"]);
-  // 导入 = 追加到磁盘清单(既有屏保留)
-  const idx = indexOnDisk();
-  assert.equal(idx.screens.length, beforeCount + 2, "existing screens kept, imports appended");
-  for (const s of res.screens) {
-    assert.ok(fs.existsSync(path.join(screensDirOnDisk(), `${s.id}.html`)), `${s.id}.html imported to screens/`);
-  }
-  const got = await client.callTool("uigen_get_screen", { id: res.screens[0].id });
-  assert.ok(got.result.structuredContent.screen.html.includes("<html>"), "imported artifact readable");
-});
+  assert.equal(res.root, path.resolve(wsDir), "root is always the workspace root");
+  assert.ok(Array.isArray(res.tree) && res.tree.length > 0, "tree present without any binding");
+  assert.deepEqual(res.stats, { modules: 4, pages: 6, skipped: 1 }, "full fixture scanned immediately");
 
-test("tools/call uigen_canvas_save / uigen_canvas_get persist workspace layout", async () => {
-  // 未保存时:layout 为 null,但 workspace 信息始终可用
-  const initial = await client.callTool("uigen_canvas_get", {});
-  const initRes = initial.result.structuredContent;
+  // rescan 同样直指工作区根
+  const rescan = await client.callTool("uigen_rescan", {});
+  const rr = rescan.result.structuredContent;
+  assert.equal(rr.ok, true);
+  assert.equal(rr.root, path.resolve(wsDir), "rescan targets the workspace root too");
+  assert.deepEqual(rr.stats, { modules: 4, pages: 6, skipped: 1 });
+
+  // 首次 canvas_get:只有布局与工作区信息,没有绑定字段
+  const init = await client.callTool("uigen_canvas_get", {});
+  const initRes = init.result.structuredContent;
   assert.equal(initRes.ok, true);
   assert.equal(initRes.layout, null, "no layout saved yet");
-  assert.ok(initRes.workspace && typeof initRes.workspace.root === "string", "workspace root reported");
+  assert.ok(!("ui" in initRes), "no ui/rootDir binding field on canvas_get");
+  assert.equal(initRes.workspace.root, path.resolve(wsDir), "workspace root reported");
   assert.ok(initRes.workspace.name, "workspace name reported");
+});
+
+test("scan: extension whitelist, pruning, size cap, empty module, tree shape", async () => {
+  const msg = await client.callTool("uigen_list_pages", {});
+  const res = msg.result.structuredContent;
+  assert.equal(res.ok, true);
+  assert.equal(res.root, path.resolve(wsDir));
+
+  // 根层:子目录(字典序)在前,页面文件在后;.hidden.html 保留、notes.txt 忽略
+  assert.deepEqual(
+    res.tree.map((n) => n.id),
+    ["app", "big", "emptydir", ".hidden.html", "about.htm", "home.html"],
+    "root children: dirs first (lexicographic), then whitelisted pages"
+  );
+  // 层级:app → [sub 模块, login, register];sub → deep.vue
+  const app = findNode(res.tree, "app");
+  assert.ok(app && app.type === "module");
+  assert.deepEqual(
+    app.children.map((n) => n.id),
+    ["app/sub", "app/login.html", "app/register.tsx"],
+    "children keep their root-relative ids"
+  );
+  const sub = findNode(res.tree, "app/sub");
+  assert.equal(sub.type, "module");
+  assert.deepEqual(sub.children.map((n) => n.id), ["app/sub/deep.vue"]);
+  // 空目录也是 module
+  const empty = findNode(res.tree, "emptydir");
+  assert.ok(empty && empty.type === "module");
+  assert.deepEqual(empty.children, []);
+  // 剪枝:node_modules / .git / 点目录不进树
+  const ids = [];
+  const collect = (nodes) => {
+    for (const n of nodes) {
+      ids.push(n.id);
+      collect(n.children || []);
+    }
+  };
+  collect(res.tree);
+  assert.ok(ids.every((id) => !id.includes("node_modules") && !id.includes(".git") && !id.startsWith(".config")), "pruned dirs absent");
+  assert.ok(!ids.includes("big/oversized.html"), ">500KB file skipped");
+  assert.ok(ids.includes(".hidden.html"), "hidden file kept (only dirs are pruned)");
+  // framework 映射
+  assert.equal(findNode(res.tree, "home.html").framework, "html_tailwind");
+  assert.equal(findNode(res.tree, "about.htm").framework, "html_tailwind");
+  assert.equal(findNode(res.tree, "app/register.tsx").framework, "react_tailwind");
+  assert.equal(findNode(res.tree, "app/sub/deep.vue").framework, "vue_tailwind");
+  assert.equal(findNode(res.tree, "app").framework, "", "modules have no framework");
+  // 节点形状
+  const home = findNode(res.tree, "home.html");
+  assert.deepEqual(Object.keys(home).sort(), ["children", "framework", "id", "name", "type"]);
+  assert.equal(home.type, "page");
+  assert.equal(home.name, "home", "page name = stem without extension");
+  // stats
+  assert.deepEqual(res.stats, { modules: 4, pages: 6, skipped: 1 });
+  // index.json = 列表缓存:{root, entries:[{id,name,type,framework,updatedAt}]}
+  const idx = indexOnDisk();
+  assert.deepEqual(Object.keys(idx).sort(), ["entries", "root", "updatedAt"]);
+  assert.equal(idx.root, "");
+  assert.equal(idx.entries.length, 10, "4 modules + 6 pages cached");
+  for (const e of idx.entries) {
+    assert.deepEqual(Object.keys(e).sort(), ["framework", "id", "name", "type", "updatedAt"]);
+    assert.ok(e.updatedAt, "entry updatedAt stamped");
+  }
+});
+
+test("reconcile: page deleted on disk drops from cache", async () => {
+  const before = indexOnDisk().entries;
+  assert.ok(before.some((e) => e.id === "home.html"), "home.html cached before delete");
+  fs.rmSync(path.join(wsDir, "home.html"));
+  const msg = await client.callTool("uigen_rescan", {});
+  const res = msg.result.structuredContent;
+  assert.equal(res.ok, true);
+  assert.ok(!findNode(res.tree, "home.html"), "tree drops the deleted page");
+  const idx = indexOnDisk();
+  assert.ok(!idx.entries.some((e) => e.id === "home.html"), "cache drops the deleted page");
+  assert.equal(idx.entries.length, 9);
+  assert.deepEqual(res.stats, { modules: 4, pages: 5, skipped: 1 });
+  // 隐藏文件仍在
+  assert.ok(findNode(res.tree, ".hidden.html"));
+});
+
+test("save/get/delete page: create, rename id changes, module ops, path safety", async () => {
+  // 新建页(无 content → 占位骨架),父目录顺带成为模块
+  const created = await client.callTool("uigen_save_page", { id: "newpage/landing.html" });
+  const cr = created.result.structuredContent;
+  assert.equal(cr.ok, true);
+  assert.equal(cr.id, "newpage/landing.html");
+  const landingAbs = path.join(wsDir, "newpage", "landing.html");
+  assert.ok(fs.existsSync(landingAbs), "page file created with parent dirs");
+  const placeholder = fs.readFileSync(landingAbs, "utf8");
+  assert.ok(placeholder.includes("<!doctype html>"), "placeholder is a full document");
+  assert.ok(placeholder.includes("<body>"), "placeholder has a body");
+
+  const got = await client.callTool("uigen_get_page", { id: "newpage/landing.html" });
+  const g = got.result.structuredContent;
+  assert.equal(g.ok, true);
+  assert.equal(g.type, "page");
+  assert.equal(g.framework, "html_tailwind");
+  assert.equal(g.name, "landing");
+  assert.equal(g.content, placeholder, "content read back from disk");
+
+  // 树里:newpage 成为模块,页面挂在下面
+  let list = await client.callTool("uigen_list_pages", {});
+  const np = findNode(list.result.structuredContent.tree, "newpage");
+  assert.ok(np && np.type === "module", "implicit parent dir becomes a module");
+  assert.deepEqual(np.children.map((c) => c.id), ["newpage/landing.html"]);
+  assert.ok(indexOnDisk().entries.some((e) => e.id === "newpage/landing.html"), "cache updated after save");
+
+  // 新建模块
+  const mod = await client.callTool("uigen_save_page", { id: "empty-created" });
+  assert.equal(mod.result.structuredContent.ok, true);
+  assert.ok(fs.existsSync(path.join(wsDir, "empty-created")), "module dir created");
+  const modGet = await client.callTool("uigen_get_page", { id: "empty-created" });
+  assert.equal(modGet.result.structuredContent.type, "module");
+  assert.equal(modGet.result.structuredContent.content, null, "modules have no content");
+
+  // 重命名页:返回新 id,旧文件消失,stem 换、扩展名保留
+  const renamed = await client.callTool("uigen_save_page", { id: "newpage/landing.html", name: "start" });
+  assert.equal(renamed.result.structuredContent.id, "newpage/start.html");
+  assert.ok(!fs.existsSync(landingAbs), "old file gone after rename");
+  assert.ok(fs.existsSync(path.join(wsDir, "newpage", "start.html")));
+  // name 带扩展名也不重复拼接
+  const renamed2 = await client.callTool("uigen_save_page", { id: "newpage/start.html", name: "home2.html" });
+  assert.equal(renamed2.result.structuredContent.id, "newpage/home2.html");
+  assert.ok(fs.existsSync(path.join(wsDir, "newpage", "home2.html")));
+
+  // 重命名模块:目录改名,子页面 id 跟着目录走(下次扫描即对齐)
+  const modRenamed = await client.callTool("uigen_save_page", { id: "newpage", name: "content" });
+  assert.equal(modRenamed.result.structuredContent.id, "content");
+  assert.ok(fs.existsSync(path.join(wsDir, "content")), "module dir renamed");
+  assert.ok(!fs.existsSync(path.join(wsDir, "newpage")));
+  list = await client.callTool("uigen_list_pages", {});
+  const tree = list.result.structuredContent.tree;
+  assert.ok(!findNode(tree, "newpage"), "old module id gone from tree");
+  const contentMod = findNode(tree, "content");
+  assert.deepEqual(contentMod.children.map((c) => c.id), ["content/home2.html"], "child ids follow the renamed module");
+
+  // 非空模块:无 recursive 报错,recursive:true 才删
+  const withfile = path.join(wsDir, "withfile");
+  fs.mkdirSync(withfile, { recursive: true });
+  fs.writeFileSync(path.join(withfile, "x.html"), HTML("x"));
+  const noRec = await client.callTool("uigen_delete_page", { id: "withfile" });
+  assert.equal(noRec.result.structuredContent.ok, false);
+  assert.equal(noRec.result.isError, true);
+  assert.match(noRec.result.structuredContent.error, /recursive/);
+  assert.ok(fs.existsSync(withfile), "module kept when recursive missing");
+  const withRec = await client.callTool("uigen_delete_page", { id: "withfile", recursive: true });
+  assert.equal(withRec.result.structuredContent.ok, true);
+  assert.ok(!fs.existsSync(withfile), "module removed with recursive:true");
+
+  // 路径安全:`..` 与绝对路径一律拒绝
+  for (const badId of ["../evil.html", "..\\evil.html", "/evil.html", "C:/evil.html", ""]) {
+    const esc = await client.callTool("uigen_save_page", { id: badId });
+    assert.equal(esc.result.structuredContent.ok, false, `save rejects ${JSON.stringify(badId)}`);
+    assert.equal(esc.result.isError, true);
+    const escDel = await client.callTool("uigen_delete_page", { id: badId });
+    assert.equal(escDel.result.structuredContent.ok, false, `delete rejects ${JSON.stringify(badId)}`);
+    const escGet = await client.callTool("uigen_get_page", { id: badId });
+    assert.equal(escGet.result.structuredContent.ok, false, `get rejects ${JSON.stringify(badId)}`);
+  }
+  assert.ok(!fs.existsSync(path.join(tmpRoot, "evil.html")), "no escape file written");
+
+  // content 更新与"改名撞已存在文件"报错
+  const p1 = await client.callTool("uigen_save_page", { id: "p1.html", content: "<p>hi</p>" });
+  assert.equal(p1.result.structuredContent.ok, true);
+  assert.equal(fs.readFileSync(path.join(wsDir, "p1.html"), "utf8"), "<p>hi</p>");
+  await client.callTool("uigen_save_page", { id: "p2.html", content: "<p>two</p>" });
+  const clash = await client.callTool("uigen_save_page", { id: "p1.html", name: "p2" });
+  assert.equal(clash.result.structuredContent.ok, false);
+  assert.match(clash.result.structuredContent.error, /already exists/);
+  const p1edit = await client.callTool("uigen_save_page", { id: "p1.html", content: "<p>bye</p>" });
+  assert.equal(p1edit.result.structuredContent.id, "p1.html");
+  assert.equal(fs.readFileSync(path.join(wsDir, "p1.html"), "utf8"), "<p>bye</p>");
+
+  // 删除页:文件与缓存一起消失;不存在的 id 报错
+  const del = await client.callTool("uigen_delete_page", { id: "content/home2.html" });
+  assert.equal(del.result.structuredContent.ok, true);
+  assert.equal(del.result.structuredContent.deleted, "content/home2.html");
+  assert.ok(!fs.existsSync(path.join(wsDir, "content", "home2.html")));
+  const delAgain = await client.callTool("uigen_delete_page", { id: "content/home2.html" });
+  assert.equal(delAgain.result.structuredContent.ok, false);
+  const delGhost = await client.callTool("uigen_delete_page", { id: "never-existed.html" });
+  assert.equal(delGhost.result.structuredContent.ok, false);
+  list = await client.callTool("uigen_list_pages", {});
+  assert.ok(!findNode(list.result.structuredContent.tree, "content/home2.html"), "cache dropped the deleted page");
+});
+
+test("uigen_get_page falls back to latin-1 when utf-8 decode fails", async () => {
+  // 0xE9 单字节在 UTF-8 里非法 → 回退 latin-1(é),不产生 U+FFFD
+  fs.writeFileSync(path.join(wsDir, "enc.html"), Buffer.from([0x68, 0x69, 0xe9]));
+  const got = await client.callTool("uigen_get_page", { id: "enc.html" });
+  const g = got.result.structuredContent;
+  assert.equal(g.ok, true);
+  assert.equal(g.content, "hié");
+  assert.ok(!g.content.includes("�"), "no replacement chars");
+});
+
+test("uigen_canvas_save / uigen_canvas_get persist layout (no ui binding)", async () => {
+  // 历史数据兼容:旧记录里的 ui(rootDir 绑定字段)读到即忽略
+  fs.writeFileSync(
+    path.join(storeDir, "canvas-layout.json"),
+    JSON.stringify({ layout: null, ui: { rootDir: "app" }, updatedAt: "2026-01-01T00:00:00.000Z", bytes: 0 })
+  );
+  const legacy = await client.callTool("uigen_canvas_get", {});
+  const legacyRes = legacy.result.structuredContent;
+  assert.equal(legacyRes.layout, null, "legacy layout respected");
+  assert.ok(!("ui" in legacyRes), "legacy ui.rootDir ignored on read");
+
+  // 正常保存 / 读回
+  const layout = { version: 1, zoom: 0.9, grid: true, viewport: 390, sidebarCollapsed: false };
+  const save = await client.callTool("uigen_canvas_save", { layoutJson: layout });
+  const sRes = save.result.structuredContent;
+  assert.equal(sRes.ok, true);
+  assert.ok(sRes.updatedAt && sRes.bytes > 0, "updatedAt + bytes reported");
+  assert.equal(sRes.file, path.join(storeDir, "canvas-layout.json"));
+  assert.ok(!("ui" in sRes), "save result carries no ui field");
+  let got = await client.callTool("uigen_canvas_get", {});
+  assert.deepEqual(got.result.structuredContent.layout, layout, "layout persisted verbatim");
+  assert.ok(!("ui" in got.result.structuredContent), "canvas_get carries no ui field");
+
+  // 历史调用方仍带 ui 的 layoutJson:ui 被剥掉,不进 layout 也不落盘
+  const saveUi = await client.callTool("uigen_canvas_save", {
+    layoutJson: { version: 2, zoom: 0.8, ui: { rootDir: "app" } },
+  });
+  assert.equal(saveUi.result.structuredContent.ok, true);
+  const onDisk = canvasOnDisk();
+  assert.deepEqual(onDisk.layout, { version: 2, zoom: 0.8 }, "ui stripped from layout body");
+  assert.ok(!("ui" in onDisk), "record rewritten without the legacy ui field");
+  got = await client.callTool("uigen_canvas_get", {});
+  assert.deepEqual(got.result.structuredContent.layout, { version: 2, zoom: 0.8 });
 
   // 非法入参被拒绝
   const bad = await client.callTool("uigen_canvas_save", { layoutJson: "nope" });
   assert.equal(bad.result.structuredContent.ok, false);
   assert.equal(bad.result.isError, true);
-
-  // 正常保存 → 读回一致,且落在 <store>/canvas-layout.json(screen 无关)
-  const layout = {
-    version: 1,
-    zoom: 0.9,
-    grid: true,
-    viewport: 390,
-    sidebarCollapsed: false,
-    cards: { s1: { x: 40, y: 80, w: 260 }, s2: { x: 360, y: 80, w: 260 } },
-  };
-  const save = await client.callTool("uigen_canvas_save", { layoutJson: layout });
-  const saveRes = save.result.structuredContent;
-  assert.equal(saveRes.ok, true);
-  assert.ok(saveRes.updatedAt, "updatedAt stamped");
-  assert.ok(saveRes.bytes > 0, "byte size reported");
-  assert.equal(saveRes.file, path.join(storeDir, "canvas-layout.json"));
-  assert.ok(fs.existsSync(saveRes.file), "canvas-layout.json written");
-  const onDisk = JSON.parse(fs.readFileSync(saveRes.file, "utf8"));
-  assert.deepEqual(onDisk.layout, layout, "layout persisted verbatim");
-
-  const got = await client.callTool("uigen_canvas_get", {});
-  const gotRes = got.result.structuredContent;
-  assert.equal(gotRes.ok, true);
-  assert.deepEqual(gotRes.layout, layout, "saved layout read back");
-  assert.ok(gotRes.updatedAt, "updatedAt returned");
 });
 
-test("resources/list and resources/read serve the panel (mcp-app profile)", async () => {
+test("resources/list and resources/read serve panel, bridge and state tree", async () => {
   const list = await client.request("resources/list", {});
   const panel = list.result.resources.find((r) => r.uri === "ui://hba-uigen/panel.html");
   assert.ok(panel, "panel resource declared");
   assert.equal(panel.mimeType, "text/html;profile=mcp-app");
+  assert.ok(list.result.resources.some((r) => r.uri === "ui://hba-uigen/bridge.js"), "bridge resource declared");
   assert.ok(list.result.resources.some((r) => r.uri === "ui://hba-uigen/state.json"), "state resource declared");
 
   const read = await client.request("resources/read", { uri: "ui://hba-uigen/panel.html" });
   const content = read.result.contents[0];
-  assert.equal(content.uri, "ui://hba-uigen/panel.html");
   assert.equal(content.mimeType, "text/html;profile=mcp-app");
-  const html = content.text;
-  assert.ok(html.includes("390"), "panel references the 390px preview");
-  assert.ok(html.includes('id="screen-canvas"'), "multi-screen canvas DOM present");
-  assert.ok(html.includes('id="canvas-grid"'), "canvas grid DOM present");
-  assert.ok(html.includes('id="preview-frame"'), "preview iframe DOM present");
-  assert.ok(html.includes("uigen_generate"), "panel calls uigen_generate");
-  assert.ok(html.includes("uigen_save_screen"), "panel persists screen edits");
-  assert.ok(html.includes("uigen_list_screens"), "panel reads the screens manifest");
-  assert.ok(html.includes("uigen_canvas_save"), "panel persists canvas layout");
-  assert.ok(html.includes("UiGenBridge"), "bridge layer embedded");
-  // 0.3.0:面板不再有版本下拉/版本工具
-  assert.ok(!html.includes("uigen_list_versions"), "panel no longer calls uigen_list_versions");
-  assert.ok(!html.includes("uigen_get_version"), "panel no longer calls uigen_get_version");
-  assert.ok(!html.includes('id="btn-versions"'), "version dropdown removed from the top bar");
+  assert.ok(content.text.length > 0, "panel html served");
+
+  const bridge = await client.request("resources/read", { uri: "ui://hba-uigen/bridge.js" });
+  assert.ok(bridge.result.contents[0].text.length > 0, "bridge js served");
+
+  // state.json = 原型树快照 { root, tree, stats }
+  const stateRead = await client.request("resources/read", { uri: "ui://hba-uigen/state.json" });
+  const state = JSON.parse(stateRead.result.contents[0].text);
+  assert.equal(state.root, path.resolve(wsDir));
+  assert.ok(Array.isArray(state.tree) && state.tree.length > 0, "state carries the tree");
+  assert.equal(typeof state.stats.modules, "number");
+  assert.equal(typeof state.stats.pages, "number");
+  assert.equal(typeof state.stats.skipped, "number");
 
   const missing = await client.request("resources/read", { uri: "ui://hba-uigen/nope.html" });
   assert.equal(missing.error.code, -32002, "unknown resource rejected");
 });
 
-test("state.json resource mirrors the screens index", async () => {
-  const read = await client.request("resources/read", { uri: "ui://hba-uigen/state.json" });
-  const state = JSON.parse(read.result.contents[0].text);
-  assert.ok(Array.isArray(state.screens), "state carries screens array");
-  assert.ok(state.screens.length >= 3, "state mirrors current manifest");
-  assert.ok(state.screens.every((s) => s.id && s.name), "state entries have id+name");
-  assert.ok(!("versions" in state), "no versions in state (0.3.0)");
-});
-
-test("resources/subscribe gets state.json updates after generation", async () => {
+test("resources/subscribe gets state.json updates after page writes", async () => {
   await client.request("resources/subscribe", { uri: "ui://hba-uigen/state.json" });
   const before = client.notifications.filter((n) => n.method === "notifications/resources/updated").length;
-  await client.callTool("uigen_generate", { prompt: "订阅测试", screenCount: 1 });
+  const save = await client.callTool("uigen_save_page", { id: "notify-test.html" });
+  assert.equal(save.result.structuredContent.ok, true);
   const afterCount = client.notifications.filter((n) => n.method === "notifications/resources/updated").length;
   assert.ok(afterCount > before, "resources/updated notification pushed to subscriber");
-  // 生成整体替换清单:旧屏文件被清掉
-  const idx = indexOnDisk();
-  assert.equal(idx.screens.length, 1, "regeneration replaces the manifest");
-  const files = fs.readdirSync(screensDirOnDisk());
-  assert.deepEqual(files.sort(), ["s1.html", "s1.jsx", "s1.vue"], "stale screen files removed on regenerate");
+  const del = await client.callTool("uigen_delete_page", { id: "notify-test.html" });
+  assert.equal(del.result.structuredContent.ok, true);
 });
 
-test("unknown method and unknown tool produce JSON-RPC errors", async () => {
+test("unknown method, unknown tool and retired tools produce JSON-RPC errors", async () => {
   const m = await client.request("no/such/method", {});
   assert.equal(m.error.code, -32601);
   const t = await client.callTool("no_such_tool", {});
   assert.equal(t.error.code, -32602);
-  const legacy = await client.callTool("uigen_list_versions", {});
-  assert.equal(legacy.error.code, -32602, "retired version tool is unknown");
+  for (const retired of [
+    "uigen_generate",
+    "uigen_export",
+    "uigen_import_dir",
+    "uigen_list_screens",
+    "uigen_save_screen",
+    "uigen_list_versions",
+    "uigen_set_root",
+    "uigen_browse_dirs",
+  ]) {
+    const r = await client.callTool(retired, {});
+    assert.equal(r.error.code, -32602, `${retired} is unknown`);
+  }
 });
