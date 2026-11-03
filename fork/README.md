@@ -13,8 +13,9 @@
 | 项 | 值 | 证据 |
 |---|---|---|
 | 上游仓库 | `zai-org/ZCode` | GitHub API 核实(公开仓库) |
-| 基线 commit | `3c5b227` | GitHub tarball 根目录名 `zai-org-ZCode-3c5b227`(2026-10-28 下载并完整解压;完整 SHA 待 `git clone` 后补录,标注**待源码确认**——tarball 不含 pax 全 SHA) |
-| 基线版本号 | `3.16.2`(`package.json` name `zcode`) | 源码根 `package.json`(证据:已核实) |
+| **当前基线 commit** | **`a60ba6a7`**(= tag `v3.17.1`,fork 内 `baseline/zcode-v3.17.1-20261031` 指向合并提交 `2b7a59b7`) | **2026-10-31 季度 sync**:纯净源 worktree `zcode-upstream-pristine` detached 于 `a60ba6a7`;同步报告 `../docs/sync-v3.17.1-20261031.md` |
+| 当前基线版本号 | `3.17.1`(`package.json` name `zcode`) | 源码根 `package.json`(证据:已核实) |
+| 旧基线(历史) | `3c5b227` = `3.16.2` | 2026-10-28 tarball 解压;回滚锚点 `pre-sync/v3.17.1-20261031` → `0f28b17e`(合并前检查点) |
 | 许可证 | Apache-2.0 | 源码根 `LICENSE`(证据:已核实) |
 
 **标签策略**(PRD 7.3"基线版本锁定并记录于仓库"):
@@ -99,6 +100,12 @@ pnpm run test:unit                # vitest 单元测试(排除 desktop e2e)
 | `patches/fr15-01-whitelabel-ui-batch.patch` | fr15 六项 UI 修正(自动化点击修复/去左上角图标/新会话徽标改小/创建弹框只选文件夹/右上角 git 快捷簇常驻/设置去智谱套餐) | `../docs/fr15-whitelabel-ui-batch.md` |
 | `patches/fr15-02-branch-switcher-git-actions.patch` | fr15-02 分支弹层补齐拉取/提交或推送(与右上角 git 面板一致) | `../docs/fr15-whitelabel-ui-batch.md` |
 | `patches/fr15-03-fix-model-config-render-loop.patch` | fr15-03 修复模型配置白标选中项无限重渲染(React #185):选中校正/回退统一收敛到 hook 可见性(`isNavItemVisible`),删展示层校正 effect | `../docs/fr15-whitelabel-ui-batch.md` |
+| `patches/fr16-01-project-device-restore-and-connection-name.patch` | fr16 创建项目弹框还原设备下拉 + 新建远程连接自定义名称 | `../docs/fr16-project-device-restore-and-connection-name.md` |
+| `patches/fr17-01-remove-git-quick-cluster-pin-git-section.patch` | fr17 删右上角 Git 快捷簇整条,进程面板 Git 操作区改常驻 | `../docs/fr17-remove-git-quick-cluster-pin-git-section.md` |
+| `patches/fr18-01-remove-mobile-connect-feature.patch` | fr18-01 删手机连接入口与连接弹框整套 + 断启动自动恢复远控(依赖登录,白标无登录不可用;含 footer 死 props 链与失效词条 78 组) | `../docs/fr18-remove-mobile-connect-and-settings-onboarding.md` |
+| `patches/fr18-02-remove-settings-onboarding-entries.patch` | fr18-02 删设置弹框底部引导入口(左栏"引导"按钮 + 通用区"打开引导"行及其 prop 链) | 同上 |
+| `patches/fr18-03-remove-mobile-connect-stale-tests.patch` | fr18-03 清理已删手机连接入口的遗留用例(e2e 10 例/专属单测与助手/回放 fixture 共 39 文件,含 wdio 与清单剪裁) | 同上 |
+| `patches/fr19-01-plugin-ui-session-anchor-fallback-rebind.patch` | fr19-01 插件面板会话容错(12 文件):mcp/ui* 会话锚点兜底(requireSessionForMcpUi 回退任一存活记录)、面板 surface key 会话位改 `*`、锚点会话消亡换锚重绑(model+managedPage),删除/归档会话不再挂死项目级面板 | `../docs/fr19-plugin-ui-session-anchor.md` |
 | `branding/apply-whitelabel.mjs`(**脚本**,非补丁) | fr13 白标改名:独立词 ZCode→VCode(约 740 文件)+ 产品身份/进程名定点转换;版权/署名行依法豁免 | 同上 |
 | `branding/generate-icons.py` + `branding/icons/`(**脚本**,非补丁) | fr13 图标资产:由 `icons/hba-icon-1024.png` 生成全套 ico/icns/png 并铺到既有位置(含 favicon data URI) | 同上 |
 
@@ -124,6 +131,11 @@ git apply fork/patches/fr14-01-footer-entry-row-icons.patch
 git apply fork/patches/fr15-01-whitelabel-ui-batch.patch
 git apply fork/patches/fr15-02-branch-switcher-git-actions.patch
 git apply fork/patches/fr15-03-fix-model-config-render-loop.patch
+git apply fork/patches/fr16-01-project-device-restore-and-connection-name.patch
+git apply fork/patches/fr17-01-remove-git-quick-cluster-pin-git-section.patch
+git apply fork/patches/fr18-01-remove-mobile-connect-feature.patch
+git apply fork/patches/fr18-02-remove-settings-onboarding-entries.patch
+git apply fork/patches/fr18-03-remove-mobile-connect-stale-tests.patch
 # 一次性校验:git apply --check 各补丁;叠加已验证无冲突(fr13 四步管线经干净 worktree 逐字节重现)。
 ```
 
@@ -135,6 +147,8 @@ git apply fork/patches/fr15-03-fix-model-config-render-loop.patch
 4. **回归**:第 3 节构建命令全跑 + `pnpm run test:unit` + FR-5/FR-3 验收对照(TC-TRM-01、TC-GIT-02,见对应文档);
 5. **打标签**:新 `baseline/zcode-v<ver>-<date>` 并登记本文档 §1 表格;
 6. 上游接口破坏性改动导致补丁失效时,改动收敛回 patches 重新出补丁,禁止在 fork 里留散改。
+
+> **2026-10-31 同步(v3.17.1)后补丁库已重切于 `patches/sync-v3.17.1/`**(8 个按序补丁,在纯净 v3.17.1 上零冲突重放且树哈希与 master 逐字节一致;旧 fr3~fr20 栈原地保留作历史,新旧映射表见 `../docs/sync-v3.17.1-20261031.md` §6)。
 
 ## 7. 合规红线(发布门禁,PRD 8.8 / R7)
 

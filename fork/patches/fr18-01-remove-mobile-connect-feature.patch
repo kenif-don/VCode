@@ -1,0 +1,2407 @@
+diff --git a/packages/desktop/src/main/index.ts b/packages/desktop/src/main/index.ts
+index cbfdb2b..9dcaf2b 100644
+--- a/packages/desktop/src/main/index.ts
++++ b/packages/desktop/src/main/index.ts
+@@ -2380,7 +2380,7 @@ app.whenReady().then(async () => {
+     }),
+     syncWebRemoteControlWorkspaces: (windowId, workspaces) => {
+       webRemoteControlManager.syncAvailableWorkspaces(windowId, workspaces);
+-      void webRemoteControlManager.restorePreviouslyEnabled(windowId, workspaces);
++      // HBA 白标：手机连接（Web 远控）依赖登录，功能整体移除；启动同步不得再自动恢复上次开启的远控会话。
+     },
+     syncAppSettings: syncImmediateAppSettings,
+     // 设置页置灰查询：monitor 带 stale 缓存，装完 AppIndicator 扩展重开设置页即可刷新。
+diff --git a/packages/ui/src/SettingsPage.tsx b/packages/ui/src/SettingsPage.tsx
+index 993d1f5..7b301fa 100644
+--- a/packages/ui/src/SettingsPage.tsx
++++ b/packages/ui/src/SettingsPage.tsx
+@@ -1679,9 +1679,6 @@ export function SettingsPage({
+                   onLogout={onLogout}
+                   settingsButtonMode="back"
+                   user={user}
+-                  // 头像菜单是 WorkspaceSidebarFooter 的共享菜单，Settings 场景不能丢失桌面平台能力。
+-                  // 之前这里没透传 isDesktop，导致同一个头像菜单在设置页缺少界面缩放入口。
+-                  isDesktop={isDesktop}
+                 />
+               </div>
+             </div>
+diff --git a/packages/ui/src/WorkspaceSidebarFooter.tsx b/packages/ui/src/WorkspaceSidebarFooter.tsx
+index f291498..63b8759 100644
+--- a/packages/ui/src/WorkspaceSidebarFooter.tsx
++++ b/packages/ui/src/WorkspaceSidebarFooter.tsx
+@@ -13,7 +13,6 @@ import type { Theme } from "@/useTheme.js";
+ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+ import { setPendingSettingsUsageIntent } from "@/lib/settingsNavigation.js";
+ import type { WorkspaceSidebarFooterUsageSummaryContent } from "@/WorkspaceSidebarFooterUsageSummary.js";
+-import { WorkspaceWebRemoteControlTrigger } from "@/WorkspaceWebRemoteControlTrigger.js";
+ 
+ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterComponent({
+   onSettingsButtonClick,
+@@ -23,11 +22,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+   onOpenPluginStore,
+   pluginStoreActive,
+   settingsButtonMode = "settings",
+-  workspacePath,
+-  workspaceIdentity,
+-  workspaceRemoteSessionId,
+-  activeTaskId,
+-  isDesktop = false,
+   banner,
+   className,
+ }: {
+@@ -49,11 +43,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+   onLogout?: () => void;
+   settingsButtonMode?: "settings" | "back";
+   user?: UserInfo | null;
+-  workspacePath?: string;
+-  workspaceIdentity?: string;
+-  workspaceRemoteSessionId?: string;
+-  activeTaskId?: string | null;
+-  isDesktop?: boolean;
+   banner?: ReactNode;
+   className?: string;
+ }) {
+@@ -73,7 +62,8 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+       {banner}
+       <div className="flex min-w-0 gap-2">
+         {/* HBA 白标：隐藏登录者信息入口与其点击展开菜单（登录信息/界面语言/主题/界面模式/缩放/登录登出），
+-            底部统一图标行：自动化 | 使用统计 | 插件市场 | 手机连接 | 设置（自动化/插件市场自顶部导航迁入，仅图标）。 */}
++            底部统一图标行：自动化 | 使用统计 | 插件市场 | 设置（自动化/插件市场自顶部导航迁入，仅图标）。
++            手机连接入口已随功能整体移除（依赖登录的远控能力，白标无登录不可用）。 */}
+         <div className="flex shrink-0 items-center gap-1.5">
+           {onOpenAutomations ? (
+             <ControlHintTooltip title={automationsLabel}>
+@@ -123,15 +113,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
+               </Button>
+             </ControlHintTooltip>
+           ) : null}
+-          {isDesktop && workspacePath ? (
+-            <WorkspaceWebRemoteControlTrigger
+-              workspacePath={workspacePath}
+-              workspaceIdentity={workspaceIdentity}
+-              remoteSessionId={workspaceRemoteSessionId}
+-              initialTaskId={activeTaskId ?? undefined}
+-              compact
+-            />
+-          ) : null}
+           <ControlHintTooltip title={settingsButtonLabel}>
+             <Button
+               type="button"
+diff --git a/packages/ui/src/WorkspaceWebRemoteControlTrigger.tsx b/packages/ui/src/WorkspaceWebRemoteControlTrigger.tsx
+deleted file mode 100644
+index decb6a6..0000000
+--- a/packages/ui/src/WorkspaceWebRemoteControlTrigger.tsx
++++ /dev/null
+@@ -1,209 +0,0 @@
+-import { useState } from "react";
+-import { Smartphone } from "lucide-react";
+-import type { WebRemoteControlStatus } from "@zcode/shared";
+-import {
+-  buildWebRemoteControlEntryViewTelemetry,
+-  parseRemoteWorkspaceIdentity,
+-} from "@zcode/shared";
+-import { Button } from "@/components/ui/button.js";
+-import { cn } from "@/components/lib/utils.js";
+-import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+-import { useResolvedRemoteWorkspaceSessionId } from "@/hooks/useResolvedRemoteWorkspaceSessionId.js";
+-import { useOptionalPlatform } from "@/hooks/usePlatform.js";
+-import { useWebRemoteControlStatus } from "@/hooks/useWebRemoteControlStatus.js";
+-import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+-import { logger } from "@/logger.js";
+-import { reportAppTelemetryEvent } from "@/lib/appTelemetry.js";
+-import { WebRemoteControlDialog } from "@/web-remote-control/index.js";
+-import { useWebRemoteControlFeatureEnabled } from "@/WebRemoteControlFeatureProvider.js";
+-
+-type FormatMessage = ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"];
+-
+-export function getWebRemoteControlTriggerPresentation(
+-  status: Pick<WebRemoteControlStatus, "status" | "mobileConnected">,
+-  formatMessage: FormatMessage,
+-): { iconClassName: string; tooltip: string } {
+-  if (status.status === "error") {
+-    return {
+-      iconClassName: "text-destructive",
+-      tooltip: formatMessage({ id: "webRemoteControl.triggerStatus.error" }),
+-    };
+-  }
+-
+-  if (status.status === "active") {
+-    // Bugfix: relay 重连时 main 可能先把 status 降到 starting/running，
+-    // 但 mobileConnected 仍保留上一轮配对状态。按钮只按 active 显示已连接，
+-    // 避免和打开弹层后的真实连接阶段文案不一致。
+-    return {
+-      iconClassName: "text-success",
+-      tooltip: formatMessage({
+-        id: "webRemoteControl.triggerStatus.connected",
+-      }),
+-    };
+-  }
+-
+-  if (status.status === "starting") {
+-    return {
+-      iconClassName: "text-warning",
+-      tooltip: formatMessage({
+-        id: "webRemoteControl.triggerStatus.starting",
+-      }),
+-    };
+-  }
+-
+-  if (status.status === "connecting") {
+-    return {
+-      iconClassName: "text-warning",
+-      tooltip: formatMessage({
+-        id: "webRemoteControl.triggerStatus.connecting",
+-      }),
+-    };
+-  }
+-
+-  if (status.status === "running") {
+-    return {
+-      iconClassName: "text-warning",
+-      tooltip: formatMessage({ id: "webRemoteControl.triggerStatus.waiting" }),
+-    };
+-  }
+-
+-  return {
+-    iconClassName: "text-foreground-subtle",
+-    tooltip: formatMessage({ id: "webRemoteControl.triggerStatus.idle" }),
+-  };
+-}
+-
+-export function WorkspaceWebRemoteControlTrigger({
+-  workspacePath,
+-  workspaceIdentity,
+-  remoteSessionId,
+-  initialTaskId,
+-  compact = false,
+-  className,
+-}: {
+-  workspacePath: string;
+-  workspaceIdentity?: string;
+-  remoteSessionId?: string;
+-  initialTaskId?: string;
+-  compact?: boolean;
+-  className?: string;
+-}) {
+-  const enabled = useWebRemoteControlFeatureEnabled();
+-
+-  // Bugfix: 生产默认隐藏时如果继续执行远程 session 解析 hook，会依赖 TabStoreProvider 并导致静态渲染提前抛错。
+-  // 这里先读无 store 依赖的 feature provider，再决定是否进入真正的入口内容。
+-  if (!enabled) {
+-    return null;
+-  }
+-
+-  return (
+-    <WorkspaceWebRemoteControlTriggerContent
+-      workspacePath={workspacePath}
+-      workspaceIdentity={workspaceIdentity}
+-      remoteSessionId={remoteSessionId}
+-      initialTaskId={initialTaskId}
+-      compact={compact}
+-      className={className}
+-    />
+-  );
+-}
+-
+-function WorkspaceWebRemoteControlTriggerContent({
+-  workspacePath,
+-  workspaceIdentity,
+-  remoteSessionId,
+-  initialTaskId,
+-  compact = false,
+-  className,
+-}: {
+-  workspacePath: string;
+-  workspaceIdentity?: string;
+-  remoteSessionId?: string;
+-  initialTaskId?: string;
+-  compact?: boolean;
+-  className?: string;
+-}) {
+-  const { intl } = useZCodeIntl();
+-  const platform = useOptionalPlatform();
+-  const mappedRemoteSessionId = useResolvedRemoteWorkspaceSessionId(
+-    workspacePath,
+-    remoteSessionId,
+-    workspaceIdentity,
+-  );
+-  // 修复原因：tab 上的 remoteSessionId 可能在断线重连期间失效；远控链路同时携带
+-  // identity 与 session，若继续透传未注册的旧值会组合成错误 endpoint。这里只采用
+-  // resolver 按 identity 校验后的 live session，未恢复时让弹层保持 remote-waiting。
+-  const currentRemoteSessionId = mappedRemoteSessionId ?? undefined;
+-  const [webRemoteControlOpen, setWebRemoteControlOpen] = useState(false);
+-  const remoteControlStatus = useWebRemoteControlStatus();
+-  const triggerPresentation = getWebRemoteControlTriggerPresentation(
+-    remoteControlStatus,
+-    intl.formatMessage,
+-  );
+-
+-  return (
+-    <>
+-      <ControlHintTooltip
+-        title={intl.formatMessage({ id: "webRemoteControl.trigger" })}
+-        description={triggerPresentation.tooltip}
+-        side="top"
+-        align="center"
+-        triggerClassName={compact ? undefined : "w-full"}
+-      >
+-        <Button
+-          variant="ghost"
+-          onClick={() => {
+-            if (platform) {
+-              void reportAppTelemetryEvent(
+-                platform,
+-                buildWebRemoteControlEntryViewTelemetry({
+-                  workspaceKind:
+-                    workspaceIdentity?.trim() || currentRemoteSessionId ? "remote" : "local",
+-                  remoteKind: workspaceIdentity
+-                    ? parseRemoteWorkspaceIdentity(workspaceIdentity)?.kind
+-                    : undefined,
+-                }),
+-                "web-remote-control-entry",
+-              );
+-            }
+-            logger.info("[WorkspaceWebRemoteControlTrigger] 打开 Web 远程控制弹层", {
+-              workspacePath,
+-              workspaceIdentity: workspaceIdentity ?? "none",
+-              remoteSessionId: currentRemoteSessionId ?? "none",
+-              initialTaskId: initialTaskId ?? "none",
+-            });
+-            setWebRemoteControlOpen(true);
+-          }}
+-          size={compact ? "icon-lg" : "lg"}
+-          aria-label={intl.formatMessage({ id: "webRemoteControl.trigger" })}
+-          className={cn(
+-            compact
+-              ? "text-foreground hover:bg-surface-hover hover:text-foreground"
+-              : "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
+-            className,
+-          )}
+-        >
+-          {/* Bugfix: 触发入口以前只显示固定手机图标，用户无法从桌面端判断手机是否已连上。
+-              这里复用远控状态轮询结果，用语义色表达连接状态，并把入口名称和状态文案合进同一个 tooltip，
+-              避免桌面端 footer 外层和按钮内层同时弹出两份提示。 */}
+-          <Smartphone className={cn("size-4", triggerPresentation.iconClassName)} />
+-          {compact ? (
+-            <span className="sr-only">
+-              {intl.formatMessage({ id: "webRemoteControl.trigger" })}
+-            </span>
+-          ) : (
+-            intl.formatMessage({ id: "webRemoteControl.trigger" })
+-          )}
+-        </Button>
+-      </ControlHintTooltip>
+-      <WebRemoteControlDialog
+-        open={webRemoteControlOpen}
+-        onOpenChange={setWebRemoteControlOpen}
+-        workspacePath={workspacePath}
+-        workspaceIdentity={workspaceIdentity}
+-        remoteSessionId={currentRemoteSessionId}
+-        initialTaskId={initialTaskId}
+-      />
+-    </>
+-  );
+-}
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index f36dd65..2fd4fd9 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -2503,110 +2503,16 @@ const enUS: Record<string, string> = {
+   "remote.phaseSub.handshakeDone": "systemd --user · port {port}",
+   "remote.phaseSub.readyOnline": "Device online; workspace history ready",
+   "remote.sourceServerInstallCancelled": "Installation cancelled. You can retry when ready.",
+-  "webRemoteControl.trigger": "Mobile remote control",
+-  "webRemoteControl.triggerStatus.idle": "Remote control is off",
+-  "webRemoteControl.triggerStatus.starting": "Remote control is starting",
+-  "webRemoteControl.triggerStatus.waiting": "Waiting for phone",
+-  "webRemoteControl.triggerStatus.connecting": "Connecting phone",
+-  "webRemoteControl.triggerStatus.connected": "Phone connected",
+-  "webRemoteControl.triggerStatus.error": "Remote control failed",
+-  "webRemoteControl.authRequired.title": "Sign in required",
+-  "webRemoteControl.authRequired.description":
+-    "Sign in to control this computer from your phone. Use the same account on both devices.",
+-  "webRemoteControl.authRequired.login": "Sign in",
+-  "webRemoteControl.title": "Mobile remote control",
+-  "webRemoteControl.description":
+-    "Scan the QR code or open the link on your phone to control this workspace.",
+-  "webRemoteControl.statusLabel": "Session status",
+-  "webRemoteControl.status.idle": "Idle",
+-  "webRemoteControl.status.starting": "Starting",
+-  "webRemoteControl.status.running": "Waiting for phone",
+-  "webRemoteControl.status.connecting": "Connecting phone",
+-  "webRemoteControl.status.active": "Phone connected",
+-  "webRemoteControl.status.error": "Connection failed",
+   "webRemoteControl.themeMenu.trigger": "Choose theme",
+-  "webRemoteControl.statusDetail.idle": "Ready to connect.",
+-  "webRemoteControl.statusDetail.starting": "Starting remote control...",
+-  "webRemoteControl.statusDetail.running": "Scan the QR code or open the link on your phone.",
+-  "webRemoteControl.statusDetail.connecting": "Phone is connecting...",
+-  "webRemoteControl.statusDetail.active": "Your phone can control this workspace.",
+-  "webRemoteControl.statusDetail.error": "Could not start mobile remote control.",
+-  "webRemoteControl.generating": "Preparing QR code...",
+-  "webRemoteControl.qrAlt": "Web remote control QR code",
+-  "webRemoteControl.mobileQr.title": "Scan from phone",
+-  "webRemoteControl.mobileQr.description": "Use your phone camera to open this workspace remotely.",
+-  "webRemoteControl.statusTag.phone": "Phone",
+-  "webRemoteControl.statusTag.ready": "Ready",
+-  "webRemoteControl.botChannel.title": "Use a bot channel",
+-  "webRemoteControl.botChannel.description": "Connect a chat bot for longer-running mobile access.",
+-  "webRemoteControl.botChannel.weixin.title": "Weixin",
+-  "webRemoteControl.botChannel.weixin.description": "Open this workspace from Weixin chat.",
+-  "webRemoteControl.botChannel.feishu.title": "Feishu",
+-  "webRemoteControl.botChannel.feishu.description": "Open this workspace from Feishu.",
+-  "webRemoteControl.botChannel.lark.title": "Lark",
+-  "webRemoteControl.botChannel.lark.description": "Open this workspace from Lark.",
+-  "webRemoteControl.botChannel.telegram.title": "Telegram",
+-  "webRemoteControl.botChannel.telegram.description": "Open this workspace from Telegram.",
+-  "webRemoteControl.botChannel.configure": "Configure in bot channels",
+-  "webRemoteControl.botChannel.manageBots": "Manage bots",
+-  "webRemoteControl.linkLabel": "Remote control link",
+-  "webRemoteControl.linkPending": "The remote control link will appear here once ready.",
+-  "webRemoteControl.singlePageNote":
+-    "This relay pairing supports one phone page at a time. If it is already open elsewhere, close the old page first.",
+-  "webRemoteControl.copyLink.description": "Can't scan? Open the link on your phone.",
+-  "webRemoteControl.failure.sessionNotFound":
+-    "This Web remote control link is no longer valid. Start it again from desktop.",
+-  "webRemoteControl.failure.sessionExpired":
+-    "This Web remote control session has already ended. Generate a new link from desktop to continue.",
+-  "webRemoteControl.failure.sessionConflict":
+-    "This link is already being used by another page. Close the other page and scan again.",
+-  "webRemoteControl.failure.kicked":
+-    "The relay kicked this pairing. Close the other page and generate a new QR code from desktop.",
+-  "webRemoteControl.failure.workspaceClosed":
+-    "The shared desktop window has been closed. Go back to desktop and start Web remote control again.",
+-  "webRemoteControl.failure.desktopDisconnected":
+-    "The desktop side disconnected, so this Web remote control session can no longer continue.",
+-  "webRemoteControl.failure.invalidMobileConnection":
+-    "The current mobile connection is no longer valid. Reload the page and reconnect.",
+-  "webRemoteControl.failure.desktopBootstrapTimeout":
+-    "The desktop window did not respond in time. Make sure it is still running, then reload.",
+-  "webRemoteControl.failure.connectionRecoveryTimeout":
+-    "The mobile connection did not recover in time, so Web remote control cannot keep syncing yet.",
+-  "webRemoteControl.failure.relayUnavailable":
+-    "The external relay connection is unavailable. Make sure desktop is online, then try again.",
+-  "webRemoteControl.failure.unsupportedAction":
+-    "Web remote control mode can only open workspaces that are already open in the current desktop window.",
+-  "webRemoteControl.failure.unexpectedError":
+-    "Could not start mobile remote control. Try again from desktop.",
+-  "webRemoteControl.copyLink": "Copy link",
+-  "webRemoteControl.copyLink.copied": "Remote control link copied",
+-  "webRemoteControl.copyLinkFailed": "Could not copy remote control link: {error}",
+-  "webRemoteControl.refreshQr": "Refresh QR",
+-  "webRemoteControl.refreshQr.confirmTitle": "Refresh QR code?",
+-  "webRemoteControl.refreshQr.confirmDescription":
+-    "Refreshing will invalidate any remote control links that were copied or scanned before. Connected phones will need to scan the new QR code.",
+-  "webRemoteControl.refreshQr.success": "Remote control QR refreshed",
+-  "webRemoteControl.refreshQr.failed": "Could not refresh remote control QR: {error}",
+-  "webRemoteControl.stop": "Stop",
+-  "webRemoteControl.switchWorkspace": "Switch workspace",
+   "webRemoteControl.expandNavigation": "Expand tasks and workspaces",
+   "webRemoteControl.collapseNavigation": "Collapse tasks and workspaces",
+   "webRemoteControl.homeOnlyWorkspaces": "Workspaces",
+   "webRemoteControl.noSwitchableWorkspaces": "No switchable workspaces",
+-  "webRemoteControl.noTasks": "No tasks available in the current desktop window",
+-  "webRemoteControl.openTask": "Open task {title}",
+-  "webRemoteControl.taskStatus.idle": "Idle",
+-  "webRemoteControl.taskStatus.running": "Running",
+-  "webRemoteControl.taskStatus.completed": "Done",
+-  "webRemoteControl.taskStatus.error": "Error",
+   "webRemoteControl.switchDevice": "Switch device",
+   "webRemoteControl.unnamedDevice": "Unnamed device",
+   "webRemoteControl.mobileShell.backHome": "Back to task home",
+   "webRemoteControl.mobileShell.chatTitle": "Task chat",
+   "webRemoteControl.mobileShell.reconnecting": "Reconnecting automatically...",
+-  "webRemoteControl.stopSuccess": "Web remote control stopped",
+-  "webRemoteControl.startFailed": "Failed to start Web remote control: {error}",
+-  "webRemoteControl.stopFailed": "Failed to stop Web remote control: {error}",
+   "remote.selectDirectoryTitle": "Choose directory",
+   "remote.selectDirectoryDescription": "Choose a directory on {method} as the workspace.",
+   "remote.backToConnection": "Back to configuration",
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 5fa3375..4d4c6dc 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -2327,106 +2327,16 @@ const zhCN: Record<string, string> = {
+   "remote.phaseSub.handshakeDone": "服务端口 {port}",
+   "remote.phaseSub.readyOnline": "设备已上线，工作区历史已就绪",
+   "remote.sourceServerInstallCancelled": "已取消安装，准备好后可以重试。",
+-  "webRemoteControl.trigger": "移动端远程控制",
+-  "webRemoteControl.triggerStatus.idle": "远程控制未开启",
+-  "webRemoteControl.triggerStatus.starting": "远程控制启动中",
+-  "webRemoteControl.triggerStatus.waiting": "等待手机连接",
+-  "webRemoteControl.triggerStatus.connecting": "正在连接手机",
+-  "webRemoteControl.triggerStatus.connected": "手机已连接",
+-  "webRemoteControl.triggerStatus.error": "远程控制连接失败",
+-  "webRemoteControl.authRequired.title": "需要先登录",
+-  "webRemoteControl.authRequired.description":
+-    "登录后即可使用手机远程控制。手机和电脑需登录同一账号。",
+-  "webRemoteControl.authRequired.login": "登录",
+-  "webRemoteControl.title": "移动端远程控制",
+-  "webRemoteControl.description": "扫码或在手机上打开链接，即可远程控制当前工作区。",
+-  "webRemoteControl.statusLabel": "会话状态",
+-  "webRemoteControl.status.idle": "未开启",
+-  "webRemoteControl.status.starting": "启动中",
+-  "webRemoteControl.status.running": "等待手机连接",
+-  "webRemoteControl.status.connecting": "正在连接手机",
+-  "webRemoteControl.status.active": "手机已连接",
+-  "webRemoteControl.status.error": "连接失败",
+   "webRemoteControl.themeMenu.trigger": "选择主题",
+-  "webRemoteControl.statusDetail.idle": "等待连接。",
+-  "webRemoteControl.statusDetail.starting": "正在启动远程控制...",
+-  "webRemoteControl.statusDetail.running": "用手机扫码，或在手机上打开链接。",
+-  "webRemoteControl.statusDetail.connecting": "手机正在连接...",
+-  "webRemoteControl.statusDetail.active": "手机可以控制当前工作区。",
+-  "webRemoteControl.statusDetail.error": "无法启动移动端远程控制。",
+-  "webRemoteControl.generating": "正在准备二维码...",
+-  "webRemoteControl.qrAlt": "Web 远程控制二维码",
+-  "webRemoteControl.mobileQr.title": "手机扫码连接",
+-  "webRemoteControl.mobileQr.description": "用手机相机扫码，在手机上打开这个工作区。",
+-  "webRemoteControl.statusTag.phone": "手机",
+-  "webRemoteControl.statusTag.ready": "已就绪",
+-  "webRemoteControl.botChannel.title": "使用 Bot Channel",
+-  "webRemoteControl.botChannel.description": "连接聊天 Bot，适合更长时间的移动端访问。",
+-  "webRemoteControl.botChannel.weixin.title": "微信",
+-  "webRemoteControl.botChannel.weixin.description": "从微信会话打开这个工作区。",
+-  "webRemoteControl.botChannel.feishu.title": "飞书",
+-  "webRemoteControl.botChannel.feishu.description": "从飞书打开这个工作区。",
+-  "webRemoteControl.botChannel.lark.title": "Lark",
+-  "webRemoteControl.botChannel.lark.description": "从 Lark 打开这个工作区。",
+-  "webRemoteControl.botChannel.telegram.title": "Telegram",
+-  "webRemoteControl.botChannel.telegram.description": "从 Telegram 打开这个工作区。",
+-  "webRemoteControl.botChannel.configure": "去 Bot Channels 配置",
+-  "webRemoteControl.botChannel.manageBots": "机器人管理",
+-  "webRemoteControl.linkLabel": "远程控制链接",
+-  "webRemoteControl.linkPending": "远程控制链接就绪后会显示在这里。",
+-  "webRemoteControl.singlePageNote":
+-    "当前 relay 配对同一时间只支持一个手机页面；如果已经在别的页面打开，请先关闭旧页面。",
+-  "webRemoteControl.copyLink.description": "无法扫码？可以在手机上打开链接。",
+-  "webRemoteControl.failure.sessionNotFound":
+-    "当前 Web 远程控制链接已经失效，请回到桌面端重新开启一次。",
+-  "webRemoteControl.failure.sessionExpired":
+-    "这次 Web 远程控制会话已经结束了，需要在桌面端重新生成新的链接。",
+-  "webRemoteControl.failure.sessionConflict":
+-    "这个链接已经被其他页面占用，请关闭旧页面后重新扫码。",
+-  "webRemoteControl.failure.kicked":
+-    "relay 已踢出这次配对，请关闭其他页面后从桌面端重新生成二维码。",
+-  "webRemoteControl.failure.workspaceClosed":
+-    "桌面端共享的窗口已经关闭，请回到桌面端重新发起访问。",
+-  "webRemoteControl.failure.desktopDisconnected":
+-    "桌面端已经断开连接，当前 Web 远程控制无法继续使用。",
+-  "webRemoteControl.failure.invalidMobileConnection": "当前手机连接已失效，请刷新页面后重新连接。",
+-  "webRemoteControl.failure.desktopBootstrapTimeout":
+-    "桌面端响应超时，请确认窗口仍在运行后刷新页面。",
+-  "webRemoteControl.failure.connectionRecoveryTimeout":
+-    "手机端连接恢复超时，当前 Web 远程控制暂时无法继续同步。",
+-  "webRemoteControl.failure.relayUnavailable": "外部 relay 连接不可用，请确认桌面端在线后重试。",
+-  "webRemoteControl.failure.unsupportedAction":
+-    "当前是 Web 远程控制模式，只支持访问桌面端当前窗口已经打开的工作区。",
+-  "webRemoteControl.failure.unexpectedError": "无法启动移动端远程控制，请回到桌面端重试。",
+-  "webRemoteControl.copyLink": "复制链接",
+-  "webRemoteControl.copyLink.copied": "已复制远程控制链接",
+-  "webRemoteControl.copyLinkFailed": "复制远程控制链接失败：{error}",
+-  "webRemoteControl.refreshQr": "刷新二维码",
+-  "webRemoteControl.refreshQr.confirmTitle": "刷新二维码？",
+-  "webRemoteControl.refreshQr.confirmDescription":
+-    "刷新后，之前复制或扫码得到的远程控制链接将失效，已连接的手机需要重新扫码。",
+-  "webRemoteControl.refreshQr.success": "已刷新远程控制二维码",
+-  "webRemoteControl.refreshQr.failed": "刷新远程控制二维码失败：{error}",
+-  "webRemoteControl.stop": "停止",
+-  "webRemoteControl.switchWorkspace": "切换工作区",
+   "webRemoteControl.expandNavigation": "展开任务和工作区",
+   "webRemoteControl.collapseNavigation": "收起任务和工作区",
+   "webRemoteControl.homeOnlyWorkspaces": "工作区",
+   "webRemoteControl.noSwitchableWorkspaces": "没有可切换的工作区",
+-  "webRemoteControl.noTasks": "当前桌面窗口没有可展示的任务",
+-  "webRemoteControl.openTask": "打开任务 {title}",
+-  "webRemoteControl.taskStatus.idle": "空闲",
+-  "webRemoteControl.taskStatus.running": "运行中",
+-  "webRemoteControl.taskStatus.completed": "已完成",
+-  "webRemoteControl.taskStatus.error": "错误",
+   "webRemoteControl.switchDevice": "切换设备",
+   "webRemoteControl.unnamedDevice": "未命名设备",
+   "webRemoteControl.mobileShell.backHome": "返回任务首页",
+   "webRemoteControl.mobileShell.chatTitle": "任务会话",
+   "webRemoteControl.mobileShell.reconnecting": "正在自动重连...",
+-  "webRemoteControl.stopSuccess": "已关闭 Web 远程控制",
+-  "webRemoteControl.startFailed": "开启 Web 远程控制失败：{error}",
+-  "webRemoteControl.stopFailed": "关闭 Web 远程控制失败：{error}",
+   "remote.selectDirectoryTitle": "选择目录",
+   "remote.selectDirectoryDescription": "在 {method} 上选择一个目录作为工作区。",
+   "remote.backToConnection": "返回配置",
+diff --git a/packages/ui/src/index.ts b/packages/ui/src/index.ts
+index 891bf49..0b1df7f 100644
+--- a/packages/ui/src/index.ts
++++ b/packages/ui/src/index.ts
+@@ -3,11 +3,6 @@ export { AppErrorBoundary, ScopedErrorBoundary } from "./ErrorBoundary.js";
+ export type { ScopedErrorBoundaryVariant } from "./ErrorBoundary.js";
+ export { Button, buttonVariants } from "./components/ui/button.js";
+ export { DesktopWindowFrame } from "./DesktopWindowFrame.js";
+-export { WebRemoteControlDialog } from "@/web-remote-control/index.js";
+-export {
+-  WebRemoteControlFeatureProvider,
+-  useWebRemoteControlFeatureEnabled,
+-} from "./WebRemoteControlFeatureProvider.js";
+ export {
+   AssistantCodeCommentFeatureProvider,
+   useAssistantCodeCommentFeatureEnabled,
+diff --git a/packages/ui/src/project-sidebar/index.tsx b/packages/ui/src/project-sidebar/index.tsx
+index 3db6766..dc71a10 100644
+--- a/packages/ui/src/project-sidebar/index.tsx
++++ b/packages/ui/src/project-sidebar/index.tsx
+@@ -340,11 +340,6 @@ export const ProjectSidebar = memo(function ProjectSidebar(props: ProjectSidebar
+                 onLogin={props.onLogin}
+                 onLogout={props.onLogout}
+                 user={props.user}
+-                workspacePath={props.workspacePath}
+-                // 项目侧栏不再从 tab 反推身份；远控入口必须沿用当前 attachment 的精确 scope。
+-                workspaceIdentity={props.workspaceIdentity}
+-                workspaceRemoteSessionId={props.workspaceRemoteSessionId}
+-                isDesktop={props.isDesktop}
+                 banner={banner}
+               />
+             </div>
+diff --git a/packages/ui/src/web-remote-control/WebRemoteControlDialog.tsx b/packages/ui/src/web-remote-control/WebRemoteControlDialog.tsx
+deleted file mode 100644
+index 82b9440..0000000
+--- a/packages/ui/src/web-remote-control/WebRemoteControlDialog.tsx
++++ /dev/null
+@@ -1,625 +0,0 @@
+-import {
+-  isSameWebRemoteControlTarget,
+-  isReusableWebRemoteControlSession,
+-  getStatusLabel,
+-  getStatusDetail,
+-  getStatusDotClassName,
+-  getWebRemoteControlStatusTagLabel,
+-  isSameWebRemoteControlStatus,
+-  getFailureDescription,
+-} from "@/web-remote-control/domain/presentation.js";
+-import { memo, useEffect, useMemo, useState } from "react";
+-import QRCode from "qrcode";
+-import type { BotProvider, WebRemoteControlStatus } from "@zcode/shared";
+-import {
+-  Bot as BotIcon,
+-  CopyIcon,
+-  LoaderCircle,
+-  MonitorSmartphone,
+-  Smartphone,
+-  Unplug,
+-  XIcon,
+-} from "lucide-react";
+-import { BotsDialog } from "@/BotsDialog.js";
+-import { ProviderIcon } from "@/BotsDialog/shared.js";
+-import { Button } from "@/components/ui/button.js";
+-import {
+-  Dialog,
+-  DialogContent,
+-  DialogDescription,
+-  DialogHeader,
+-  DialogTitle,
+-} from "@/components/ui/dialog.js";
+-import { toast } from "@/components/ui/toast.js";
+-import { useZCodeStore } from "@/store/StoreProvider.js";
+-import { usePlatform } from "@/hooks/usePlatform.js";
+-import { useOAuth } from "@/hooks/useOAuth.js";
+-import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+-import { logger } from "@/logger.js";
+-import { getBotProviderRegionTagLabelId } from "@/botsUi.js";
+-
+-type RemoteControlBotProvider = Extract<BotProvider, "weixin" | "feishu" | "lark" | "telegram">;
+-
+-const REMOTE_CONTROL_BOT_ENTRIES: Array<{
+-  provider: RemoteControlBotProvider;
+-}> = [
+-  { provider: "weixin" },
+-  { provider: "feishu" },
+-  { provider: "lark" },
+-  { provider: "telegram" },
+-];
+-
+-function WebRemoteControlLoginButton({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
+-  const { intl } = useZCodeIntl();
+-  const hasUser = useZCodeStore((state) => Boolean(state.user));
+-  const requestLoginEntry = useZCodeStore((state) => state.requestLoginEntry);
+-  const { activeProvider, loadingProviders, refreshProviders } = useOAuth();
+-
+-  return (
+-    <Button
+-      type="button"
+-      data-testid="web-remote-control-login"
+-      className="enabled:cursor-pointer"
+-      disabled={loadingProviders}
+-      onClick={() => {
+-        // 远控401不清全局用户；必须指定当前渠道建立新登录尝试，避免统一入口把缓存用户当作成功。
+-        if (hasUser && !activeProvider) {
+-          toast(intl.formatMessage({ id: "login.oauth.loginFailure" }));
+-          void refreshProviders();
+-          return;
+-        }
+-        onOpenChange(false);
+-        requestLoginEntry(activeProvider ?? undefined, "app-login");
+-      }}
+-    >
+-      {intl.formatMessage({ id: "webRemoteControl.authRequired.login" })}
+-    </Button>
+-  );
+-}
+-
+-export const WebRemoteControlDialog = memo(function WebRemoteControlDialogComponent({
+-  open,
+-  onOpenChange,
+-  workspacePath,
+-  workspaceIdentity,
+-  remoteSessionId,
+-  initialTaskId,
+-}: {
+-  open: boolean;
+-  onOpenChange: (open: boolean) => void;
+-  workspacePath: string;
+-  workspaceIdentity?: string;
+-  remoteSessionId?: string;
+-  initialTaskId?: string;
+-}) {
+-  const platform = usePlatform();
+-  const { intl } = useZCodeIntl();
+-  const [status, setStatus] = useState<WebRemoteControlStatus>({
+-    status: "idle",
+-  });
+-  const [loading, setLoading] = useState(false);
+-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+-  const [botsDialogOpen, setBotsDialogOpen] = useState(false);
+-  const [botEntryProvider, setBotEntryProvider] = useState<RemoteControlBotProvider | null>(null);
+-
+-  const statusLabel = useMemo(
+-    () => getStatusLabel(status, intl.formatMessage),
+-    [intl.formatMessage, status],
+-  );
+-  const statusDetail = useMemo(
+-    () => getStatusDetail(status, intl.formatMessage),
+-    [intl.formatMessage, status],
+-  );
+-  const failureDescription = useMemo(
+-    () => getFailureDescription(status.failure, intl.formatMessage),
+-    [intl.formatMessage, status.failure],
+-  );
+-  const statusTagLabel = useMemo(
+-    () => getWebRemoteControlStatusTagLabel(status, intl.formatMessage),
+-    [intl.formatMessage, status],
+-  );
+-  const statusDotClassName = getStatusDotClassName(status);
+-
+-  useEffect(() => {
+-    if (!open) {
+-      return;
+-    }
+-
+-    let cancelled = false;
+-
+-    const syncWebRemoteControlStatus = async () => {
+-      setLoading(true);
+-
+-      try {
+-        const currentStatus = await platform.getWebRemoteControlStatus();
+-        let nextStatus: WebRemoteControlStatus;
+-        if (
+-          currentStatus.status === "auth-required" ||
+-          isSameWebRemoteControlTarget(
+-            currentStatus,
+-            workspacePath,
+-            workspaceIdentity,
+-            remoteSessionId,
+-          ) ||
+-          isReusableWebRemoteControlSession(currentStatus)
+-        ) {
+-          nextStatus = currentStatus;
+-        } else {
+-          const startResult = await platform.startWebRemoteControl({
+-            workspacePath,
+-            workspaceIdentity,
+-            remoteSessionId,
+-            initialTaskId,
+-          });
+-          // 兼容仍可返回 cancelled 的平台实现；当前 Desktop 不再叠加原生确认。
+-          nextStatus = startResult.status === "cancelled" ? { status: "idle" } : startResult;
+-        }
+-        // Bugfix: 手机端默认主题已统一收敛到 dark，不再依赖二维码 URL 透传 theme。
+-        // 这里去掉启动参数里的 theme，避免桌面端主题无意义地参与远控链路。
+-
+-        if (!cancelled) {
+-          setStatus(nextStatus);
+-          logger.info("[WebRemoteControlDialog] Web 远程控制状态已同步", {
+-            workspacePath,
+-            workspaceIdentity: workspaceIdentity ?? "none",
+-            remoteSessionId: remoteSessionId ?? "none",
+-            initialTaskId: initialTaskId ?? "none",
+-            status: nextStatus.status,
+-            sessionId: nextStatus.sessionId ?? "none",
+-          });
+-        }
+-      } catch (error) {
+-        const currentStatus = await platform.getWebRemoteControlStatus().catch(() => null);
+-        if (currentStatus?.status === "auth-required") {
+-          if (!cancelled) setStatus(currentStatus);
+-          return;
+-        }
+-        const message = error instanceof Error ? error.message : String(error);
+-        if (!cancelled) {
+-          setStatus({
+-            status: "error",
+-            workspacePath,
+-            remoteSessionId,
+-            error: message,
+-          });
+-          toast(intl.formatMessage({ id: "webRemoteControl.startFailed" }, { error: message }));
+-        }
+-        logger.error("[WebRemoteControlDialog] 启动 Web 远程控制失败", {
+-          workspacePath,
+-          workspaceIdentity: workspaceIdentity ?? "none",
+-          remoteSessionId: remoteSessionId ?? "none",
+-          initialTaskId: initialTaskId ?? "none",
+-          error: message,
+-        });
+-      } finally {
+-        if (!cancelled) {
+-          setLoading(false);
+-        }
+-      }
+-    };
+-
+-    void syncWebRemoteControlStatus();
+-
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [intl, open, platform, remoteSessionId, workspaceIdentity, workspacePath, initialTaskId]);
+-
+-  useEffect(() => {
+-    if (!open) {
+-      return;
+-    }
+-
+-    let cancelled = false;
+-
+-    const pollWebRemoteControlStatus = async () => {
+-      try {
+-        const nextStatus = await platform.getWebRemoteControlStatus();
+-        if (cancelled) {
+-          return;
+-        }
+-
+-        const shouldApplyStatus =
+-          isSameWebRemoteControlTarget(
+-            nextStatus,
+-            workspacePath,
+-            workspaceIdentity,
+-            remoteSessionId,
+-          ) ||
+-          isReusableWebRemoteControlSession(nextStatus) ||
+-          nextStatus.status === "auth-required" ||
+-          nextStatus.status === "idle" ||
+-          nextStatus.status === "error";
+-        if (!shouldApplyStatus) {
+-          return;
+-        }
+-
+-        setStatus((currentStatus) =>
+-          isSameWebRemoteControlStatus(currentStatus, nextStatus) ? currentStatus : nextStatus,
+-        );
+-      } catch {
+-        // Bugfix: Web 远程控制的状态变化发生在 main / relay 侧，
+-        // 如果弹层只在打开时同步一次，状态会长期停在“等待连接”。
+-        // 这里用轻量轮询补齐状态刷新；单次失败时静默忽略，避免打断用户操作。
+-      }
+-    };
+-
+-    const intervalId = window.setInterval(() => {
+-      void pollWebRemoteControlStatus();
+-    }, 1000);
+-
+-    return () => {
+-      cancelled = true;
+-      window.clearInterval(intervalId);
+-    };
+-  }, [open, platform, remoteSessionId, workspaceIdentity, workspacePath]);
+-
+-  useEffect(() => {
+-    if (!status.qrUrl) {
+-      setQrDataUrl(null);
+-      return;
+-    }
+-
+-    let cancelled = false;
+-    setQrDataUrl(null);
+-
+-    void QRCode.toDataURL(status.qrUrl, {
+-      margin: 1,
+-      width: 320,
+-    })
+-      .then((dataUrl: string) => {
+-        if (!cancelled) {
+-          setQrDataUrl(dataUrl);
+-        }
+-      })
+-      .catch((error: unknown) => {
+-        const message = error instanceof Error ? error.message : String(error);
+-        logger.error("[WebRemoteControlDialog] 生成二维码失败", message);
+-      });
+-
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [status.qrUrl]);
+-
+-  const handleCopyLink = async () => {
+-    if (!status.connectUrl) {
+-      return;
+-    }
+-
+-    try {
+-      await navigator.clipboard.writeText(status.connectUrl);
+-      toast(intl.formatMessage({ id: "webRemoteControl.copyLink.copied" }));
+-      logger.info("[WebRemoteControlDialog] 已复制 Web 远程控制链接", {
+-        workspacePath,
+-        remoteSessionId: remoteSessionId ?? "none",
+-        sessionId: status.sessionId ?? "none",
+-      });
+-    } catch (error) {
+-      const message = error instanceof Error ? error.message : String(error);
+-      toast(intl.formatMessage({ id: "webRemoteControl.copyLinkFailed" }, { error: message }));
+-      logger.error("[WebRemoteControlDialog] 复制 Web 远程控制链接失败", message);
+-    }
+-  };
+-
+-  const handleStop = async () => {
+-    setLoading(true);
+-    try {
+-      await platform.stopWebRemoteControl();
+-      setStatus({ status: "idle" });
+-      onOpenChange(false);
+-      toast(intl.formatMessage({ id: "webRemoteControl.stopSuccess" }));
+-      logger.info("[WebRemoteControlDialog] 已关闭 Web 远程控制", {
+-        workspacePath,
+-        remoteSessionId: remoteSessionId ?? "none",
+-      });
+-    } catch (error) {
+-      const message = error instanceof Error ? error.message : String(error);
+-      toast(intl.formatMessage({ id: "webRemoteControl.stopFailed" }, { error: message }));
+-      logger.error("[WebRemoteControlDialog] 关闭 Web 远程控制失败", message);
+-    } finally {
+-      setLoading(false);
+-    }
+-  };
+-
+-  const handleDialogOpenChange = (nextOpen: boolean) => {
+-    logger.info("[WebRemoteControlDialog] 弹层开关状态变化", {
+-      workspacePath,
+-      remoteSessionId: remoteSessionId ?? "none",
+-      nextOpen,
+-    });
+-    onOpenChange(nextOpen);
+-  };
+-
+-  const handleDismiss = () => {
+-    logger.info("[WebRemoteControlDialog] 用户点击右上角关闭按钮", {
+-      workspacePath,
+-      remoteSessionId: remoteSessionId ?? "none",
+-      sessionId: status.sessionId ?? "none",
+-      status: status.status,
+-    });
+-    handleDialogOpenChange(false);
+-  };
+-
+-  const handleOpenBotEntry = (provider: RemoteControlBotProvider) => {
+-    setBotEntryProvider(provider);
+-    setBotsDialogOpen(true);
+-    logger.info("[WebRemoteControlDialog] 打开 Bot Channel 配置入口", {
+-      workspacePath,
+-      workspaceIdentity: workspaceIdentity ?? "none",
+-      provider,
+-    });
+-  };
+-
+-  const handleOpenBotsDialog = () => {
+-    setBotEntryProvider(null);
+-    setBotsDialogOpen(true);
+-    logger.info("[WebRemoteControlDialog] 打开 Bots 总配置入口", {
+-      workspacePath,
+-      workspaceIdentity: workspaceIdentity ?? "none",
+-    });
+-  };
+-
+-  return (
+-    <>
+-      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+-        <DialogContent
+-          showCloseButton={false}
+-          // Bugfix: Mobile Remote Control 弹窗之前比 Remote Connect 更宽也更贴近窗口边缘，
+-          // 启动二维码和 Bot Channel 内容时会显得层级不一致。这里复用 Remote Connect 的外层尺寸，
+-          // 但不强制撑满高度；远控内容比 Remote Connect 少，内容自适应能避免窗口显得空。
+-          className="max-h-[calc(100vh-6rem)] max-w-4xl gap-0 overflow-hidden rounded-2xl p-0"
+-        >
+-          <Button
+-            type="button"
+-            variant="ghost"
+-            size="icon-sm"
+-            // Bugfix: 这个弹窗会贴近桌面窗口顶部显示，默认 close 在 Electron drag 区里容易点不中。
+-            // 这里改成显式点击关闭，并把按钮本身标成 no-drag，保证右上角关闭动作能稳定命中。
+-            // Bugfix: 远控弹层内可点击控件之前没有显式 pointer cursor，桌面端 hover 时不像可操作元素。
+-            // 这里仅给启用态补手指指针，禁用态仍沿用 Button 的 disabled 交互语义。
+-            className="absolute top-2 right-2 enabled:cursor-pointer [app-region:no-drag]"
+-            onClick={handleDismiss}
+-          >
+-            <XIcon />
+-            <span className="sr-only">Close</span>
+-          </Button>
+-          <div
+-            data-testid="web-remote-control-dialog-scroll"
+-            className="max-h-[calc(100vh-6rem)] min-h-0 overflow-y-auto p-5"
+-          >
+-            <DialogHeader className="space-y-2 pr-8">
+-              <div className="flex items-center gap-2">
+-                <div className="flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-primary">
+-                  <MonitorSmartphone className="size-5" />
+-                </div>
+-                <div className="space-y-1">
+-                  <DialogTitle>{intl.formatMessage({ id: "webRemoteControl.title" })}</DialogTitle>
+-                  <DialogDescription>
+-                    {intl.formatMessage({ id: "webRemoteControl.description" })}
+-                  </DialogDescription>
+-                </div>
+-              </div>
+-            </DialogHeader>
+-
+-            <div
+-              data-testid="web-remote-control-main-grid"
+-              className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1.45fr)_minmax(300px,1fr)]"
+-            >
+-              <section
+-                data-testid="web-remote-control-scan-card"
+-                className="flex min-h-[360px] flex-col rounded-xl border border-border bg-card p-4"
+-              >
+-                {status.status === "auth-required" ? (
+-                  <div
+-                    data-testid="web-remote-control-auth-required"
+-                    className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-6 text-center"
+-                  >
+-                    <MonitorSmartphone className="size-8 text-foreground-subtle" />
+-                    <div className="space-y-2">
+-                      <h3 className="text-ui-base font-medium text-foreground">
+-                        {intl.formatMessage({ id: "webRemoteControl.authRequired.title" })}
+-                      </h3>
+-                      <p className="text-ui-base/relaxed text-foreground-subtle">
+-                        {intl.formatMessage({ id: "webRemoteControl.authRequired.description" })}
+-                      </p>
+-                    </div>
+-                    <WebRemoteControlLoginButton onOpenChange={onOpenChange} />
+-                  </div>
+-                ) : (
+-                  <>
+-                    <div className="mb-4 flex items-start gap-2">
+-                      <Smartphone className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
+-                      <div className="min-w-0 space-y-1">
+-                        <div className="text-ui-base font-medium text-foreground">
+-                          {intl.formatMessage({
+-                            id: "webRemoteControl.mobileQr.title",
+-                          })}
+-                        </div>
+-                        <p className="text-ui-base/relaxed text-foreground-subtle">
+-                          {intl.formatMessage({
+-                            id: "webRemoteControl.mobileQr.description",
+-                          })}
+-                        </p>
+-                      </div>
+-                    </div>
+-                    <div
+-                      data-testid="web-remote-control-connection-card"
+-                      className="mb-3 rounded-lg bg-surface px-3 py-2"
+-                    >
+-                      <div className="flex flex-wrap items-center justify-between gap-3">
+-                        <div className="min-w-0 flex-1 space-y-1">
+-                          <div className="flex min-w-0 items-center gap-2">
+-                            <div className="text-ui-base font-medium text-foreground">
+-                              {statusLabel}
+-                            </div>
+-                            <div className="flex min-w-0 items-center gap-1.5 rounded-full bg-card px-2 py-0.5 text-ui-xs font-medium text-foreground-subtle">
+-                              <span
+-                                className={`size-1.5 shrink-0 rounded-full ${statusDotClassName}`}
+-                              />
+-                              <span className="truncate">{statusTagLabel}</span>
+-                            </div>
+-                          </div>
+-                          <div className="text-ui-base/relaxed text-foreground-subtle">
+-                            {statusDetail}
+-                          </div>
+-                        </div>
+-                        {loading ? (
+-                          <LoaderCircle className="size-4 animate-spin text-foreground-subtle" />
+-                        ) : (
+-                          <Button
+-                            type="button"
+-                            variant="outline"
+-                            size="default"
+-                            className="shrink-0 gap-2 enabled:cursor-pointer"
+-                            onClick={() => void handleStop()}
+-                            disabled={status.status === "idle"}
+-                          >
+-                            <Unplug className="size-3.5" />
+-                            {intl.formatMessage({ id: "webRemoteControl.stop" })}
+-                          </Button>
+-                        )}
+-                      </div>
+-                      {failureDescription ? (
+-                        <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-ui-base/relaxed text-destructive">
+-                          <p>{failureDescription}</p>
+-                          {status.failure?.message &&
+-                          status.failure.message !== failureDescription ? (
+-                            <p className="mt-1 text-ui-xs/relaxed opacity-80">
+-                              {status.failure.message}
+-                            </p>
+-                          ) : null}
+-                        </div>
+-                      ) : status.error ? (
+-                        <p className="mt-3 text-ui-base/relaxed text-destructive">{status.error}</p>
+-                      ) : null}
+-                      <div
+-                        data-testid="web-remote-control-copy-link-row"
+-                        className="mt-3 flex min-h-10 flex-wrap items-center gap-3 border-t border-border pt-3"
+-                      >
+-                        <div className="min-w-48 flex-1 text-ui-base/relaxed text-foreground-subtle">
+-                          {intl.formatMessage({
+-                            id: "webRemoteControl.copyLink.description",
+-                          })}
+-                        </div>
+-                        <Button
+-                          type="button"
+-                          variant="outline"
+-                          size="default"
+-                          className="shrink-0 gap-2 enabled:cursor-pointer"
+-                          onClick={() => void handleCopyLink()}
+-                          disabled={!status.connectUrl || loading}
+-                        >
+-                          <CopyIcon className="size-3.5" />
+-                          {intl.formatMessage({ id: "webRemoteControl.copyLink" })}
+-                        </Button>
+-                      </div>
+-                    </div>
+-                    <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-background-alt p-4">
+-                      {qrDataUrl ? (
+-                        <img
+-                          src={qrDataUrl}
+-                          alt={intl.formatMessage({ id: "webRemoteControl.qrAlt" })}
+-                          className="size-64 max-w-full rounded-lg bg-white p-3"
+-                        />
+-                      ) : (
+-                        <div className="flex flex-col items-center gap-3 text-center text-ui-base text-foreground-subtle">
+-                          <LoaderCircle className="size-5 animate-spin" />
+-                          <span>
+-                            {intl.formatMessage({
+-                              id: "webRemoteControl.generating",
+-                            })}
+-                          </span>
+-                        </div>
+-                      )}
+-                    </div>
+-                  </>
+-                )}
+-              </section>
+-
+-              <section className="flex min-h-[360px] flex-col rounded-xl border border-border bg-card p-4">
+-                <div className="mb-4 flex items-start gap-2">
+-                  <BotIcon className="mt-0.5 size-4 shrink-0 text-foreground-subtle" />
+-                  <div className="min-w-0 space-y-1">
+-                    <div className="text-ui-base font-medium text-foreground">
+-                      {intl.formatMessage({
+-                        id: "webRemoteControl.botChannel.title",
+-                      })}
+-                    </div>
+-                    <p className="text-ui-base/relaxed text-foreground-subtle">
+-                      {intl.formatMessage({
+-                        id: "webRemoteControl.botChannel.description",
+-                      })}
+-                    </p>
+-                  </div>
+-                </div>
+-                <div className="grid min-h-0 flex-1 gap-3">
+-                  {REMOTE_CONTROL_BOT_ENTRIES.map((entry) => {
+-                    const regionTagLabelId = getBotProviderRegionTagLabelId(entry.provider);
+-
+-                    return (
+-                      <button
+-                        key={entry.provider}
+-                        type="button"
+-                        className="flex min-h-0 cursor-pointer items-start gap-3 rounded-lg border border-transparent bg-surface px-3 py-3 text-left transition-colors hover:border-input-border-focused hover:bg-surface-hover focus-visible:border-input-border-focused"
+-                        onClick={() => handleOpenBotEntry(entry.provider)}
+-                      >
+-                        {/* Bugfix: 远控 Bot Channel 入口原来用通用 lucide 图标，用户无法一眼区分微信、飞书和 Telegram。
+-                            这里直接复用 BotsDialog 的渠道 logo，不再额外包裹容器，保证品牌图标本身作为视觉识别。 */}
+-                        <ProviderIcon provider={entry.provider} className="size-12 shrink-0" />
+-                        <span className="min-w-0 flex-1 space-y-1">
+-                          <span className="flex min-w-0 items-center gap-1.5 text-ui-base font-medium text-foreground">
+-                            <span className="min-w-0 truncate">
+-                              {intl.formatMessage({
+-                                id: `webRemoteControl.botChannel.${entry.provider}.title`,
+-                              })}
+-                            </span>
+-                            {regionTagLabelId ? (
+-                              <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-border px-2 text-ui-xs font-medium leading-none text-foreground-subtle">
+-                                {intl.formatMessage({ id: regionTagLabelId })}
+-                              </span>
+-                            ) : null}
+-                          </span>
+-                          <span className="block text-ui-base/relaxed text-foreground-subtle">
+-                            {intl.formatMessage({
+-                              id: `webRemoteControl.botChannel.${entry.provider}.description`,
+-                            })}
+-                          </span>
+-                          <span className="block text-ui-base font-medium text-primary">
+-                            {intl.formatMessage({
+-                              id: "webRemoteControl.botChannel.configure",
+-                            })}
+-                          </span>
+-                        </span>
+-                      </button>
+-                    );
+-                  })}
+-                </div>
+-                <div className="mt-3">
+-                  <Button
+-                    type="button"
+-                    variant="outline"
+-                    size="lg"
+-                    data-testid="web-remote-control-open-bots"
+-                    className="w-full justify-center gap-2 enabled:cursor-pointer"
+-                    onClick={handleOpenBotsDialog}
+-                  >
+-                    <BotIcon className="size-3.5" />
+-                    {intl.formatMessage({
+-                      id: "webRemoteControl.botChannel.manageBots",
+-                    })}
+-                  </Button>
+-                </div>
+-              </section>
+-            </div>
+-          </div>
+-        </DialogContent>
+-      </Dialog>
+-      <BotsDialog
+-        open={botsDialogOpen}
+-        onOpenChange={setBotsDialogOpen}
+-        entryProvider={botEntryProvider}
+-      />
+-    </>
+-  );
+-});
+diff --git a/packages/ui/src/web-remote-control/contract.test.ts b/packages/ui/src/web-remote-control/contract.test.ts
+index b59b456..ca3ed84 100644
+--- a/packages/ui/src/web-remote-control/contract.test.ts
++++ b/packages/ui/src/web-remote-control/contract.test.ts
+@@ -1,22 +1,18 @@
+ import { describe, expect, it } from "vitest";
+-import {
+-  isSameWebRemoteControlTarget,
+-  isReusableWebRemoteControlSession,
+-} from "@/web-remote-control/index.js";
+ 
+-describe("remote control UI target contract", () => {
+-  it("keeps identity and remote session distinct from display paths", () => {
+-    const status = {
+-      status: "active",
+-      workspacePath: "/project",
+-      workspaceIdentity: "host-a",
+-      remoteSessionId: "session-a",
+-      sessionId: "relay",
+-      mobileConnected: true,
+-    } as const;
+-    expect(isSameWebRemoteControlTarget(status, "/project", "host-a", "session-a")).toBe(true);
+-    expect(isSameWebRemoteControlTarget(status, "/project", "host-b", "session-a")).toBe(false);
+-    expect(isSameWebRemoteControlTarget(status, "/project", "host-a", "session-b")).toBe(false);
+-    expect(isReusableWebRemoteControlSession(status)).toBe(true);
++import { deviceNavigation } from "@/web-remote-control/contract.example.js";
++import { webRemoteControlUiModule } from "@/web-remote-control/module.js";
++
++// 契约测试只 import contract 与 module，不知道实现是谁；同一份测试应同时跑真实现与跨进程代理。
++describe("web-remote-control-ui contract", () => {
++  it("declares its module manifest", () => {
++    expect(webRemoteControlUiModule.id).toBe("web-remote-control-ui");
++  });
++
++  it("shapes device navigation from the remote switcher contract", () => {
++    const chooseOtherDevice = () => {};
++    const navigation = deviceNavigation(chooseOtherDevice);
++    expect(navigation.deviceName).toBe("Example computer");
++    expect(navigation.chooseOtherDevice).toBe(chooseOtherDevice);
+   });
+ });
+diff --git a/packages/ui/src/web-remote-control/domain/presentation.ts b/packages/ui/src/web-remote-control/domain/presentation.ts
+deleted file mode 100644
+index 335f80a..0000000
+--- a/packages/ui/src/web-remote-control/domain/presentation.ts
++++ /dev/null
+@@ -1,209 +0,0 @@
+-import type { WebRemoteControlStatus, WebRemoteControlFailure } from "@zcode/shared";
+-import { resolveWebRemoteControlWorkspaceKey } from "@zcode/shared";
+-import type { useZCodeIntl } from "@/i18n/IntlProvider.js";
+-
+-export function isSameWebRemoteControlTarget(
+-  status: WebRemoteControlStatus,
+-  workspacePath: string,
+-  workspaceIdentity?: string,
+-  remoteSessionId?: string,
+-): boolean {
+-  if (status.status === "idle" || status.status === "error") {
+-    return false;
+-  }
+-
+-  // Bugfix: 之前这里仅凭 sessionId 存在就判定“同一目标”，会把其他 workspace 的旧会话误复用，
+-  // 导致当前 workspace 打开弹层时不触发 start，状态长期卡在 starting。
+-  // 这里改为严格比较 workspaceKey(identity 优先) + remoteSessionId，确保会话和目标一一对应。
+-  const statusWorkspacePath = status.workspacePath?.trim();
+-  if (!statusWorkspacePath) {
+-    return false;
+-  }
+-
+-  const expectedWorkspaceKey = resolveWebRemoteControlWorkspaceKey({
+-    workspacePath,
+-    workspaceIdentity,
+-  });
+-  const statusWorkspaceKey = resolveWebRemoteControlWorkspaceKey({
+-    workspacePath: statusWorkspacePath,
+-    workspaceIdentity: status.workspaceIdentity,
+-  });
+-  if (statusWorkspaceKey !== expectedWorkspaceKey) {
+-    return false;
+-  }
+-
+-  const expectedRemoteSessionId = remoteSessionId?.trim() || undefined;
+-  const statusRemoteSessionId = status.remoteSessionId?.trim() || undefined;
+-  if (statusRemoteSessionId !== expectedRemoteSessionId) {
+-    return false;
+-  }
+-
+-  return Boolean(status.windowControlSessionId ?? status.sessionId);
+-}
+-
+-export function isReusableWebRemoteControlSession(status: WebRemoteControlStatus): boolean {
+-  if (status.status === "idle" || status.status === "error") {
+-    return false;
+-  }
+-
+-  // Bugfix: 打开桌面弹层只是查看/管理 window 级远控入口，不能因为当前桌面 workspace
+-  // 和手机已 bridge 的 workspace 不一致就重启 device relay 会话；否则会主动给手机发
+-  // desktop-disconnected。只有已经连上手机的会话才跨 workspace 复用，避免未连接的旧二维码
+-  // 继续把新扫码用户带回旧默认 workspace。
+-  return Boolean(status.mobileConnected && (status.windowControlSessionId ?? status.sessionId));
+-}
+-
+-export function getStatusLabel(
+-  status: WebRemoteControlStatus,
+-  formatMessage: ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"],
+-): string {
+-  switch (status.status) {
+-    case "starting":
+-      return formatMessage({ id: "webRemoteControl.status.starting" });
+-    case "running":
+-      return formatMessage({ id: "webRemoteControl.status.running" });
+-    case "connecting":
+-      return formatMessage({ id: "webRemoteControl.status.connecting" });
+-    case "active":
+-      return formatMessage({ id: "webRemoteControl.status.active" });
+-    case "error":
+-      return formatMessage({ id: "webRemoteControl.status.error" });
+-    default:
+-      return formatMessage({ id: "webRemoteControl.status.idle" });
+-  }
+-}
+-
+-export function getStatusDetail(
+-  status: WebRemoteControlStatus,
+-  formatMessage: ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"],
+-): string {
+-  switch (status.status) {
+-    case "starting":
+-      return formatMessage({ id: "webRemoteControl.statusDetail.starting" });
+-    case "running":
+-      return formatMessage({ id: "webRemoteControl.statusDetail.running" });
+-    case "connecting":
+-      return formatMessage({ id: "webRemoteControl.statusDetail.connecting" });
+-    case "active":
+-      return formatMessage({ id: "webRemoteControl.statusDetail.active" });
+-    case "error":
+-      return formatMessage({ id: "webRemoteControl.statusDetail.error" });
+-    default:
+-      return formatMessage({ id: "webRemoteControl.statusDetail.idle" });
+-  }
+-}
+-
+-export function getStatusDotClassName(status: WebRemoteControlStatus): string {
+-  if (status.status === "error") {
+-    return "bg-destructive";
+-  }
+-  if (status.status === "active") {
+-    return "bg-success";
+-  }
+-  if (status.status === "idle") {
+-    return "bg-border";
+-  }
+-  return "bg-warning";
+-}
+-
+-export function getWebRemoteControlStatusTagLabel(
+-  status: WebRemoteControlStatus,
+-  formatMessage: ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"],
+-): string {
+-  const deviceName =
+-    status.mobileDeviceInfo?.browserPlatform?.trim() || status.mobileDeviceInfo?.name?.trim();
+-
+-  if (deviceName) {
+-    return deviceName;
+-  }
+-
+-  if (status.mobileConnected) {
+-    return formatMessage({ id: "webRemoteControl.statusTag.phone" });
+-  }
+-
+-  if (status.status === "idle") {
+-    return formatMessage({ id: "webRemoteControl.status.idle" });
+-  }
+-
+-  if (status.status === "error") {
+-    return formatMessage({ id: "webRemoteControl.status.error" });
+-  }
+-
+-  return formatMessage({ id: "webRemoteControl.statusTag.ready" });
+-}
+-
+-export function isSameWebRemoteControlStatus(
+-  left: WebRemoteControlStatus,
+-  right: WebRemoteControlStatus,
+-): boolean {
+-  return (
+-    left.status === right.status &&
+-    left.sessionId === right.sessionId &&
+-    left.windowControlSessionId === right.windowControlSessionId &&
+-    left.deviceToken === right.deviceToken &&
+-    left.expiresAt === right.expiresAt &&
+-    left.mobileConnected === right.mobileConnected &&
+-    left.mobileDeviceInfo?.updatedAt === right.mobileDeviceInfo?.updatedAt &&
+-    left.mobileDeviceInfo?.userAgent === right.mobileDeviceInfo?.userAgent &&
+-    left.mobileDeviceInfo?.viewport?.width === right.mobileDeviceInfo?.viewport?.width &&
+-    left.mobileDeviceInfo?.viewport?.height === right.mobileDeviceInfo?.viewport?.height &&
+-    left.qrUrl === right.qrUrl &&
+-    left.connectUrl === right.connectUrl &&
+-    left.workspacePath === right.workspacePath &&
+-    left.workspaceIdentity === right.workspaceIdentity &&
+-    left.remoteSessionId === right.remoteSessionId &&
+-    left.error === right.error &&
+-    left.failure?.reason === right.failure?.reason &&
+-    left.failure?.message === right.failure?.message
+-  );
+-}
+-
+-export function getFailureDescription(
+-  failure: WebRemoteControlFailure | undefined,
+-  formatMessage: ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"],
+-): string | null {
+-  if (!failure) {
+-    return null;
+-  }
+-
+-  switch (failure.reason) {
+-    case "session-not-found":
+-      return formatMessage({ id: "webRemoteControl.failure.sessionNotFound" });
+-    case "session-expired":
+-      return formatMessage({ id: "webRemoteControl.failure.sessionExpired" });
+-    case "session-conflict":
+-      if (failure.message?.toLowerCase().includes("kicked")) {
+-        return formatMessage({ id: "webRemoteControl.failure.kicked" });
+-      }
+-      return formatMessage({ id: "webRemoteControl.failure.sessionConflict" });
+-    case "workspace-closed":
+-      return formatMessage({ id: "webRemoteControl.failure.workspaceClosed" });
+-    case "desktop-disconnected":
+-      return formatMessage({
+-        id: "webRemoteControl.failure.desktopDisconnected",
+-      });
+-    case "invalid-mobile-connection":
+-      return formatMessage({
+-        id: "webRemoteControl.failure.invalidMobileConnection",
+-      });
+-    case "desktop-bootstrap-timeout":
+-      return formatMessage({
+-        id: "webRemoteControl.failure.desktopBootstrapTimeout",
+-      });
+-    case "connection-recovery-timeout":
+-      return formatMessage({
+-        id: "webRemoteControl.failure.connectionRecoveryTimeout",
+-      });
+-    case "relay-unavailable":
+-      return formatMessage({ id: "webRemoteControl.failure.relayUnavailable" });
+-    case "unsupported-action":
+-      return formatMessage({
+-        id: "webRemoteControl.failure.unsupportedAction",
+-      });
+-    case "device-not-owned":
+-    case "auth-required":
+-      return failure.message ?? null;
+-    case "unexpected-error":
+-      return formatMessage({ id: "webRemoteControl.failure.unexpectedError" });
+-  }
+-}
+diff --git a/packages/ui/src/web-remote-control/index.ts b/packages/ui/src/web-remote-control/index.ts
+index 5e76109..1cc825d 100644
+--- a/packages/ui/src/web-remote-control/index.ts
++++ b/packages/ui/src/web-remote-control/index.ts
+@@ -1,8 +1,2 @@
+-export { WebRemoteControlDialog } from "@/web-remote-control/WebRemoteControlDialog.js";
+-export {
+-  isSameWebRemoteControlTarget,
+-  isReusableWebRemoteControlSession,
+-  getWebRemoteControlStatusTagLabel,
+-} from "@/web-remote-control/domain/presentation.js";
+ export type * from "@/web-remote-control/contract.js";
+ export { WebRemoteControlTaskViewReporter } from "@/web-remote-control/WebRemoteControlTaskViewReporter.js";
+diff --git a/packages/ui/test/webRemoteControlDialogLayout.test.ts b/packages/ui/test/webRemoteControlDialogLayout.test.ts
+deleted file mode 100644
+index dcd3280..0000000
+--- a/packages/ui/test/webRemoteControlDialogLayout.test.ts
++++ /dev/null
+@@ -1,338 +0,0 @@
+-// @vitest-environment jsdom
+-
+-import { readFileSync } from "node:fs";
+-import { createElement, type ReactNode } from "react";
+-import { renderToStaticMarkup } from "react-dom/server";
+-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+-import { afterEach, describe, expect, it, vi } from "vitest";
+-import {
+-  WebRemoteControlDialog,
+-  isSameWebRemoteControlTarget,
+-  isReusableWebRemoteControlSession,
+-  getWebRemoteControlStatusTagLabel,
+-} from "@/web-remote-control/index.js";
+-
+-vi.mock("@/components/ui/button.js", () => ({
+-  Button: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+-    createElement("button", props, children),
+-}));
+-
+-vi.mock("@/components/ui/dialog.js", () => ({
+-  Dialog: ({ children }: { children?: ReactNode }) => createElement("div", null, children),
+-  DialogContent: ({
+-    children,
+-    className,
+-    showCloseButton: _showCloseButton,
+-    ...props
+-  }: {
+-    children?: ReactNode;
+-    className?: string;
+-    showCloseButton?: boolean;
+-    [key: string]: unknown;
+-  }) => createElement("section", { className, ...props }, children),
+-  DialogDescription: ({ children }: { children?: ReactNode }) => createElement("p", null, children),
+-  DialogHeader: ({ children, className }: { children?: ReactNode; className?: string }) =>
+-    createElement("header", { className }, children),
+-  DialogTitle: ({ children }: { children?: ReactNode }) => createElement("h2", null, children),
+-}));
+-
+-const feedbackMocks = vi.hoisted(() => ({
+-  error: vi.fn(),
+-  info: vi.fn(),
+-  toast: vi.fn(),
+-  requestLoginEntry: vi.fn(),
+-}));
+-
+-vi.mock("@/components/ui/toast.js", () => ({ toast: feedbackMocks.toast }));
+-
+-vi.mock("@/BotsDialog.js", () => ({
+-  BotsDialog: () => createElement("div", { "data-testid": "bots-dialog" }),
+-}));
+-
+-const platformMock = vi.hoisted(() => ({
+-  getWebRemoteControlStatus: vi.fn(async () => ({ status: "idle" })),
+-  startWebRemoteControl: vi.fn(async () => ({ status: "running" })),
+-  stopWebRemoteControl: vi.fn(async () => {}),
+-}));
+-
+-vi.mock("@/hooks/usePlatform.js", () => ({
+-  usePlatform: () => platformMock,
+-}));
+-
+-vi.mock("@/hooks/useOAuth.js", () => ({
+-  useOAuth: () => ({ activeProvider: null, loadingProviders: false, refreshProviders: vi.fn() }),
+-}));
+-
+-vi.mock("@/store/StoreProvider.js", () => ({
+-  useZCodeStore: (
+-    selector: (state: {
+-      theme: string;
+-      requestLoginEntry: typeof feedbackMocks.requestLoginEntry;
+-    }) => unknown,
+-  ) => selector({ theme: "zai-dark", requestLoginEntry: feedbackMocks.requestLoginEntry }),
+-}));
+-
+-const intlMock = vi.hoisted(() => ({
+-  intl: {
+-    formatMessage: ({ id }: { id: string }) => id,
+-  },
+-}));
+-
+-vi.mock("@/i18n/IntlProvider.js", () => ({
+-  useZCodeIntl: () => intlMock,
+-}));
+-
+-vi.mock("@/logger.js", () => ({
+-  logger: {
+-    error: feedbackMocks.error,
+-    info: feedbackMocks.info,
+-  },
+-}));
+-
+-function readWebRemoteControlDialogSource() {
+-  // Bugfix: WebRemoteControlDialog 经过 React.memo 包装后，组件 toString() 只会返回 [object Object]。
+-  // 源码结构守卫需要读取真实文件，才能继续校验复用顺序和确认弹窗保护没有被性能优化绕开。
+-  return readFileSync("packages/ui/src/web-remote-control/WebRemoteControlDialog.tsx", "utf8");
+-}
+-
+-describe("WebRemoteControlDialog layout", () => {
+-  afterEach(() => {
+-    cleanup();
+-    platformMock.getWebRemoteControlStatus.mockClear();
+-    platformMock.startWebRemoteControl.mockClear();
+-    platformMock.stopWebRemoteControl.mockClear();
+-    feedbackMocks.error.mockClear();
+-    feedbackMocks.info.mockClear();
+-    feedbackMocks.toast.mockClear();
+-  });
+-
+-  it("auth-required 显示登录入口，无二维码、生成中、复制链接或错误toast", async () => {
+-    platformMock.getWebRemoteControlStatus.mockResolvedValueOnce({ status: "auth-required" });
+-    const onOpenChange = vi.fn();
+-    const view = render(
+-      createElement(WebRemoteControlDialog, {
+-        open: true,
+-        onOpenChange,
+-        workspacePath: "/tmp/project",
+-      }),
+-    );
+-    const login = await view.findByRole("button", { name: "webRemoteControl.authRequired.login" });
+-    expect(view.container.textContent).toContain("webRemoteControl.authRequired.title");
+-    expect(view.container.textContent).toContain("webRemoteControl.authRequired.description");
+-    expect(view.container.textContent).not.toContain("webRemoteControl.generating");
+-    expect(view.queryByTestId("web-remote-control-copy-link-row")).toBeNull();
+-    expect(view.queryByRole("img")).toBeNull();
+-    expect(platformMock.startWebRemoteControl).not.toHaveBeenCalled();
+-    expect(feedbackMocks.toast).not.toHaveBeenCalled();
+-    fireEvent.click(login);
+-    expect(onOpenChange).toHaveBeenCalledWith(false);
+-    expect(feedbackMocks.requestLoginEntry).toHaveBeenCalledOnce();
+-  });
+-  it("启动因缺少JWT失败时读取main的auth-required状态，不展示失败toast", async () => {
+-    platformMock.getWebRemoteControlStatus
+-      .mockResolvedValueOnce({ status: "idle" })
+-      .mockResolvedValueOnce({ status: "auth-required" });
+-    platformMock.startWebRemoteControl.mockRejectedValueOnce(new Error("auth-required"));
+-    const view = render(
+-      createElement(WebRemoteControlDialog, {
+-        open: true,
+-        onOpenChange: vi.fn(),
+-        workspacePath: "/tmp/project",
+-      }),
+-    );
+-    await view.findByRole("button", { name: "webRemoteControl.authRequired.login" });
+-    expect(feedbackMocks.toast).not.toHaveBeenCalled();
+-  });
+-  it("treats native start cancellation as idle without failure UI", async () => {
+-    platformMock.startWebRemoteControl.mockResolvedValueOnce({ status: "cancelled" });
+-
+-    const view = render(
+-      createElement(WebRemoteControlDialog, {
+-        open: true,
+-        onOpenChange: vi.fn(),
+-        workspacePath: "/tmp/project",
+-      }),
+-    );
+-
+-    await waitFor(() => expect(platformMock.startWebRemoteControl).toHaveBeenCalledOnce());
+-    expect(view.container.textContent).toContain("webRemoteControl.statusDetail.idle");
+-    expect(feedbackMocks.toast).not.toHaveBeenCalled();
+-    expect(feedbackMocks.error).not.toHaveBeenCalled();
+-  });
+-
+-  it("仅在 workspace 与 remoteSessionId 都匹配时复用远控状态", () => {
+-    expect(
+-      isSameWebRemoteControlTarget(
+-        {
+-          status: "running",
+-          sessionId: "sid-1",
+-          workspacePath: "/tmp/workspace-a",
+-        },
+-        "/tmp/workspace-b",
+-      ),
+-    ).toBe(false);
+-
+-    expect(
+-      isSameWebRemoteControlTarget(
+-        {
+-          status: "running",
+-          sessionId: "sid-1",
+-          workspacePath: "/tmp/workspace-a",
+-          remoteSessionId: "remote-a",
+-        },
+-        "/tmp/workspace-a",
+-        undefined,
+-        "remote-b",
+-      ),
+-    ).toBe(false);
+-
+-    expect(
+-      isSameWebRemoteControlTarget(
+-        {
+-          status: "running",
+-          sessionId: "sid-1",
+-          workspacePath: "/tmp/workspace-a",
+-          workspaceIdentity: "ssh://host/repo",
+-          remoteSessionId: "remote-a",
+-        },
+-        "/tmp/any-local-path",
+-        "ssh://host/repo",
+-        "remote-a",
+-      ),
+-    ).toBe(true);
+-  });
+-
+-  it("复用已有 window 级远控会话时不要求 workspace 匹配", () => {
+-    expect(
+-      isReusableWebRemoteControlSession({
+-        status: "active",
+-        sessionId: "sid-1",
+-        mobileConnected: true,
+-        workspacePath: "/tmp/workspace-a",
+-      }),
+-    ).toBe(true);
+-
+-    expect(
+-      isReusableWebRemoteControlSession({
+-        status: "idle",
+-      }),
+-    ).toBe(false);
+-
+-    expect(
+-      isReusableWebRemoteControlSession({
+-        status: "error",
+-        sessionId: "sid-1",
+-        mobileConnected: true,
+-        workspacePath: "/tmp/workspace-a",
+-      }),
+-    ).toBe(false);
+-
+-    expect(
+-      isReusableWebRemoteControlSession({
+-        status: "running",
+-        sessionId: "sid-1",
+-        mobileConnected: false,
+-        workspacePath: "/tmp/workspace-a",
+-      }),
+-    ).toBe(false);
+-  });
+-
+-  it("打开弹层时先复用已连接手机的 window 会话再考虑重新 start", () => {
+-    const source = readWebRemoteControlDialogSource();
+-    const reuseIndex = source.indexOf("isReusableWebRemoteControlSession(currentStatus)");
+-    const startIndex = source.indexOf("platform.startWebRemoteControl");
+-    const pollReuseIndex = source.indexOf("isReusableWebRemoteControlSession(nextStatus)");
+-
+-    expect(reuseIndex).toBeGreaterThan(-1);
+-    expect(startIndex).toBeGreaterThan(-1);
+-    expect(reuseIndex).toBeLessThan(startIndex);
+-    expect(pollReuseIndex).toBeGreaterThan(-1);
+-  });
+-
+-  it("renders phone QR and bot channel entry cards in the remote control dialog", () => {
+-    const html = renderToStaticMarkup(
+-      createElement(WebRemoteControlDialog, {
+-        open: true,
+-        onOpenChange: vi.fn(),
+-        workspacePath: "/tmp/project",
+-      }),
+-    );
+-
+-    expect(html).toContain('data-testid="web-remote-control-main-grid"');
+-    expect(html).toContain("webRemoteControl.mobileQr.title");
+-    expect(html).toContain("webRemoteControl.botChannel.title");
+-    expect(html).toContain("webRemoteControl.botChannel.weixin.title");
+-    expect(html).toContain("webRemoteControl.botChannel.feishu.title");
+-    expect(html).toContain("webRemoteControl.botChannel.lark.title");
+-    expect(html).toContain("webRemoteControl.botChannel.telegram.title");
+-    expect(html).toContain("login.oauth.regionTag.bigmodel");
+-    expect(html).toContain("login.oauth.regionTag.zai");
+-    expect(html).toContain('data-testid="web-remote-control-open-bots"');
+-    expect(html).toContain("webRemoteControl.botChannel.manageBots");
+-
+-    const larkIndex = html.indexOf("webRemoteControl.botChannel.lark.title");
+-    const larkTagIndex = html.indexOf("login.oauth.regionTag.zai");
+-    const telegramIndex = html.indexOf("webRemoteControl.botChannel.telegram.title");
+-    const openBotsIndex = html.indexOf('data-testid="web-remote-control-open-bots"');
+-    expect(larkTagIndex).toBeGreaterThan(larkIndex);
+-    expect(larkTagIndex).toBeLessThan(telegramIndex);
+-    expect(telegramIndex).toBeGreaterThan(larkIndex);
+-    expect(openBotsIndex).toBeGreaterThan(telegramIndex);
+-  });
+-
+-  it("merges status and copy link inside the Scan from phone card", () => {
+-    const html = renderToStaticMarkup(
+-      createElement(WebRemoteControlDialog, {
+-        open: true,
+-        onOpenChange: vi.fn(),
+-        workspacePath: "/tmp/project",
+-      }),
+-    );
+-
+-    const scanCardIndex = html.indexOf('data-testid="web-remote-control-scan-card"');
+-    const connectionCardIndex = html.indexOf('data-testid="web-remote-control-connection-card"');
+-    const copyLinkIndex = html.indexOf('data-testid="web-remote-control-copy-link-row"');
+-    const botChannelIndex = html.indexOf("webRemoteControl.botChannel.title");
+-
+-    expect(scanCardIndex).toBeGreaterThan(-1);
+-    expect(connectionCardIndex).toBeGreaterThan(scanCardIndex);
+-    expect(copyLinkIndex).toBeGreaterThan(connectionCardIndex);
+-    expect(copyLinkIndex).toBeLessThan(botChannelIndex);
+-    expect(html).toContain('data-testid="web-remote-control-connection-card"');
+-    expect(html).toContain('data-testid="web-remote-control-copy-link-row"');
+-    expect(html).toContain("webRemoteControl.statusDetail.idle");
+-    expect(html).toContain("webRemoteControl.copyLink.description");
+-  });
+-
+-  it("V2弹窗只保留复制链接，移除刷新二维码入口", () => {
+-    const html = renderToStaticMarkup(
+-      createElement(WebRemoteControlDialog, {
+-        open: true,
+-        onOpenChange: vi.fn(),
+-        workspacePath: "/tmp/project",
+-      }),
+-    );
+-    expect(html).toContain("webRemoteControl.copyLink</button>");
+-    expect(html).not.toContain("webRemoteControl.refreshQr");
+-  });
+-
+-  it("uses the paired mobile device name for the status tag instead of session id", () => {
+-    expect(
+-      getWebRemoteControlStatusTagLabel(
+-        {
+-          status: "active",
+-          sessionId: "sid-12345678",
+-          mobileConnected: true,
+-          mobileDeviceInfo: {
+-            platform: "web",
+-            version: "1.7.0",
+-            name: "mobile-browser",
+-            browserPlatform: "iPhone",
+-            updatedAt: 1,
+-          },
+-        },
+-        ({ id }: { id: string }) => id,
+-      ),
+-    ).toBe("iPhone");
+-  });
+-});
+diff --git a/packages/ui/test/webRemoteControlLoginEntry.test.ts b/packages/ui/test/webRemoteControlLoginEntry.test.ts
+deleted file mode 100644
+index 6ca933a..0000000
+--- a/packages/ui/test/webRemoteControlLoginEntry.test.ts
++++ /dev/null
+@@ -1,147 +0,0 @@
+-// @vitest-environment jsdom
+-
+-import { createElement, type ReactNode } from "react";
+-import { cleanup, fireEvent, render } from "@testing-library/react";
+-import { afterEach, expect, it, vi } from "vitest";
+-import type { OAuthProviderId } from "@zcode/shared";
+-import { WebRemoteControlDialog } from "@/web-remote-control/index.js";
+-import { LoginPanel } from "@/WelcomeScreen.js";
+-
+-const state = vi.hoisted(() => ({
+-  user: { id: "cached-user", username: "User" } as { id: string; username: string } | null,
+-  theme: "zai-dark",
+-  oauthError: null,
+-  oauthSuccessSeq: 0,
+-  lastOAuthSuccessProvider: null,
+-  loginEntryRequest: null as { id: number; providerId?: OAuthProviderId; purpose?: string } | null,
+-  requestLoginEntry: vi.fn(),
+-  clearLoginEntryRequest: vi.fn(),
+-  markLoginEntryAttemptStatus: vi.fn(),
+-  setOAuthError: vi.fn(),
+-}));
+-const oauth = vi.hoisted(() => ({
+-  startLogin: vi.fn(),
+-  cancel: vi.fn(),
+-  reset: vi.fn(),
+-  status: "idle",
+-  error: null,
+-  providers: [{ id: "zai", displayName: "Z.AI", enabled: true }],
+-  activeProvider: "zai" as OAuthProviderId | null,
+-  loadingProviders: false,
+-  pendingProvider: null,
+-  refreshProviders: vi.fn(),
+-}));
+-const toast = vi.hoisted(() => vi.fn());
+-const platform = vi.hoisted(() => ({
+-  getWebRemoteControlStatus: vi.fn(async () => ({ status: "auth-required" })),
+-}));
+-const intl = vi.hoisted(() => ({ intl: { formatMessage: ({ id }: { id: string }) => id } }));
+-
+-vi.mock("@/hooks/useOAuth.js", () => ({ useOAuth: () => oauth }));
+-vi.mock("@/store/StoreProvider.js", () => ({
+-  useZCodeStore: (selector: (value: typeof state) => unknown) => selector(state),
+-}));
+-vi.mock("@/hooks/usePlatform.js", () => ({ usePlatform: () => platform }));
+-vi.mock("@/i18n/IntlProvider.js", () => ({ useZCodeIntl: () => intl }));
+-vi.mock("@/logger.js", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+-vi.mock("@/components/ui/button.js", () => ({
+-  Button: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
+-    createElement("button", props, children),
+-}));
+-vi.mock("@/components/ui/dialog.js", () => {
+-  const Wrapper = ({ children }: { children?: ReactNode }) => createElement("div", null, children);
+-  return {
+-    Dialog: Wrapper,
+-    DialogContent: Wrapper,
+-    DialogDescription: Wrapper,
+-    DialogHeader: Wrapper,
+-    DialogTitle: Wrapper,
+-  };
+-});
+-vi.mock("@/components/ui/toast.js", () => ({ toast }));
+-vi.mock("@/BotsDialog.js", () => ({ BotsDialog: () => null }));
+-vi.mock("@/BotsDialog/shared.js", () => ({ ProviderIcon: () => null }));
+-vi.mock("@/components/ui/ZCodeAboutLogo.js", () => ({ ZCodeAboutLogo: () => null }));
+-vi.mock("@/login/LoginApiKeyForm.js", () => ({ LoginApiKeyForm: () => null }));
+-vi.mock("@/openWorkspacePageThemeHero.js", () => ({ ThemeHeroVisual: () => null }));
+-vi.mock("@/lib/oauthProviderIcon.js", () => ({ renderOAuthProviderIcon: () => null }));
+-
+-function openDialog(onOpenChange = vi.fn()) {
+-  state.requestLoginEntry.mockImplementation((providerId?: OAuthProviderId, purpose?: string) => {
+-    state.loginEntryRequest = { id: 1, providerId, purpose };
+-  });
+-  return render(
+-    createElement(WebRemoteControlDialog, { open: true, onOpenChange, workspacePath: "/project" }),
+-  );
+-}
+-
+-afterEach(() => {
+-  cleanup();
+-  vi.clearAllMocks();
+-  state.user = { id: "cached-user", username: "User" };
+-  state.loginEntryRequest = null;
+-  oauth.activeProvider = "zai";
+-  oauth.loadingProviders = false;
+-});
+-
+-it.each(["zai", "bigmodel"] as const)(
+-  "远控401保留用户时，登录按钮重新发起 %s OAuth，不把缓存用户判为登录成功",
+-  async (providerId) => {
+-    oauth.activeProvider = providerId;
+-    const view = openDialog();
+-    fireEvent.click(await view.findByTestId("web-remote-control-login"));
+-    expect(state.requestLoginEntry).toHaveBeenCalledWith(providerId, "app-login");
+-    view.unmount();
+-    const onComplete = vi.fn();
+-    render(createElement(LoginPanel, { active: true, onComplete }));
+-    expect(oauth.startLogin).toHaveBeenCalledWith(providerId, { purpose: "app-login" });
+-    expect(onComplete).not.toHaveBeenCalled();
+-  },
+-);
+-
+-it("provider仍在加载时不关闭弹窗或提交不完整登录请求", async () => {
+-  oauth.loadingProviders = true;
+-  const onOpenChange = vi.fn();
+-  const view = openDialog(onOpenChange);
+-  const button = await view.findByTestId("web-remote-control-login");
+-  expect(button.hasAttribute("disabled")).toBe(true);
+-  fireEvent.click(button);
+-  expect(onOpenChange).not.toHaveBeenCalled();
+-  expect(state.requestLoginEntry).not.toHaveBeenCalled();
+-});
+-
+-it("已有用户但provider不可读时保留弹窗并重新读取，避免进入立即完成的泛化入口", async () => {
+-  oauth.activeProvider = null;
+-  const onOpenChange = vi.fn();
+-  const view = openDialog(onOpenChange);
+-  fireEvent.click(await view.findByTestId("web-remote-control-login"));
+-  expect(onOpenChange).not.toHaveBeenCalled();
+-  expect(state.requestLoginEntry).not.toHaveBeenCalled();
+-  expect(oauth.refreshProviders).toHaveBeenCalledOnce();
+-  expect(toast).toHaveBeenCalledWith("login.oauth.loginFailure");
+-  oauth.activeProvider = "zai";
+-  view.rerender(
+-    createElement(WebRemoteControlDialog, {
+-      open: true,
+-      onOpenChange: (open: boolean) => onOpenChange(open),
+-      workspacePath: "/project",
+-    }),
+-  );
+-  fireEvent.click(await view.findByTestId("web-remote-control-login"));
+-  expect(state.requestLoginEntry).toHaveBeenCalledWith("zai", "app-login");
+-});
+-
+-it("尚未登录且无active provider时继续打开原有渠道选择入口", async () => {
+-  state.user = null;
+-  oauth.activeProvider = null;
+-  const onOpenChange = vi.fn();
+-  const view = openDialog(onOpenChange);
+-  fireEvent.click(await view.findByTestId("web-remote-control-login"));
+-  expect(onOpenChange).toHaveBeenCalledWith(false);
+-  expect(state.requestLoginEntry).toHaveBeenCalledWith(undefined, "app-login");
+-  view.unmount();
+-  const onComplete = vi.fn();
+-  render(createElement(LoginPanel, { active: true, onComplete }));
+-  expect(oauth.startLogin).not.toHaveBeenCalled();
+-  expect(onComplete).not.toHaveBeenCalled();
+-});
+diff --git a/packages/ui/test/webRemoteControlTriggerPresentation.test.ts b/packages/ui/test/webRemoteControlTriggerPresentation.test.ts
+deleted file mode 100644
+index c234c1d..0000000
+--- a/packages/ui/test/webRemoteControlTriggerPresentation.test.ts
++++ /dev/null
+@@ -1,46 +0,0 @@
+-import { describe, expect, it } from "vitest";
+-import { getWebRemoteControlTriggerPresentation } from "@/WorkspaceWebRemoteControlTrigger.js";
+-
+-const formatMessage = ({ id }: { id: string }) => id;
+-
+-describe("getWebRemoteControlTriggerPresentation", () => {
+-  it("uses success styling and a connected tooltip when a phone is paired", () => {
+-    const presentation = getWebRemoteControlTriggerPresentation(
+-      { status: "active", mobileConnected: true },
+-      formatMessage,
+-    );
+-
+-    expect(presentation.iconClassName).toContain("text-success");
+-    expect(presentation.tooltip).toBe("webRemoteControl.triggerStatus.connected");
+-  });
+-
+-  it("uses warning styling while waiting for phone pairing", () => {
+-    const presentation = getWebRemoteControlTriggerPresentation(
+-      { status: "running", mobileConnected: false },
+-      formatMessage,
+-    );
+-
+-    expect(presentation.iconClassName).toContain("text-warning");
+-    expect(presentation.tooltip).toBe("webRemoteControl.triggerStatus.waiting");
+-  });
+-
+-  it("does not show connected while the relay is reconnecting with stale mobile state", () => {
+-    const presentation = getWebRemoteControlTriggerPresentation(
+-      { status: "starting", mobileConnected: true },
+-      formatMessage,
+-    );
+-
+-    expect(presentation.iconClassName).toContain("text-warning");
+-    expect(presentation.tooltip).toBe("webRemoteControl.triggerStatus.starting");
+-  });
+-
+-  it("uses destructive styling for failed remote control sessions", () => {
+-    const presentation = getWebRemoteControlTriggerPresentation(
+-      { status: "error" },
+-      formatMessage,
+-    );
+-
+-    expect(presentation.iconClassName).toContain("text-destructive");
+-    expect(presentation.tooltip).toBe("webRemoteControl.triggerStatus.error");
+-  });
+-});
+diff --git a/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts b/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts
+index cf7ca33..e1caf11 100644
+--- a/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts
++++ b/packages/ui/test/workspaceSidebarFooterEntryRow.test.ts
+@@ -15,13 +15,6 @@ vi.mock("@/ControlHintTooltip.js", async (importOriginal) => ({
+     createElement("span", { "data-tooltip-title": title }, children),
+ }));
+ 
+-vi.mock("@/WorkspaceWebRemoteControlTrigger.js", () => ({
+-  WorkspaceWebRemoteControlTrigger: () =>
+-    createElement("button", {
+-      "data-testid": "web-remote-control-trigger",
+-    }),
+-}));
+-
+ vi.mock("@/i18n/IntlProvider.js", () => ({
+   useZCodeIntl: () => ({
+     intl: { formatMessage: ({ id }: { id: string }) => id },
+@@ -40,15 +33,13 @@ function footerProps(overrides: Record<string, unknown> = {}) {
+   } as Parameters<typeof WorkspaceSidebarFooter>[0];
+ }
+ 
+-it("入口行顺序:自动化 → 使用统计 → 插件市场 → 手机连接 → 设置,自动化/插件市场仅图标", () => {
++it("入口行顺序:自动化 → 使用统计 → 插件市场 → 设置,自动化/插件市场仅图标", () => {
+   const onOpenAutomations = vi.fn();
+   const onOpenPluginStore = vi.fn();
+   render(
+     createElement(
+       WorkspaceSidebarFooter,
+       footerProps({
+-        isDesktop: true,
+-        workspacePath: "/local",
+         onSettingsButtonClick: vi.fn(),
+         onOpenAutomations,
+         onOpenPluginStore,
+@@ -58,7 +49,6 @@ it("入口行顺序:自动化 → 使用统计 → 插件市场 → 手机连接
+   const scheduled = screen.getByTestId(TID_AUTOMATIONS_OPEN);
+   const usage = screen.getByTestId(TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON);
+   const plugins = screen.getByTestId("plugin-store-sidebar-open");
+-  const remote = screen.getByTestId("web-remote-control-trigger");
+   const settings = screen.getByTestId(TID_TASK_SETTINGS_BUTTON);
+ 
+   // 仅图标入口：不渲染文字，悬停提示（data-tooltip-title）与 aria-label 承载名称。
+@@ -71,7 +61,7 @@ it("入口行顺序:自动化 → 使用统计 → 插件市场 → 手机连接
+   ).toBe("workspace.openScheduledSettings");
+ 
+   // DOM 顺序即行内顺序。
+-  const order = [scheduled, usage, plugins, remote, settings];
++  const order = [scheduled, usage, plugins, settings];
+   for (let i = 1; i < order.length; i += 1) {
+     expect(
+       order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+diff --git a/packages/ui/test/workspaceSidebarFooterWebRemoteControlTooltip.test.ts b/packages/ui/test/workspaceSidebarFooterWebRemoteControlTooltip.test.ts
+index 89c7765..dcc948b 100644
+--- a/packages/ui/test/workspaceSidebarFooterWebRemoteControlTooltip.test.ts
++++ b/packages/ui/test/workspaceSidebarFooterWebRemoteControlTooltip.test.ts
+@@ -23,13 +23,6 @@ vi.mock("@/ControlHintTooltip.js", async (importOriginal) => ({
+     createElement("span", { "data-tooltip-title": title }, children),
+ }));
+ 
+-vi.mock("@/WorkspaceWebRemoteControlTrigger.js", () => ({
+-  WorkspaceWebRemoteControlTrigger: () =>
+-    createElement("button", {
+-      "data-testid": "web-remote-control-trigger",
+-    }),
+-}));
+-
+ vi.mock("@/hooks/usePlatform.js", () => ({
+   usePlatform: () => ({
+     executeDesktopCommand: vi.fn(),
+@@ -380,21 +373,4 @@ describe("WorkspaceSidebarFooter web remote control tooltip", () => {
+       }),
+     ).toBeNull();
+   });
+-
+-  it("does not wrap the remote control trigger in a second tooltip", () => {
+-    const html = renderToStaticMarkup(
+-      createElement(WorkspaceSidebarFooter, {
+-        theme: "dark",
+-        localeMenuValue: "zh-CN",
+-        onLocaleChange: () => {},
+-        onThemeChange: () => {},
+-        onSettingsButtonClick: () => {},
+-        workspacePath: "/tmp/project",
+-        isDesktop: true,
+-      }),
+-    );
+-
+-    expect(html).toContain('data-testid="web-remote-control-trigger"');
+-    expect(html).not.toContain('data-tooltip-title="webRemoteControl.trigger"');
+-  });
+ });
+diff --git a/packages/ui/test/workspaceWebRemoteControlTrigger.test.ts b/packages/ui/test/workspaceWebRemoteControlTrigger.test.ts
+deleted file mode 100644
+index df8d3e0..0000000
+--- a/packages/ui/test/workspaceWebRemoteControlTrigger.test.ts
++++ /dev/null
+@@ -1,163 +0,0 @@
+-import { createElement } from "react";
+-import { renderToStaticMarkup } from "react-dom/server";
+-import { afterEach, describe, expect, it, vi } from "vitest";
+-
+-const { resolvedRemoteSessionIdMock } = vi.hoisted(() => ({
+-  resolvedRemoteSessionIdMock: vi.fn<() => string | null>(),
+-}));
+-
+-vi.mock("@/ControlHintTooltip.js", () => ({
+-  ControlHintTooltip: ({
+-    children,
+-    title,
+-    description,
+-    side,
+-  }: {
+-    children: unknown;
+-    title: string;
+-    description?: string;
+-    side?: string;
+-  }) =>
+-    createElement(
+-      "span",
+-      {
+-        "data-tooltip-title": title,
+-        "data-tooltip-description": description ?? "",
+-        "data-tooltip-side": side ?? "",
+-      },
+-      children,
+-    ),
+-}));
+-
+-vi.mock("@/components/ui/button.js", () => ({
+-  Button: ({ children, ...props }: { children: unknown; [key: string]: unknown }) =>
+-    createElement("button", props, children),
+-}));
+-
+-vi.mock("@/components/ui/lucide.js", () => ({
+-  Smartphone: () => createElement("span", { "data-testid": "smartphone-icon" }),
+-}));
+-
+-vi.mock("@/i18n/IntlProvider.js", () => ({
+-  useZCodeIntl: () => ({
+-    intl: {
+-      formatMessage: ({ id }: { id: string }) => id,
+-    },
+-  }),
+-}));
+-
+-vi.mock("@/logger.js", () => ({
+-  logger: {
+-    info: vi.fn(),
+-    warn: vi.fn(),
+-    error: vi.fn(),
+-  },
+-}));
+-
+-vi.mock("@/hooks/useResolvedRemoteWorkspaceSessionId.js", () => ({
+-  useResolvedRemoteWorkspaceSessionId: resolvedRemoteSessionIdMock,
+-}));
+-
+-vi.mock("@/hooks/useWebRemoteControlStatus.js", () => ({
+-  useWebRemoteControlStatus: () => ({ status: "idle" }),
+-}));
+-
+-vi.mock("@/web-remote-control/index.js", () => ({
+-  WebRemoteControlDialog: ({
+-    initialTaskId,
+-    remoteSessionId,
+-  }: {
+-    initialTaskId?: string;
+-    remoteSessionId?: string;
+-  }) =>
+-    createElement("div", {
+-      "data-testid": "web-remote-control-dialog",
+-      "data-initial-task-id": initialTaskId ?? "",
+-      "data-remote-session-id": remoteSessionId ?? "",
+-    }),
+-}));
+-
+-async function renderTriggerWithEnv(
+-  env: "test" | "production",
+-  options?: {
+-    initialTaskId?: string;
+-    featureEnabled?: boolean;
+-    workspaceIdentity?: string;
+-    remoteSessionId?: string;
+-  },
+-) {
+-  vi.resetModules();
+-  vi.doMock("@zcode/shared", () => ({ ZCODE_ENV: env }));
+-
+-  const { WorkspaceWebRemoteControlTrigger } =
+-    await import("../src/WorkspaceWebRemoteControlTrigger.js");
+-  const { WebRemoteControlFeatureProvider } =
+-    await import("../src/WebRemoteControlFeatureProvider.js");
+-
+-  const trigger = createElement(WorkspaceWebRemoteControlTrigger, {
+-    workspacePath: "/tmp/project",
+-    workspaceIdentity: options?.workspaceIdentity,
+-    remoteSessionId: options?.remoteSessionId,
+-    initialTaskId: options?.initialTaskId,
+-  });
+-
+-  return renderToStaticMarkup(
+-    typeof options?.featureEnabled === "boolean"
+-      ? createElement(WebRemoteControlFeatureProvider, { enabled: options.featureEnabled }, trigger)
+-      : trigger,
+-  );
+-}
+-
+-afterEach(() => {
+-  resolvedRemoteSessionIdMock.mockReset();
+-  vi.resetModules();
+-});
+-
+-describe("WorkspaceWebRemoteControlTrigger", () => {
+-  it("默认展示 Web 远程控制入口", async () => {
+-    const html = await renderTriggerWithEnv("production");
+-
+-    expect(html).toContain("webRemoteControl.trigger");
+-  });
+-
+-  it("允许 root wiring 显式注入 Web 远程控制入口能力", async () => {
+-    const html = await renderTriggerWithEnv("production", {
+-      featureEnabled: true,
+-    });
+-
+-    expect(html).toContain("webRemoteControl.trigger");
+-  });
+-
+-  it("把当前 active task 作为 Web 远程控制初始 task 传给弹层", async () => {
+-    const html = await renderTriggerWithEnv("test", {
+-      initialTaskId: "task-from-desktop",
+-    });
+-
+-    expect(html).toContain('data-initial-task-id="task-from-desktop"');
+-  });
+-
+-  it("用 workspaceIdentity 精确解析远控 session，并只向弹层传递已验证结果", async () => {
+-    resolvedRemoteSessionIdMock.mockReturnValue(null);
+-
+-    const html = await renderTriggerWithEnv("test", {
+-      workspaceIdentity: "remote:ssh:localhost:2222:root:/tmp/project",
+-      remoteSessionId: "stale-session",
+-    });
+-
+-    expect(resolvedRemoteSessionIdMock).toHaveBeenCalledWith(
+-      "/tmp/project",
+-      "stale-session",
+-      "remote:ssh:localhost:2222:root:/tmp/project",
+-    );
+-    expect(html).toContain('data-remote-session-id=""');
+-    expect(html).not.toContain('data-remote-session-id="stale-session"');
+-  });
+-
+-  it("把入口名称和手机连接状态合并到同一个 tooltip", async () => {
+-    const html = await renderTriggerWithEnv("test");
+-
+-    expect(html).toContain('data-tooltip-title="webRemoteControl.trigger"');
+-    expect(html).toContain('data-tooltip-description="webRemoteControl.triggerStatus.idle"');
+-    expect(html).not.toContain('data-tooltip-title="webRemoteControl.triggerStatus.idle"');
+-  });
+-});
+diff --git a/packages/ui/test/workspaceWebRemoteControlTriggerTelemetry.test.ts b/packages/ui/test/workspaceWebRemoteControlTriggerTelemetry.test.ts
+deleted file mode 100644
+index d7cde9d..0000000
+--- a/packages/ui/test/workspaceWebRemoteControlTriggerTelemetry.test.ts
++++ /dev/null
+@@ -1,129 +0,0 @@
+-// @vitest-environment jsdom
+-import { createElement } from "react";
+-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+-import { afterEach, describe, expect, it, vi } from "vitest";
+-
+-const h = vi.hoisted(() => ({
+-  reportAppTelemetryEvent: vi.fn(async () => {}),
+-}));
+-
+-vi.mock("@/ControlHintTooltip.js", () => ({
+-  ControlHintTooltip: ({ children }: { children: unknown }) => children,
+-}));
+-
+-vi.mock("@/components/ui/button.js", () => ({
+-  Button: ({ children, ...props }: { children: unknown; [key: string]: unknown }) =>
+-    createElement("button", props, children),
+-}));
+-
+-vi.mock("@/i18n/IntlProvider.js", () => ({
+-  useZCodeIntl: () => ({
+-    intl: {
+-      formatMessage: ({ id }: { id: string }) => id,
+-    },
+-  }),
+-}));
+-
+-vi.mock("@/logger.js", () => ({
+-  logger: {
+-    info: vi.fn(),
+-    warn: vi.fn(),
+-    error: vi.fn(),
+-  },
+-}));
+-
+-vi.mock("@/lib/appTelemetry.js", () => ({
+-  reportAppTelemetryEvent: h.reportAppTelemetryEvent,
+-}));
+-
+-vi.mock("@/hooks/useResolvedRemoteWorkspaceSessionId.js", () => ({
+-  useResolvedRemoteWorkspaceSessionId: (_workspacePath: string, remoteSessionId?: string) =>
+-    remoteSessionId ?? null,
+-}));
+-
+-vi.mock("@/hooks/useWebRemoteControlStatus.js", () => ({
+-  useWebRemoteControlStatus: () => ({ status: "idle" }),
+-}));
+-
+-vi.mock("@/web-remote-control/index.js", () => ({
+-  WebRemoteControlDialog: () => null,
+-}));
+-
+-afterEach(() => {
+-  cleanup();
+-  h.reportAppTelemetryEvent.mockClear();
+-});
+-
+-async function renderTrigger(input: {
+-  workspacePath: string;
+-  workspaceIdentity?: string;
+-  remoteSessionId?: string;
+-}) {
+-  const { WorkspaceWebRemoteControlTrigger } =
+-    await import("../src/WorkspaceWebRemoteControlTrigger.js");
+-  const { WebRemoteControlFeatureProvider } =
+-    await import("../src/WebRemoteControlFeatureProvider.js");
+-  const { PlatformProvider } = await import("../src/hooks/usePlatform.js");
+-  const platform = {
+-    reportTelemetryEvent: vi.fn(async () => {}),
+-  };
+-
+-  render(
+-    createElement(
+-      PlatformProvider,
+-      { platform: platform as never },
+-      createElement(
+-        WebRemoteControlFeatureProvider,
+-        { enabled: true },
+-        createElement(WorkspaceWebRemoteControlTrigger, input),
+-      ),
+-    ),
+-  );
+-
+-  fireEvent.click(screen.getByRole("button"));
+-  return platform;
+-}
+-
+-describe("WorkspaceWebRemoteControlTrigger telemetry", () => {
+-  it("点击本地 workspace 入口时上报 local 维度", async () => {
+-    const platform = await renderTrigger({
+-      workspacePath: "/workspace/local",
+-    });
+-
+-    expect(h.reportAppTelemetryEvent).toHaveBeenCalledWith(
+-      platform,
+-      {
+-        elementName: "web_remote_control_entry_view",
+-        eventRegion: "web_remote_control",
+-        eventType: "view",
+-        eventExtraDetail: {
+-          workspace_kind: "local",
+-          remote_kind: "",
+-        },
+-      },
+-      "web-remote-control-entry",
+-    );
+-  });
+-
+-  it("点击远程 workspace 入口时上报解析后的 remote kind", async () => {
+-    const platform = await renderTrigger({
+-      workspacePath: "/workspace/remote",
+-      workspaceIdentity: "remote:ssh:dev.example.com:22:root:/workspace/remote",
+-      remoteSessionId: "remote-session-1",
+-    });
+-
+-    expect(h.reportAppTelemetryEvent).toHaveBeenCalledWith(
+-      platform,
+-      {
+-        elementName: "web_remote_control_entry_view",
+-        eventRegion: "web_remote_control",
+-        eventType: "view",
+-        eventExtraDetail: {
+-          workspace_kind: "remote",
+-          remote_kind: "ssh",
+-        },
+-      },
+-      "web-remote-control-entry",
+-    );
+-  });
+-});

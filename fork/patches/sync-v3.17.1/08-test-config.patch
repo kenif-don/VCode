@@ -1,0 +1,533 @@
+diff --git a/apps/zcode-cli/vitest.config.ts b/apps/zcode-cli/vitest.config.ts
+index 71b9a224..a3bd4afe 100644
+--- a/apps/zcode-cli/vitest.config.ts
++++ b/apps/zcode-cli/vitest.config.ts
+@@ -9,5 +9,10 @@ export default defineConfig({
+       "packages/*/test/**/*.test.ts",
+       "packages/*/tests/**/*.test.ts",
+     ],
++    // 与根 vitest.config.ts 同一政策：Windows 低配/高负载下默认 5s 会被真实 SQLite、
++    // 真实进程与工作流用例提前打穿（v3.17.1 工作流收尾路径变慢后，本工作区
++    // session-persistence 的专家工作流用例稳定落在 5.0~5.4s）。统一放宽到 30s。
++    testTimeout: 30_000,
++    hookTimeout: 30_000,
+   },
+ });
+diff --git a/packages/desktop/wdio.conf.ts b/packages/desktop/wdio.conf.ts
+index 9701c17c..5b9377d5 100644
+--- a/packages/desktop/wdio.conf.ts
++++ b/packages/desktop/wdio.conf.ts
+@@ -113,7 +113,6 @@ import { createE2EStartupCredentialSeed } from "./test/e2e/helpers/e2e-startup-c
+ import { seedRemoteOnboardingFixture } from "./test/e2e/helpers/remote-startup-profile.js";
+ import { getE2EProviderEndpointEnv } from "#e2e/helpers/e2e-provider-endpoint";
+ import { prepareOAuthCompletionRaceFixture } from "./test/e2e/helpers/oauth-completion-race-fixture.js";
+-import { prepareWebRemoteControlAuthGateFixture } from "./test/e2e/helpers/web-remote-control-auth-gate-fixture.js";
+ import { prepareAccessToken401Fixture } from "./test/e2e/helpers/access-token-401-fixture.js";
+ import { createE2EReplayFixtureVariables } from "./test/e2e/helpers/e2e-runtime-paths.js";
+ import { stageE2EAppOutput } from "./test/e2e/helpers/e2e-app-output-stage.js";
+@@ -407,7 +406,7 @@ const codingPlanDefaultDataPlaneResponse = createCodingPlanDataPlaneResponse(nul
+ const E2E_AUTH_PROVIDER_ID = "zai";
+ const E2E_AUTH_TOKEN = "e2e-oauth-token";
+ const E2E_USER_PROFILE = {
+-  displayName: "ZCode E2E",
++  displayName: "VCode E2E",
+   id: "zcode-e2e-user",
+   username: "zcode-e2e-user",
+ };
+@@ -624,13 +623,13 @@ process.env.USERPROFILE = E2E_HOME_DIR;
+ process.env.ZCODE_E2E_HOME_DIR = E2E_HOME_DIR;
+ process.env.ZCODE_E2E_RUN_ID = E2E_RUN_ID;
+ process.env.ZCODE_DATA_BASE_DIR = E2E_HOME_DIR;
+-process.env.ZCODE_DESKTOP_APPLICATION_NAME = "ZCode E2E";
++process.env.ZCODE_DESKTOP_APPLICATION_NAME = "VCode E2E";
+ process.env.ZCODE_DESKTOP_HOME_DIR = E2E_HOME_DIR;
+ process.env.ZCODE_DESKTOP_USE_ELECTRON_DEFAULT_USER_DATA = "1";
+ // Bugfix: renderer E2E store bridge 只能由 WDIO 进程显式打开，避免 ZCODE_ENV=test 的产品测试环境暴露全局可变 store。
+ process.env.VITE_ZCODE_E2E_STORE_BRIDGE = "1";
+ // Bugfix: e2e session 由 Chromedriver 管理调试端口；禁用主进程开发态固定的 9229，
+-// 避免和本机已打开的 ZCode Dev 冲突后出现空白窗口并卡在 session 创建阶段。
++// 避免和本机已打开的 VCode Dev 冲突后出现空白窗口并卡在 session 创建阶段。
+ process.env.ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT = "1";
+ 
+ let upstreamCaptureProxy: E2ENetworkCaptureProxy | null = null;
+@@ -645,7 +644,6 @@ let dynamicWorkflowConfigMockServer: DynamicWorkflowConfigMockServer | null = nu
+ let clientScenesMockServer: ClientScenesMockServer | null = null;
+ let stopOAuthCompletionRaceFixture: (() => Promise<void>) | null = null;
+ let stopTtftOtlpFixture: (() => Promise<void>) | null = null;
+-let stopWebRemoteControlAuthGateFixture: (() => Promise<void>) | null = null;
+ let stopAccessToken401Fixture: (() => Promise<void>) | null = null;
+ let pluginCdnZipFixtureServer: PluginCdnZipFixtureServer | null = null;
+ let upstreamE2EBaseUrl: string = e2eProviderPreset.baseUrl;
+@@ -1087,7 +1085,7 @@ function prepareZCodeAgentServer() {
+     // 会并发覆盖同一 dist 目录。跳过时仍校验入口，避免旧或缺失产物静默启动。
+     console.log("[e2e] ZCODE_E2E_SKIP_AGENT_BUILD=1, skipping agent build");
+     if (!existsSync(ZCODE_CLI_ENTRYPOINT)) {
+-      throw new Error(`ZCode CLI entrypoint not found: ${ZCODE_CLI_ENTRYPOINT}`);
++      throw new Error(`VCode CLI entrypoint not found: ${ZCODE_CLI_ENTRYPOINT}`);
+     }
+     configureZCodeAgentServerEnv();
+     return;
+@@ -1095,7 +1093,7 @@ function prepareZCodeAgentServer() {
+ 
+   // Bugfix: e2e 还在找仓库外的旧原生 zcode-agent binary，并调用已经删除的
+   // `build:agent-exe`。当前桌面端统一通过 zcode-cli 的 app-server JS bundle
+-  // 暴露 ZCode Protocol，这里复用正式开发入口的构建脚本，之后由 bundled resolver
++  // 暴露 VCode Protocol，这里复用正式开发入口的构建脚本，之后由 bundled resolver
+   // 选择已校验的 bundle，保留存储准备能力和正式桌面启动契约。
+   execFileSync(process.execPath, [BUILD_DESKTOP_AGENT_SCRIPT], {
+     cwd: REPO_ROOT,
+@@ -1104,7 +1102,7 @@ function prepareZCodeAgentServer() {
+   });
+ 
+   if (!existsSync(ZCODE_CLI_ENTRYPOINT)) {
+-    throw new Error(`ZCode CLI entrypoint not found: ${ZCODE_CLI_ENTRYPOINT}`);
++    throw new Error(`VCode CLI entrypoint not found: ${ZCODE_CLI_ENTRYPOINT}`);
+   }
+ 
+   configureZCodeAgentServerEnv();
+@@ -2594,7 +2592,7 @@ async function materializeOffPeakMockZCodeBuiltinProviderConfig(
+       (rule) => rule.providerId === providerId,
+     )?.config;
+     if (!offPeakProvider?.api) {
+-      throw new Error(`ZCode Built-in Config 缺少 ${providerId}.api`);
++      throw new Error(`VCode Built-in Config 缺少 ${providerId}.api`);
+     }
+     offPeakProvider.api.baseUrl = `http://127.0.0.1:${port}/api/v1/off-peak/anthropic`;
+     // 原闲时 fixture 的单模型白名单应迁到当前 Built-in 输入，不能继续依赖已退役的
+@@ -2741,7 +2739,7 @@ async function armCurrentElectronAppQuit(stage: string) {
+     const result = (await browser.electron.execute((electron) => {
+       const currentAppPid = process.pid;
+       const appName = electron.app.getName();
+-      if (appName !== "ZCode E2E") {
++      if (appName !== "VCode E2E") {
+         return {
+           appName,
+           appPid: currentAppPid,
+@@ -3390,7 +3388,7 @@ function seedE2EGitCommitDialogWorkspace(specs: string[] = []) {
+   writeFileSync(resolve(workspacePath, "README.md"), "Git commit dialog E2E workspace\n", "utf-8");
+   runGitE2ECommand(workspacePath, ["init"]);
+   runGitE2ECommand(workspacePath, ["checkout", "-B", "main"]);
+-  runGitE2ECommand(workspacePath, ["config", "user.name", "ZCode E2E"]);
++  runGitE2ECommand(workspacePath, ["config", "user.name", "VCode E2E"]);
+   runGitE2ECommand(workspacePath, ["config", "user.email", "zcode-e2e@example.com"]);
+   runGitE2ECommand(workspacePath, ["add", "README.md"]);
+   runGitE2ECommand(workspacePath, ["commit", "-m", "chore: seed git commit dialog e2e"]);
+@@ -3532,7 +3530,7 @@ function seedE2EStartupState(specs: string[] = []) {
+       providerReadinessColdStartFixture ||
+         workerSpecsContain(specs, "oauth-login-failure-cancel.test.ts")
+         ? {}
+-        : // Bug 根因：I20 不验证账号登录，却播种假 ZCode JWT；带账号身份的旁路请求
++        : // Bug 根因：I20 不验证账号登录，却播种假 VCode JWT；带账号身份的旁路请求
+           // 会把它发往真实控制面，401 随后弹出登录过期对话框并遮挡目标交互。
+           // 该 case 只保留本地 Provider 回放，不注入无关账号身份。
+           builtInSubagentModelOverridesSpec
+@@ -4587,7 +4585,7 @@ export const config: WebdriverIO.Config = {
+     ZCODE_DATA_BASE_DIR: E2E_HOME_DIR,
+     ZCODE_BUILTIN_PROVIDER_CONFIG_FILE:
+       INITIAL_ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? E2E_DEFAULT_ZCODE_BUILTIN_PROVIDER_CONFIG_FILE,
+-    ZCODE_DESKTOP_APPLICATION_NAME: "ZCode E2E",
++    ZCODE_DESKTOP_APPLICATION_NAME: "VCode E2E",
+     ZCODE_DESKTOP_HOME_DIR: E2E_HOME_DIR,
+     ZCODE_DESKTOP_USE_ELECTRON_DEFAULT_USER_DATA: "1",
+     ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT: "1",
+@@ -4730,13 +4728,7 @@ export const config: WebdriverIO.Config = {
+           ? // 走查用例串行完成真实首装、失败/取消/后台、设置页与停容器掉线恢复，并全程录屏；
+             // 与用例内 30 分钟预算一致。
+             30 * 60_000
+-          : configuredE2ESpecs.some((spec) =>
+-                spec.endsWith("conversation-session-r3-mobile.test.ts"),
+-              )
+-            ? // 此用例串行完成真实 SSH 安装、两次 relay 配对和断网恢复；同步其原定预算，
+-              // 避免 WDIO 在手机离线期间按默认 120 秒截断，this.timeout 无法覆盖外层。
+-              40 * 60_000
+-            : pluginNoGitGitHubArchiveE2E ||
++          : pluginNoGitGitHubArchiveE2E ||
+                 workspacePluginRemoteExplicitSyncE2E ||
+                 configuredE2ESpecs.some((spec) =>
+                   spec.endsWith("conversation-session-subagent-cross-host.test.ts"),
+@@ -4757,7 +4749,7 @@ export const config: WebdriverIO.Config = {
+         await cleanupE2EDirectory("onPrepare", E2E_CHROMIUM_USER_DATA_ROOT_DIR, true);
+         // Bug 根因：beforeSession 发生在 WDIO worker 内，而 Electron/ChromeDriver
+         // 启动链继承的是 launcher 派生 worker 时的环境。reset mock 若到 worker 才启动，
+-        // Main -> Host 会继续请求真实 ZCode 域名；因此与 upgrade mock 一样在派发 worker
++        // Main -> Host 会继续请求真实 VCode 域名；因此与 upgrade mock 一样在派发 worker
+         // 前启动，并通过环境把同一个动态端口传给 Electron 和测试控制端。
+         await startCodingPlanTeamMockIfNeeded(configuredE2ESpecs);
+         if (codingPlanTeamMockBaseUrl) {
+@@ -4939,12 +4931,6 @@ export const config: WebdriverIO.Config = {
+           credentialsFile: E2E_APP_CREDENTIALS_FILE,
+           settingsFile: E2E_APP_SETTINGS_FILE,
+         });
+-        stopWebRemoteControlAuthGateFixture = await prepareWebRemoteControlAuthGateFixture({
+-          specs,
+-          credentialsFile: E2E_APP_CREDENTIALS_FILE,
+-          settingsFile: E2E_APP_SETTINGS_FILE,
+-          workspacePath: resolve(E2E_HOME_DIR, "ZCodeProject"),
+-        });
+         // resetHome 之后、Electron 启动之前安装，Main -> Host -> Agent 才会同时继承
+         // case-owned PATH；其他 spec 由 helper 保持 no-op。
+         await installBashPrefixPermissionPnpmShim({
+@@ -5055,8 +5041,6 @@ export const config: WebdriverIO.Config = {
+           stopOAuthCompletionRaceFixture = null;
+           await stopTtftOtlpFixture?.();
+           stopTtftOtlpFixture = null;
+-          await stopWebRemoteControlAuthGateFixture?.();
+-          stopWebRemoteControlAuthGateFixture = null;
+           await stopAccessToken401Fixture?.();
+           stopAccessToken401Fixture = null;
+           currentE2EBeforeSessionError = null;
+@@ -5137,8 +5121,6 @@ export const config: WebdriverIO.Config = {
+           await stopClientScenesE2EMock();
+           await stopOAuthCompletionRaceFixture?.();
+           stopOAuthCompletionRaceFixture = null;
+-          await stopWebRemoteControlAuthGateFixture?.();
+-          stopWebRemoteControlAuthGateFixture = null;
+           await stopAccessToken401Fixture?.();
+           stopAccessToken401Fixture = null;
+           await stopPluginCdnZipFixture();
+diff --git a/packages/ui/package.json b/packages/ui/package.json
+index 75f5d043..32a7f20c 100644
+--- a/packages/ui/package.json
++++ b/packages/ui/package.json
+@@ -96,9 +96,12 @@
+   "devDependencies": {
+     "@tailwindcss/typography": "^0.5.19",
+     "@tanstack/react-virtual": "^3.13.23",
++    "@testing-library/dom": "^10.4.1",
++    "@testing-library/react": "^16.3.2",
+     "@types/qrcode": "^1.5.5",
+     "@types/react": "^19.2.14",
+     "@types/react-dom": "^19.2.3",
++    "jsdom": "^29.1.1",
+     "tailwindcss": "^4.2.2",
+     "typescript": "^6.0.2",
+     "unified": "^11.0.5"
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 74fdedba..e55293fb 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -596,6 +596,10 @@ importers:
+         specifier: ^4.1.5
+         version: 4.1.7(patch_hash=11fdb66aa985e1d77e68752deeb7c1130ae33c9a4e2968f23aae8adaf8bc9ba0)(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.13.3(@types/node@24.12.2)(typescript@6.0.2))(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+ 
++  apps/zcode-cli/packages/hba-run-plugin: {}
++
++  apps/zcode-cli/packages/hba-uigen-plugin: {}
++
+   apps/zcode-cli/packages/i18n:
+     dependencies:
+       '@zcode/contracts':
+@@ -1953,6 +1957,12 @@ importers:
+       '@tanstack/react-virtual':
+         specifier: ^3.13.23
+         version: 3.13.23(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
++      '@testing-library/dom':
++        specifier: ^10.4.1
++        version: 10.4.2
++      '@testing-library/react':
++        specifier: ^16.3.2
++        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+       '@types/qrcode':
+         specifier: ^1.5.5
+         version: 1.5.6
+@@ -1962,6 +1972,9 @@ importers:
+       '@types/react-dom':
+         specifier: ^19.2.3
+         version: 19.2.3(@types/react@19.2.14)
++      jsdom:
++        specifier: ^29.1.1
++        version: 29.1.1(@noble/hashes@2.2.0)
+       tailwindcss:
+         specifier: ^4.2.2
+         version: 4.2.2
+@@ -6360,6 +6373,25 @@ packages:
+   '@tanstack/virtual-core@3.13.23':
+     resolution: {integrity: sha512-zSz2Z2HNyLjCplANTDyl3BcdQJc2k1+yyFoKhNRmCr7V7dY8o8q5m8uFTI1/Pg1kL+Hgrz6u3Xo6eFUB7l66cg==}
+ 
++  '@testing-library/dom@10.4.2':
++    resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
++    engines: {node: '>=18'}
++
++  '@testing-library/react@16.3.3':
++    resolution: {integrity: sha512-Uo193NgQbPMz6lrrhtRQQFcMC6Re/ELLFbbuVL30WDlZxlpZf9/lMHTAVxPRLw1q1iu9OJmR1c2BLiENRstdBg==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      '@testing-library/dom': ^10.0.0
++      '@types/react': ^18.0.0 || ^19.0.0
++      '@types/react-dom': ^18.0.0 || ^19.0.0
++      react: 19.2.7
++      react-dom: 19.2.7
++    peerDependenciesMeta:
++      '@types/react':
++        optional: true
++      '@types/react-dom':
++        optional: true
++
+   '@tokenizer/inflate@0.4.1':
+     resolution: {integrity: sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA==}
+     engines: {node: '>=18'}
+@@ -6436,6 +6468,9 @@ packages:
+   '@tybys/wasm-util@0.10.4':
+     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
+ 
++  '@types/aria-query@5.0.4':
++    resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}
++
+   '@types/babel__core@7.20.5':
+     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
+ 
+@@ -7114,6 +7149,9 @@ packages:
+     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
+     engines: {node: '>=10'}
+ 
++  aria-query@5.3.0:
++    resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
++
+   aria-query@5.3.2:
+     resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
+     engines: {node: '>= 0.4'}
+@@ -8230,6 +8268,9 @@ packages:
+   docx-preview@0.4.0:
+     resolution: {integrity: sha512-OdKtE/uj3M4RfGarLkGjahUzRg8/kBp0Sraj1r1NAY1tp/sTpHOBqDrzVf9onMBt9vxP6SdQ6bpLCUCsFwjgcA==}
+ 
++  dom-accessibility-api@0.5.16:
++    resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
++
+   dom-serializer@2.0.0:
+     resolution: {integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==}
+ 
+@@ -10111,6 +10152,10 @@ packages:
+     peerDependencies:
+       react: 19.2.7
+ 
++  lz-string@1.5.0:
++    resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
++    hasBin: true
++
+   macos-release@3.4.0:
+     resolution: {integrity: sha512-wpGPwyg/xrSp4H4Db4xYSeAr6+cFQGHfspHzDUdYxswDnUW0L5Ov63UuJiSr8NMSpyaChO4u1n0MXUvVPtrN6A==}
+     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+@@ -11201,6 +11246,10 @@ packages:
+     engines: {node: '>=14'}
+     hasBin: true
+ 
++  pretty-format@27.5.1:
++    resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
++    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
++
+   pretty-format@30.3.0:
+     resolution: {integrity: sha512-oG4T3wCbfeuvljnyAzhBvpN45E8iOTXCU/TD3zXW80HA3dQ4ahdqMkWGiPWZvjpQwlbyHrPTWUAqUzGzv4l1JQ==}
+     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
+@@ -11383,6 +11432,9 @@ packages:
+   react-is@16.13.1:
+     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
+ 
++  react-is@17.0.2:
++    resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
++
+   react-is@18.3.1:
+     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
+ 
+@@ -17416,6 +17468,27 @@ snapshots:
+ 
+   '@tanstack/virtual-core@3.13.23': {}
+ 
++  '@testing-library/dom@10.4.2':
++    dependencies:
++      '@babel/code-frame': 7.29.0
++      '@babel/runtime': 7.29.7
++      '@types/aria-query': 5.0.4
++      aria-query: 5.3.0
++      dom-accessibility-api: 0.5.16
++      lz-string: 1.5.0
++      picocolors: 1.1.1
++      pretty-format: 27.5.1
++
++  '@testing-library/react@16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
++    dependencies:
++      '@babel/runtime': 7.29.7
++      '@testing-library/dom': 10.4.2
++      react: 19.2.7
++      react-dom: 19.2.7(react@19.2.7)
++    optionalDependencies:
++      '@types/react': 19.2.14
++      '@types/react-dom': 19.2.3(@types/react@19.2.14)
++
+   '@tokenizer/inflate@0.4.1':
+     dependencies:
+       debug: 4.4.3(supports-color@8.1.1)
+@@ -17490,6 +17563,8 @@ snapshots:
+       tslib: 2.8.1
+     optional: true
+ 
++  '@types/aria-query@5.0.4': {}
++
+   '@types/babel__core@7.20.5':
+     dependencies:
+       '@babel/parser': 7.29.2
+@@ -18508,6 +18583,10 @@ snapshots:
+     dependencies:
+       tslib: 2.8.1
+ 
++  aria-query@5.3.0:
++    dependencies:
++      dequal: 2.0.3
++
+   aria-query@5.3.2: {}
+ 
+   array-buffer-byte-length@1.0.2:
+@@ -19664,6 +19743,8 @@ snapshots:
+     dependencies:
+       jszip: 3.10.1
+ 
++  dom-accessibility-api@0.5.16: {}
++
+   dom-serializer@2.0.0:
+     dependencies:
+       domelementtype: 2.3.0
+@@ -21878,6 +21959,8 @@ snapshots:
+     dependencies:
+       react: 19.2.7
+ 
++  lz-string@1.5.0: {}
++
+   macos-release@3.4.0: {}
+ 
+   magic-string@0.30.21:
+@@ -23450,6 +23533,12 @@ snapshots:
+ 
+   prettier@3.8.2: {}
+ 
++  pretty-format@27.5.1:
++    dependencies:
++      ansi-regex: 5.0.1
++      ansi-styles: 5.2.0
++      react-is: 17.0.2
++
+   pretty-format@30.3.0:
+     dependencies:
+       '@jest/schemas': 30.0.5
+@@ -23742,6 +23831,8 @@ snapshots:
+ 
+   react-is@16.13.1: {}
+ 
++  react-is@17.0.2: {}
++
+   react-is@18.3.1: {}
+ 
+   react-jsx-parser@2.4.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+diff --git a/vitest.config.ts b/vitest.config.ts
+index 69fde5ec..b8b7d243 100644
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -3,6 +3,62 @@ import { configDefaults, defineConfig } from "vitest/config";
+ 
+ import engineeringTestFiles from "./scripts/engineering-test-files.json";
+ 
++const processLifecycleTests = [
++  "packages/services/test/processTreeTerminator.test.ts",
++  "packages/services/test/zcodeAgentService.test.ts",
++  "packages/services/test/zcodeAgentService.v4.test.ts",
++  "packages/services/test/zcodeAgentProcessManager.test.ts",
++  "packages/services/test/zcodeStdioTransport.test.ts",
++];
++const forkIsolatedTests = [
++  ...processLifecycleTests,
++  // 真实显示进程树和独立配置读者都在 5 秒内等待启动；并发调度延迟曾触发截止。
++  // 放入串行组保留真实进程和原时限，避免把启动排队误判为资源隔离或读锁失败。
++  "packages/desktop/test/r3RemoteProcess.test.ts",
++  "packages/provider-node/test/personal-config-read-lock.test.ts",
++  // 原生 fs.watch 集成在批量并发时曾等不到通知；串行验证真实接线，去重逻辑由受控事件单测覆盖。
++  "packages/services/src/gen-ui/adapters/stateStorage.test.ts",
++  // electron-builder 下载 NSIS 时把进程 stdio 传给子进程，不能使用 threads 的虚拟 stdio。
++  "packages/desktop/test/windowsInstallerCompile.test.ts",
++  "packages/desktop/test/cdnPreloadScript.test.ts",
++  "packages/desktop/test/desktopRuntimeEnv.test.ts",
++  "packages/desktop/test/e2eDesktopBuildCache.test.ts",
++  "packages/desktop/test/e2eSummarySpecCoverage.test.ts",
++  "packages/desktop/test/migrateStableFeedScript.test.ts",
++  "packages/desktop/test/pluginE2EAdmissionScripts.test.ts",
++  "packages/desktop/test/uploadOssScript.test.ts",
++  // 发布脚本会启动真实 Node/工具子进程，批量 threads 下曾打穿 30s；沿用发布类串行隔离。
++  "packages/desktop/test/notarizeMacosScript.test.ts",
++  "packages/desktop/test/publishReleaseScript.test.ts",
++  // 选源集成测试连续启动 Git、Bash 和 Node；并发启动排队会打穿 30s，沿用发布类串行隔离。
++  "packages/web/test/remoteFrontendBuildSource.test.ts",
++  // Sharp 闭包装配后要启动真实 Node 加载原生库；并行热启动曾触发其 15s 子进程限时。
++  "packages/desktop/test/dev-cua-plugin-runtime.test.ts",
++  // 全量并发时真实心跳与嵌套构建会被调度延迟打穿；单独运行均通过，沿用串行组保留原时限。
++  "packages/desktop/test/webRemoteControlTransport.test.ts",
++  "packages/web/test/webRemoteControlTransport.test.ts",
++  "packages/provider-node/test/builtin-provider-build.test.ts",
++  "packages/provider-node/test/builtin-provider-test-config-sync.test.ts",
++  "packages/server/test/remoteDeploy.test.ts",
++  // Bugfix: 该集成测试会启动数百个真实 Git 子进程；放在普通 threads 并发组会让
++  // macOS 进程启动队列饥饿，表现为 git init 长时间停在 dyld_start。
++  "packages/services/test/gitService.test.ts",
++  // Bugfix: checkpoint 集成测试同样会连续创建真实 Git 仓库；related 全量并发时会因
++  // 子进程与磁盘调度饥饿超过 30 秒，隔离串行后保持聚焦运行时的真实耗时口径。
++  "packages/services/test/gitCheckpointService.test.ts",
++  "packages/services/test/mcpSyncService.test.ts",
++  "packages/services/test/providerRuntimeResolver.test.ts",
++  "packages/services/test/runtimeToolResolver.test.ts",
++  // 该集成测试会真实启动 tsx、Supervisor 与多代 Core；放在普通 threads 中时，
++  // 并行 worker 的进程启动压力会让 15 秒 ready barrier 偶发超时。
++  "packages/zcode-server-cli/test/runtimeUpdateIntegration.test.ts",
++  // Bugfix: pdfjs-dist legacy build 在 threads worker 内偶发原生崩溃（0xC0000005，
++  // 测试自身通过、worker 收尾时崩，会把整场全量跑拦腰截断）。隔离到 fork 池后崩溃
++  // 波及面收敛到本文件，其余测试结果可完整收集；崩溃根因见
++  // docs/windows-test-compatibility.md。
++  "packages/ui/test/pdfJsCMapSupport.test.ts",
++];
++
+ export default defineConfig({
+   // 测试固定注入事件上报端点，使遥测上报链路在单测中可验证；真实构建由 scripts/build-time-config.mjs 决定。
+   define: {
+@@ -55,6 +111,47 @@ export default defineConfig({
+     testTimeout: 30_000,
+     // 工程测试使用明确清单；不再发现 App 业务单测。真实子进程测试串行运行。
+     projects: [
++      {
++        extends: true,
++        test: {
++          name: "unit",
++          include: [
++            "packages/*/test/**/*.test.ts",
++            // 架构治理要求 managed 模块自带 contract.test.ts（见 architecture-policy.yaml），放在模块目录内。
++            "packages/*/src/**/contract.test.ts",
++            // Gen UI 目录回归位于源码旁，默认入口也必须执行，避免只在手动定向运行时生效。
++            "packages/shared/src/node/genUiPaths.test.ts",
++            "packages/services/src/gen-ui/**/*.test.ts",
++            // Git 仓选择持久化与分支弹层过滤的纯函数回归同样位于源码旁，默认入口必须执行。
++            "packages/ui/src/lib/gitSelectedRepository.test.ts",
++            "packages/ui/src/git-branch-switcher/display.test.ts",
++            "scripts/assert-safe-cua-helper-zip.test.mjs",
++            "scripts/ci/ci-telemetry-keyword-guard.test.mjs",
++          ],
++          exclude: [
++            "packages/desktop/test/e2e/**",
++            "packages/zcode-cua/**",
++            ...forkIsolatedTests,
++            // engineering 项目按官方清单直跑；unit 侧排除避免全量（无 --project）时重复执行。
++            ...engineeringTestFiles,
++          ],
++          // Node 24/macOS 的 threads 全量运行可触发 V8 SIGSEGV；诊断时切换进程隔离，测试范围不变。
++          pool: process.env.ZCODE_TEST_POOL === "forks" ? "forks" : "threads",
++          maxWorkers: process.env.ZCODE_TEST_POOL === "forks" ? 2 : 4,
++          sequence: { groupOrder: 0 },
++        },
++      },
++      {
++        extends: true,
++        test: {
++          name: "fork-isolated",
++          include: forkIsolatedTests,
++          pool: "forks",
++          fileParallelism: false,
++          maxWorkers: 1,
++          sequence: { groupOrder: 1 },
++        },
++      },
+       {
+         extends: true,
+         test: {

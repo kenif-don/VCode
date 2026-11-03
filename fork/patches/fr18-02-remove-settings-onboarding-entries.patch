@@ -1,0 +1,153 @@
+diff --git a/packages/ui/src/SettingsPage.tsx b/packages/ui/src/SettingsPage.tsx
+index 7b301fa..fbc23fc 100644
+--- a/packages/ui/src/SettingsPage.tsx
++++ b/packages/ui/src/SettingsPage.tsx
+@@ -3,7 +3,7 @@ import { getWorkspaceSourceServerId } from "@/conversation-workspace-target/sour
+ import { RemoteConnectionNavigationDot } from "@/remote-connection/RemoteConnectionNavigationDot.js";
+ import { resolveRemoteConnectionNavigationPresentation } from "@/lib/remoteConnectionPresentation.js";
+ /* oxlint-disable eslint(max-lines) */
+-import { ArrowLeft, Rocket, type LucideIcon } from "lucide-react";
++import { ArrowLeft, type LucideIcon } from "lucide-react";
+ import { useStore } from "zustand";
+ import {
+   marketingNavigation,
+@@ -652,8 +652,6 @@ export function SettingsPage({
+         : "app",
+     );
+   }, [selectedUsageCodingPlanSource, usageActiveTab, usageCodingPlanSources]);
+-  const setNewUserOnboardingOpen = useZCodeStore((state) => state.setNewUserOnboardingOpen);
+-  const requestOnboardingDialog = () => setNewUserOnboardingOpen(true);
+   const setActiveSettingsSection = useCallback(
+     (section: SettingsSectionId, fallbackSection: SettingsSectionId = activeSection) => {
+       const resolvedSection = resolveSettingsSection(section, fallbackSection);
+@@ -1642,28 +1640,6 @@ export function SettingsPage({
+                     );
+                   })}
+                 </div>
+-
+-                <SettingsSidebarButton
+-                  icon={Rocket}
+-                  label={intl.formatMessage({ id: "settings.onboarding" })}
+-                  className="mt-4 border border-dashed border-border hover:border-border-hover"
+-                  onClick={() => {
+-                    runUserAction({
+-                      input: {
+-                        featureId: "settings.navigation",
+-                        action: "open_onboarding",
+-                        trigger: "button",
+-                      },
+-                      operation: requestOnboardingDialog,
+-                      completed: { resultSource: "local_commit" },
+-                      failureStage: "dialog_open",
+-                    });
+-                  }}
+-                >
+-                  <span className="text-ui-base text-foreground">
+-                    {intl.formatMessage({ id: "settings.onboarding" })}
+-                  </span>
+-                </SettingsSidebarButton>
+               </nav>
+ 
+               <div className="max-lg:hidden">
+@@ -1909,18 +1885,6 @@ export function SettingsPage({
+                               onAskUserQuestionAutoResolutionEnabledChange={
+                                 handleAskUserQuestionAutoResolutionEnabledChange
+                               }
+-                              onOpenOnboardingDialog={() =>
+-                                runUserAction({
+-                                  input: {
+-                                    featureId: "settings.navigation",
+-                                    action: "open_onboarding",
+-                                    trigger: "button",
+-                                  },
+-                                  operation: requestOnboardingDialog,
+-                                  completed: { resultSource: "local_commit" },
+-                                  failureStage: "dialog_open",
+-                                })
+-                              }
+                             />
+                           ) : activeSection === "remoteDevices" ? (
+                             sharedSettings && isDesktop && sourceManagement ? (
+diff --git a/packages/ui/src/i18n/locales/en-US.ts b/packages/ui/src/i18n/locales/en-US.ts
+index 2fd4fd9..f40ac50 100644
+--- a/packages/ui/src/i18n/locales/en-US.ts
++++ b/packages/ui/src/i18n/locales/en-US.ts
+@@ -1371,10 +1371,6 @@ const enUS: Record<string, string> = {
+   "login.apiKey.saveError": "Failed to save API key: {error}",
+   "login.apiKey.skipError": "Failed to skip API key setup: {error}",
+   "login.skip": "Skip for now",
+-  "settings.onboarding": "Onboard",
+-  "settings.onboardingDescription":
+-    "Choose your role, interface mode, and preferences again. Use Migration settings to import data.",
+-  "settings.onboardingOpen": "Open onboarding",
+ 
+   // App header
+   "app.currentTheme": "Current: {theme}",
+diff --git a/packages/ui/src/i18n/locales/zh-CN.ts b/packages/ui/src/i18n/locales/zh-CN.ts
+index 4d4c6dc..2c412ba 100644
+--- a/packages/ui/src/i18n/locales/zh-CN.ts
++++ b/packages/ui/src/i18n/locales/zh-CN.ts
+@@ -1247,10 +1247,6 @@ const zhCN: Record<string, string> = {
+   "login.apiKey.saveError": "保存 API key 失败：{error}",
+   "login.apiKey.skipError": "跳过 API key 设置失败：{error}",
+   "login.skip": "暂时跳过",
+-  "settings.onboarding": "引导",
+-  "settings.onboardingDescription":
+-    "重新选择职业、界面模式和使用偏好。数据迁移可在迁移设置中操作。",
+-  "settings.onboardingOpen": "打开引导",
+ 
+   // 应用头部
+   "app.currentTheme": "当前: {theme}",
+diff --git a/packages/ui/src/settingsPageHelpers.tsx b/packages/ui/src/settingsPageHelpers.tsx
+index 3d61780..9181386 100644
+--- a/packages/ui/src/settingsPageHelpers.tsx
++++ b/packages/ui/src/settingsPageHelpers.tsx
+@@ -188,7 +188,6 @@ export function GeneralSectionContent({
+   onZCodeInteractionBehaviorChange,
+   onAskUserQuestionAutoResolutionEnabledChange = async () => {},
+   onModelIoFullRetentionEnabledChange = async () => {},
+-  onOpenOnboardingDialog,
+ }: {
+   localePreference: LocalePreference;
+   interfaceMode?: InterfaceMode;
+@@ -260,7 +259,6 @@ export function GeneralSectionContent({
+   onZCodeInteractionBehaviorChange: (behavior: ZCodeInteractionBehavior) => Promise<void>;
+   onAskUserQuestionAutoResolutionEnabledChange?: (enabled: boolean) => Promise<void>;
+   onModelIoFullRetentionEnabledChange?: (enabled: boolean) => Promise<void>;
+-  onOpenOnboardingDialog: () => void;
+ }) {
+   const { intl } = useZCodeIntl();
+   const hasServices = Boolean(useOptionalServices());
+@@ -966,20 +964,6 @@ export function GeneralSectionContent({
+           }
+         />
+       </SettingsGroupCard>
+-
+-      <SettingsGroupCard>
+-        <SettingsRow
+-          label={intl.formatMessage({ id: "settings.onboarding" })}
+-          description={intl.formatMessage({
+-            id: "settings.onboardingDescription",
+-          })}
+-          control={
+-            <Button type="button" size="lg" variant="outline" onClick={onOpenOnboardingDialog}>
+-              {intl.formatMessage({ id: "settings.onboardingOpen" })}
+-            </Button>
+-          }
+-        />
+-      </SettingsGroupCard>
+     </div>
+   );
+ }
+diff --git a/packages/ui/test/settingsDataBaseDirControl.test.ts b/packages/ui/test/settingsDataBaseDirControl.test.ts
+index 5841845..cede023 100644
+--- a/packages/ui/test/settingsDataBaseDirControl.test.ts
++++ b/packages/ui/test/settingsDataBaseDirControl.test.ts
+@@ -204,7 +204,6 @@ async function renderGeneralSection(
+       onAskUserQuestionAutoResolutionEnabledChange: vi.fn(async () => {}),
+       onModelIoFullRetentionEnabledChange: vi.fn(async () => {}),
+       onOptimizeAgentExperienceEnabledChange: vi.fn(async () => {}),
+-      onOpenOnboardingDialog: vi.fn(),
+       ...overrides,
+     }),
+   );

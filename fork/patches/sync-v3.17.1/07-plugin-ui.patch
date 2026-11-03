@@ -1,0 +1,1093 @@
+diff --git a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsProtocol.ts b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsProtocol.ts
+index 731e3b72..989b8957 100644
+--- a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsProtocol.ts
++++ b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/appToolsProtocol.ts
+@@ -16,7 +16,7 @@ import {
+ import {
+   ProtocolRequestError,
+   parseParams,
+-  requireSession,
++  requireSessionForMcpUi,
+   type ZCodeProtocolAgentServerContext,
+ } from "../server-types.js";
+ import { McpUiAppToolRegistry } from "./appTools.js";
+@@ -97,7 +97,7 @@ export async function registerMcpUiAppTools(
+   rawParams: unknown,
+ ): Promise<ZCodeMcpUiRegisterAppToolsResult> {
+   const params = parseParams(zcodeMcpUiRegisterAppToolsParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, {
++  const record = requireSessionForMcpUi(context, params.sessionId, {
+     operation: "mcp/uiRegisterAppTools",
+   });
+   return withScopeError(async () => {
+@@ -128,7 +128,7 @@ export async function claimMcpUiAppToolCall(
+   rawParams: unknown,
+ ): Promise<ZCodeMcpUiAppToolAcceptedResult> {
+   const params = parseParams(zcodeMcpUiClaimAppToolCallParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiClaimAppToolCall" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiClaimAppToolCall" });
+   mcpUiInstances.validate(
+     params.instance,
+     params,
+@@ -144,7 +144,7 @@ export async function resolveMcpUiAppToolCall(
+   rawParams: unknown,
+ ): Promise<ZCodeMcpUiAppToolAcceptedResult> {
+   const params = parseParams(zcodeMcpUiResolveAppToolCallParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, {
++  const record = requireSessionForMcpUi(context, params.sessionId, {
+     operation: "mcp/uiResolveAppToolCall",
+   });
+   mcpUiInstances.validate(
+diff --git a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/protocol.ts b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/protocol.ts
+index fd77b3f3..6ad9f4ef 100644
+--- a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/protocol.ts
++++ b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/protocol.ts
+@@ -17,8 +17,9 @@ import {
+ } from "@zcode/shared";
+ import {
+   ProtocolRequestError,
++  isSessionRecordLive,
+   parseParams,
+-  requireSession,
++  requireSessionForMcpUi,
+   type ZCodeProtocolAgentServerContext,
+ } from "../server-types.js";
+ import { getMcpUiAppToolRegistry } from "./appToolsProtocol.js";
+@@ -39,7 +40,7 @@ export async function readMcpUiResource(
+   signal?: AbortSignal,
+ ): Promise<ZCodeMcpReadResourceResult> {
+   const params = parseParams(zcodeMcpReadResourceParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/readResource" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/readResource" });
+   const active = mcpUiInstances.validate(
+     params.instance,
+     params,
+@@ -63,7 +64,7 @@ export async function callMcpUiTool(
+   signal?: AbortSignal,
+ ): Promise<ZCodeMcpUiCallToolResult> {
+   const params = parseParams(zcodeMcpUiCallToolParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiCallTool" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiCallTool" });
+   return translateScopeError(() =>
+     createMcpUiHandlers({ logger: context.logger }).callTool(
+       createMcpUiSessionAccess(record, params),
+@@ -79,7 +80,7 @@ export async function cancelMcpUiToolCall(
+   rawParams: unknown,
+ ): Promise<ZCodeMcpUiCancelCallResult> {
+   const params = parseParams(zcodeMcpUiCancelCallParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiCancelCall" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiCancelCall" });
+   return translateScopeError(async () =>
+     createMcpUiHandlers({ logger: context.logger }).cancelToolCall(
+       createMcpUiSessionAccess(record, params),
+@@ -95,7 +96,7 @@ export async function listMcpUiResources(
+   signal?: AbortSignal,
+ ): Promise<ZCodeMcpUiListResourcesResult> {
+   const params = parseParams(zcodeMcpUiListResourcesParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiListResources" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiListResources" });
+   return translateScopeError(() =>
+     createMcpUiHandlers({ logger: context.logger }).listResources(
+       createMcpUiSessionAccess(record, params),
+@@ -111,7 +112,7 @@ export async function listMcpUiResourceTemplates(
+   signal?: AbortSignal,
+ ): Promise<ZCodeMcpUiListResourceTemplatesResult> {
+   const params = parseParams(zcodeMcpUiListResourcesParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, {
++  const record = requireSessionForMcpUi(context, params.sessionId, {
+     operation: "mcp/uiListResourceTemplates",
+   });
+   return translateScopeError(() =>
+@@ -130,7 +131,7 @@ export async function subscribeMcpUiResource(
+   signal?: AbortSignal,
+ ): Promise<Record<string, never>> {
+   const params = parseParams(zcodeMcpUiResourceSubscriptionParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, {
++  const record = requireSessionForMcpUi(context, params.sessionId, {
+     operation: "mcp/uiSubscribeResource",
+   });
+   await translateScopeError(() =>
+@@ -149,7 +150,7 @@ export async function unsubscribeMcpUiResource(
+   signal?: AbortSignal,
+ ): Promise<Record<string, never>> {
+   const params = parseParams(zcodeMcpUiResourceSubscriptionParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, {
++  const record = requireSessionForMcpUi(context, params.sessionId, {
+     operation: "mcp/uiUnsubscribeResource",
+   });
+   await translateScopeError(() =>
+@@ -169,7 +170,7 @@ export async function readMcpUiResourceForUi(
+   signal?: AbortSignal,
+ ): Promise<ZCodeMcpUiReadResourceResult> {
+   const params = parseParams(zcodeMcpUiReadResourceParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiReadResource" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiReadResource" });
+   return translateScopeError(() =>
+     createMcpUiHandlers({ logger: context.logger }).readResourceForUi(
+       createMcpUiSessionAccess(record, params),
+@@ -218,12 +219,12 @@ export async function openMcpUiInstance(
+   rawParams: unknown,
+ ) {
+   const params = parseParams(zcodeMcpUiOpenInstanceParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiOpenInstance" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiOpenInstance" });
+   // session ready 不代表目标 MCP ready；首次签发等待连接，已有凭证校验仍保持同步拒绝失效来源。
+   const source = await record.app.waitForMcpAppConnection(params.serverName);
+   const current = record.app.getMcpAppConnectionSnapshot(params.serverName);
+   if (
+-    context.sessions.get(params.sessionId) !== record ||
++    !isSessionRecordLive(context, params.sessionId, record) ||
+     !source ||
+     current?.identity !== source.identity ||
+     current.generation !== source.generation
+@@ -322,7 +323,7 @@ export async function validateMcpUiInstance(
+   rawParams: unknown,
+ ) {
+   const params = parseParams(zcodeMcpUiCloseInstanceParamsSchema, rawParams);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiValidateInstance" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiValidateInstance" });
+   mcpUiInstances.validate(
+     params.instance,
+     params,
+diff --git a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/samplingProtocol.ts b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/samplingProtocol.ts
+index b92c483f..f91b94b1 100644
+--- a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/samplingProtocol.ts
++++ b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/samplingProtocol.ts
+@@ -5,7 +5,7 @@ import {
+ import { mcpAppsSamplingResultSchema } from "@zcode/shared/mcp-apps";
+ import {
+   parseParams,
+-  requireSession,
++  requireSessionForMcpUi,
+   type ZCodeProtocolAgentServerContext,
+ } from "../server-types.js";
+ import { mcpUiInstances } from "./instances.js";
+@@ -14,7 +14,7 @@ import { McpUiSamplingCalls } from "./samplingCalls.js";
+ const calls = new McpUiSamplingCalls();
+ export async function sampleMcpUi(context: ZCodeProtocolAgentServerContext, raw: unknown) {
+   const params = parseParams(zcodeMcpUiSamplingParamsSchema, raw);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiSampling" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiSampling" });
+   const validate = () =>
+     mcpUiInstances.validate(
+       params.instance,
+@@ -55,7 +55,7 @@ export async function sampleMcpUi(context: ZCodeProtocolAgentServerContext, raw:
+ }
+ export function cancelMcpUiSampling(context: ZCodeProtocolAgentServerContext, raw: unknown) {
+   const params = parseParams(zcodeMcpUiCancelSamplingParamsSchema, raw);
+-  const record = requireSession(context, params.sessionId, { operation: "mcp/uiCancelSampling" });
++  const record = requireSessionForMcpUi(context, params.sessionId, { operation: "mcp/uiCancelSampling" });
+   const active = mcpUiInstances.validate(
+     params.instance,
+     params,
+diff --git a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-types.ts b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-types.ts
+index 006918f4..02066a8b 100644
+--- a/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-types.ts
++++ b/apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-types.ts
+@@ -181,7 +181,7 @@ export interface ZCodeProtocolAgentServerContext {
+ 
+ /** server → client 请求失败的协议错误码；server.ts 抛出，适配层按码翻译，不在业务逻辑中散落字面量。 */
+ export const PROTOCOL_CLIENT_REQUEST_ERROR_CODES = {
+-  /** 没有 ZCode Protocol client 挂载，无法投递请求。 */
++  /** 没有 VCode Protocol client 挂载，无法投递请求。 */
+   noClientAttached: -32020,
+   /** 请求在收到应答前被取消。 */
+   cancelled: -32021,
+@@ -347,7 +347,7 @@ export function requireSession(
+   if (!record) {
+     // 诊断：readSession 只读取活跃 runtime；记录缺失时要区分“冷会话尚未恢复”和“ID 已失效”，
+     // 不能只留下相同的错误文本，否则无法判断 UI 是读早了还是 task index 带来了脏引用。
+-    context.logger?.warn("ZCode Protocol session runtime missing", {
++    context.logger?.warn("VCode Protocol session runtime missing", {
+       activeSessionCount: context.sessions.size,
+       event: "zcode_protocol.session.require_missing",
+       hasSessionStore: Boolean(context.deps.sessionStore),
+@@ -364,6 +364,57 @@ export function requireSession(
+   return record;
+ }
+ 
++/**
++ * mcp/ui* 面板调用的会话解析（HBA fr19）：项目级面板（surface）跟随项目而非创建会话，
++ * 锚点会话被归档或删除后调用仍需送达。锚定会话缺失时回退到同一 CLI 内任一存活会话
++ * 记录——插件 server 声明 isolation=workspace（fr11），连接池工作区级共享，任一存活
++ * 记录的 app 都能到达同一 server。归属校验仍按请求自带的 sessionId/scopeId 在
++ * mcpUiInstances 内完成，不因回退而放松；会话隔离（isolation=session）的 server 在
++ * 锚点会话消失后本来就应失效，回退记录查不到其连接时照常拒绝。
++ * 全部会话都不存在时仍失败（面板在完全无会话的工作区退化为不可用）。
++ */
++export function requireSessionForMcpUi(
++  context: ZCodeProtocolAgentServerContext,
++  sessionId: string,
++  options: { deliveryKind?: ZCodeDeliveryKind; operation?: string } = {},
++): ZCodeProtocolSessionRecord {
++  const record = context.sessions.get(sessionId);
++  if (record) return record;
++  // Map 迭代序 = 插入序，取最近创建的存活记录作代理。
++  let fallback: ZCodeProtocolSessionRecord | undefined;
++  let fallbackSessionId = "";
++  for (const [id, candidate] of context.sessions) {
++    fallback = candidate;
++    fallbackSessionId = id;
++  }
++  if (fallback) {
++    context.logger?.warn("VCode Protocol mcp-ui session anchor missing, using live record", {
++      activeSessionCount: context.sessions.size,
++      event: "zcode_protocol.session.mcp_ui_fallback",
++      fallbackSessionId,
++      module: "bootstrap.zcode_protocol",
++      operation: options.operation ?? "unknown",
++      sessionId,
++    });
++    return fallback;
++  }
++  return requireSession(context, sessionId, options);
++}
++
++/** record 是否仍是当前有效实例：直连记录按同一性判断；回退代理记录只要仍在活跃表即有效。 */
++export function isSessionRecordLive(
++  context: ZCodeProtocolAgentServerContext,
++  sessionId: string,
++  record: ZCodeProtocolSessionRecord,
++): boolean {
++  const current = context.sessions.get(sessionId);
++  if (current !== undefined) return current === record;
++  for (const candidate of context.sessions.values()) {
++    if (candidate === record) return true;
++  }
++  return false;
++}
++
+ export function createProtocolLogger(deps: ZCodeProtocolAgentDependencies): Logger | undefined {
+   return deps.loggerFactory?.createLogger("zcode").child({
+     module: "bootstrap.zcode_protocol",
+diff --git a/apps/zcode-cli/packages/bootstrap/tests/mcp-ui-session-fallback.test.ts b/apps/zcode-cli/packages/bootstrap/tests/mcp-ui-session-fallback.test.ts
+new file mode 100644
+index 00000000..0a667f42
+--- /dev/null
++++ b/apps/zcode-cli/packages/bootstrap/tests/mcp-ui-session-fallback.test.ts
+@@ -0,0 +1,61 @@
++import { describe, expect, it } from "vitest";
++import {
++  isSessionRecordLive,
++  requireSession,
++  requireSessionForMcpUi,
++  type ZCodeProtocolAgentServerContext,
++  type ZCodeProtocolSessionRecord,
++} from "../src/zcode-protocol/server-types.js";
++
++function makeRecord(): ZCodeProtocolSessionRecord {
++  return {} as unknown as ZCodeProtocolSessionRecord;
++}
++
++function makeContext(
++  entries: Array<[string, ZCodeProtocolSessionRecord]>,
++): ZCodeProtocolAgentServerContext {
++  return { sessions: new Map(entries) } as unknown as ZCodeProtocolAgentServerContext;
++}
++
++describe("mcp-ui 会话锚点兜底（HBA fr19）", () => {
++  it("锚定会话存活时原样返回", () => {
++    const record = makeRecord();
++    const context = makeContext([["s1", record]]);
++    expect(requireSessionForMcpUi(context, "s1", { operation: "mcp/uiCallTool" })).toBe(record);
++  });
++
++  it("锚定会话缺失时回退到存活记录", () => {
++    const alive = makeRecord();
++    const context = makeContext([["s2", alive]]);
++    expect(requireSessionForMcpUi(context, "s1", { operation: "mcp/uiCallTool" })).toBe(alive);
++  });
++
++  it("多个存活记录时取最近创建的", () => {
++    const older = makeRecord();
++    const newer = makeRecord();
++    const context = makeContext([
++      ["s2", older],
++      ["s3", newer],
++    ]);
++    expect(requireSessionForMcpUi(context, "s1")).toBe(newer);
++  });
++
++  it("全部会话消失时仍按 sessionUnavailable 失败", () => {
++    const context = makeContext([]);
++    expect(() => requireSessionForMcpUi(context, "s1")).toThrow("Session is not active: s1");
++    expect(() => requireSession(context, "s1")).toThrow("Session is not active: s1");
++  });
++
++  it("isSessionRecordLive：直连按同一性，回退代理按在表判断", () => {
++    const record = makeRecord();
++    const replaced = makeRecord();
++    // 直连命中。
++    expect(isSessionRecordLive(makeContext([["s1", record]]), "s1", record)).toBe(true);
++    // 会话被替换后旧记录失效。
++    expect(isSessionRecordLive(makeContext([["s1", replaced]]), "s1", record)).toBe(false);
++    // 回退代理：只要仍在活跃表即有效。
++    expect(isSessionRecordLive(makeContext([["s2", record]]), "s1", record)).toBe(true);
++    // 回退代理被移除后失效。
++    expect(isSessionRecordLive(makeContext([]), "s1", record)).toBe(false);
++  });
++});
+diff --git a/packages/shared/src/mcp-apps/contract.ts b/packages/shared/src/mcp-apps/contract.ts
+index 0a6910b7..c5f40f10 100644
+--- a/packages/shared/src/mcp-apps/contract.ts
++++ b/packages/shared/src/mcp-apps/contract.ts
+@@ -1,7 +1,7 @@
+ /**
+  * MCP Apps 协议契约：agent、host、renderer 与 main 共用的常量、工具 UI 元数据类型、沙箱句柄与登记载荷。
+  * 页面 ↔ 宿主的线协议（`ui/*` 方法、握手、版本协商、JSON-RPC）由官方 `@modelcontextprotocol/ext-apps` 定义，
+- * 这里只保留 ZCode 自己的扩展键与限额。只放类型与常量；归一化与 schema 在同目录其他文件，经 index.ts 导出。
++ * 这里只保留 VCode 自己的扩展键与限额。只放类型与常量；归一化与 schema 在同目录其他文件，经 index.ts 导出。
+  */
+ 
+ /** MCP 扩展标识（规范「Extension Identifier」）；与官方 SDK `EXTENSION_ID` 一致。 */
+@@ -148,19 +148,25 @@ export {
+ } from "./resourceMime.js";
+ 
+ /**
+- * `hostCapabilities.experimental` 里 ZCode 扩展的键。官方 SDK 的 zod 会剥掉标准位之外的未知能力键，
++ * `hostCapabilities.experimental` 里 VCode 扩展的键。官方 SDK 的 zod 会剥掉标准位之外的未知能力键，
+  * 扩展一律放 experimental（规范预留位），页面按键 feature detect。
+  */
+ export const MCP_APPS_WIDGET_STATE_EXPERIMENTAL_KEY = "zcode/widgetState";
+ export const MCP_APPS_RESOURCE_SUBSCRIBE_EXPERIMENTAL_KEY = "zcode/resourceSubscribe";
+ export const MCP_APPS_SURFACE_EXPERIMENTAL_KEY = "zcode/surface";
++export const MCP_APPS_INSERT_INPUT_TEXT_EXPERIMENTAL_KEY = "zcode/insertInputText";
++/**
++ * VCode 扩展方法 `ui/insert-input-text { text }`：文本追加到当前会话输入框末尾（不发送、不弹框）；
++ * 没有 composer 接住时回 -32601 供页面降级。能力位 `experimental["zcode/insertInputText"]`。
++ */
++export const MCP_APPS_INSERT_INPUT_TEXT_METHOD = "ui/insert-input-text";
+ /**
+  * 宿主允许插件文档内部创建子 frame（srcdoc / about:blank 预览、声明的 frameDomains）而不把它当作页面重载撤销实例。
+  * 旧宿主会在子 frame 导航时停止页面；需要嵌套预览的插件据此键降级，而不是创建 frame 后被释放。
+  */
+ export const MCP_APPS_NESTED_FRAMES_EXPERIMENTAL_KEY = "zcode/nestedFrames";
+ /**
+- * ZCode 扩展方法 `ui/set-widget-state { widgetState }`（MCP Apps 无 widgetState）：页面把界面状态交给宿主
++ * VCode 扩展方法 `ui/set-widget-state { widgetState }`（MCP Apps 无 widgetState）：页面把界面状态交给宿主
+  * renderer 内存保存（不持久化，会话内重挂载可恢复）；初值经 hostContext 的 `zcode/widgetState` 键随握手下发。
+  */
+ export const MCP_APPS_SET_WIDGET_STATE_METHOD = "ui/set-widget-state";
+diff --git a/packages/ui/src/plugin-ui/PluginUiSidePane.tsx b/packages/ui/src/plugin-ui/PluginUiSidePane.tsx
+index b2627b52..60346247 100644
+--- a/packages/ui/src/plugin-ui/PluginUiSidePane.tsx
++++ b/packages/ui/src/plugin-ui/PluginUiSidePane.tsx
+@@ -10,6 +10,8 @@ import { PluginUiSidePaneView } from "@/plugin-ui/components/PluginUiSidePane.js
+ type Props = {
+   tab: PluginUiSidePaneTab;
+   visible: boolean;
++  /** 当前活跃会话；面板（surface）的 ui/message / 模型上下文发到这里（HBA fr7）。 */
++  activeSessionId?: string | null;
+   onOpenBrowserUrl?: (url: string) => void;
+   /** 页面请求回到 inline 时宿主关闭本 tab。 */
+   onCloseTab?: (tabId: string) => void;
+diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts b/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts
+index 45eaac41..3e69a1c9 100644
+--- a/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts
++++ b/packages/ui/src/plugin-ui/adapters/pluginUiHostTypes.ts
+@@ -35,7 +35,12 @@ export interface UsePluginUiHostInput {
+   /** false 时不创建沙箱（如侧栏已接管同一作用域）；默认 true。 */
+   enabled?: boolean;
+   /** 会话交互回调：缺省时对应请求回 -32601，能力声明也不带该项。 */
+-  interactions?: Pick<PluginUiHostControllerDeps, "onSendFollowUpMessage" | "onUpdateModelContext">;
++  interactions?: Pick<
++    PluginUiHostControllerDeps,
++    "onSendFollowUpMessage" | "onUpdateModelContext" | "onInsertInputText"
++  >;
++  /** 锚点会话消亡（删除/归档）时通知调用方换锚重绑（HBA fr19）；仅面板（surface）传。 */
++  onSessionLost?: () => void;
+ }
+ 
+ export interface UsePluginUiHostResult {
+diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts b/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts
+index 37a2e4e7..476e0624 100644
+--- a/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts
++++ b/packages/ui/src/plugin-ui/adapters/pluginUiInteractions.ts
+@@ -8,6 +8,7 @@ import {
+   buildPluginUiFollowUpPrompt,
+ } from "../domain/pluginUiFollowUp.js";
+ import { readPluginUiImageBlocks } from "../domain/pluginUiImageBlocks.js";
++import { dispatchPluginUiInsertInputText } from "../domain/pluginUiInsertInputText.js";
+ import { dispatchPluginUiModelContextAdd } from "./pluginUiModelContextEvents.js";
+ 
+ import { type PluginUiSessionScope } from "@/plugin-ui/contract.js";
+@@ -49,11 +50,15 @@ function scopeMarker(scope: PluginUiScopeRef): string {
+  * - sendFollowUpMessage：有用户手势直接以用户身份发送；无手势弹可编辑确认框，取消回 -32000。
+  *   ：structuredContent 以 ```json 块拼在文本后面；来源只进 metadata `source`。
+  * - updateModelContext：投递到当前会话 composer 的插件上下文块；没有 composer 接住回 -32601。
++ * - insertInputText：文本追加到当前会话输入框末尾（不发送、不弹框）；没有 composer 接住回 -32601。
+  * widgetState 由窗口页面管理器唯一写入。
+  */
+ export function createPluginUiInteractions(
+   input: PluginUiInteractionScope,
+-): Pick<PluginUiHostControllerDeps, "onSendFollowUpMessage" | "onUpdateModelContext"> {
++): Pick<
++  PluginUiHostControllerDeps,
++  "onSendFollowUpMessage" | "onUpdateModelContext" | "onInsertInputText"
++> {
+   const marker = scopeMarker(input.scope);
+   const source = { kind: "pluginUi" as const, pluginId: input.pluginId, toolCallId: marker };
+   return {
+@@ -107,5 +112,13 @@ export function createPluginUiInteractions(
+       if (!delivered)
+         throw rpcError(JSON_RPC_UNAVAILABLE, "No composer is listening for model context");
+     },
++    async onInsertInputText(payload) {
++      const delivered = dispatchPluginUiInsertInputText({
++        sessionId: input.sessionId,
++        text: payload.text,
++      });
++      if (!delivered)
++        throw rpcError(JSON_RPC_UNAVAILABLE, "No composer is listening for input text");
++    },
+   };
+ }
+diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts b/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
+index 9fe4136b..2a434a99 100644
+--- a/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
++++ b/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
+@@ -89,6 +89,8 @@ export function createPage(
+   let lastFeed = "";
+   let lastContext = "";
+   let appIdentity: string | undefined;
++  // 当前租约/订阅锚定的会话（HBA fr19）；update 交付不同锚点时整体重绑。
++  let boundSessionId: string | null = null;
+   const notify = () => {
+     for (const listener of listeners) listener();
+   };
+@@ -215,6 +217,7 @@ export function createPage(
+       );
+       releaseLease = () => connection.release();
+       const lease = connection.layer.acquire(latest.current.scope.sessionId);
++      boundSessionId = latest.current.scope.sessionId;
+       const runtimeStopped = () => {
+         void page.suspend(true);
+         patch({ phase: "error", error: "MCP App runtime is no longer available" });
+@@ -291,6 +294,7 @@ export function createPage(
+         buildPluginUiHostCapabilities({
+           canSendFollowUpMessage: Boolean(latest.current.interactions?.onSendFollowUpMessage),
+           canUpdateModelContext: Boolean(latest.current.interactions?.onUpdateModelContext),
++          canInsertInputText: Boolean(latest.current.interactions?.onInsertInputText),
+           canSetWidgetState: true,
+           canSample: Boolean(services?.pluginUiSamplingService && getPluginUiSessionActions(scope)),
+           canSubscribeResources: true,
+@@ -309,6 +313,10 @@ export function createPage(
+         latest.current.interactions?.onUpdateModelContext
+           ? latest.current.interactions.onUpdateModelContext(payload)
+           : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
++      onInsertInputText: (payload) =>
++        latest.current.interactions?.onInsertInputText
++          ? latest.current.interactions.onInsertInputText(payload)
++          : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
+       onUpdateWidgetState: async (widgetState) => {
+         setPluginUiWidgetState(surfaceKey, widgetState);
+       },
+@@ -367,22 +375,30 @@ export function createPage(
+     reportUsage("ui_open_request");
+     controller.start();
+   }
+-  const task = buildPluginUiSessionKey(input.scope);
+   const workspaceEvents = services.zcodeTaskService.onDynamicWorkspaceEvent({
+     workspacePath: input.scope.workspacePath,
+     workspaceIdentity: input.scope.workspaceIdentity,
+   })((event) => {
+     if (
+-      event.type === "workspace_task_list_changed" &&
+-      event.reason === "task_deleted" &&
+-      event.taskId === input.scope.sessionId
++      event.type !== "workspace_task_list_changed" ||
++      event.reason !== "task_deleted" ||
++      event.taskId !== latest.current.scope.sessionId
+     )
+-      pluginUiPages.removeTask(task);
++      return;
++    // HBA fr19：面板（surface）跟随项目，锚点会话被删除不销毁页面，只通知换锚重绑；
++    // 工具卡片归对话，任务删除仍按 task 回收页面。
++    if (latest.current.scope.scope.kind === "surface") {
++      latest.current.onSessionLost?.();
++      return;
++    }
++    pluginUiPages.removeTask(buildPluginUiSessionKey(latest.current.scope));
+   });
+   const page: Page = {
+     kind: "mcp",
+     key,
+-    task,
++    get task() {
++      return buildPluginUiSessionKey(latest.current.scope);
++    },
+     visible: false,
+     snapshot: () => snapshot,
+     start: () => void ensure(),
+@@ -406,6 +422,14 @@ export function createPage(
+     update(next) {
+       // 背景内联锚点不能覆盖侧栏当前的交互上下文。
+       if (next.enabled === false) return;
++      // 换锚重绑（HBA fr19）：锚点会话消亡后调用方换到存活会话，这里整体重启页面
++      // （新租约/新订阅/新 AppBridge 归属）；widgetState / surfaceFeed / surfaceStateKey
++      // 因 key 的会话位是 `*` 而保持连续，guest 内存不受影响。
++      if (boundSessionId !== null && next.scope.sessionId !== boundSessionId) {
++        latest.current = next;
++        void page.suspend(true).then(() => ensure());
++        return;
++      }
+       latest.current = next;
+       // 只重选展示锚点，绝不销毁或重载 WebView；插件的未保存状态仍留在同一 guest。
+       syncDisplayModes(snapshot.appCapabilities);
+@@ -502,6 +526,7 @@ export function createPage(
+         offLease = releaseLease;
+       releaseFeed = undefined;
+       releaseLease = undefined;
++      boundSessionId = null;
+       patch({ phase: "idle", handle: null, appCapabilities: undefined });
+       plane.setAllowedDisplayModes([]);
+       // 先前释放未完成时不能重新预备；反复重试也只等待同一个释放链。
+diff --git a/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx b/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx
+index 3bcb1e30..efd99569 100644
+--- a/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx
++++ b/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx
+@@ -32,7 +32,7 @@ import { toolCallRowToLegacyNode } from "@/v4/toolCallRowAdapter.js";
+ import { useConversationProjection } from "@/v4/useConversationProjection.js";
+ import { V4PaneConversationProvider, useV4Conversation } from "@/v4/V4ConversationContext.js";
+ import type { McpAppsDisplayMode, PluginUiScopeRef } from "@zcode/shared/mcp-apps";
+-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { resolvePluginUiLogicalScope } from "../domain/pluginUiLogicalScope.js";
+ 
+ const FULLSCREEN_ONLY: readonly McpAppsDisplayMode[] = ["fullscreen"];
+@@ -42,12 +42,15 @@ export function usePluginUiSidePaneModel({
+   tab,
+   visible,
+   scopeRef,
++  activeSessionId,
+   onOpenBrowserUrl,
+   onCloseTab,
+ }: {
+   tab: PluginUiSidePaneTab;
+   visible: boolean;
+   scopeRef: PluginUiScopeRef;
++  /** 当前活跃会话；面板（surface）的会话交互发到这里（HBA fr7）。 */
++  activeSessionId?: string | null;
+   onOpenBrowserUrl?: (url: string) => void;
+   onCloseTab?: (tabId: string) => void;
+ }): PluginUiSidePaneViewProps {
+@@ -55,22 +58,54 @@ export function usePluginUiSidePaneModel({
+   const { layer } = useV4Conversation();
+   const [lease, setLease] = useState<SessionLease | null>(null);
+   const theme = useZCodeStoreWithDefault((state) => state.theme, "system");
++  // 面板（surface）会话锚点（HBA fr19）：默认钉在创建会话（工具结果行所在），
++  // 锚点会话被归档/删除后换锚到当前活跃会话——面板跟随项目，不随单个会话消亡而失效。
++  const [anchorSessionId, setAnchorSessionId] = useState(tab.parentSessionId);
++  const [anchorLost, setAnchorLost] = useState(false);
++  const retriedStoreRef = useRef(false);
+ 
+   useEffect(() => {
+-    const nextLease = layer.acquire(tab.parentSessionId);
++    const nextLease = layer.acquire(anchorSessionId);
+     setLease(nextLease);
+     return () => nextLease.release();
+-  }, [layer, tab.parentSessionId]);
++  }, [layer, anchorSessionId]);
+   const state = useConversationProjection(lease);
++  // 锚点消亡信号（HBA fr19）：任务删除经 onSessionLost 直达；归档/冷启动死锚落在
++  // 订阅终态失败（status=error）。会话消亡特征的失败 → 标记待换锚；其余终态失败 → 手动重连一次。
++  useEffect(() => {
++    if (scopeRef.kind !== "surface") return;
++    if (state.status !== "error") {
++      if (state.status === "live") retriedStoreRef.current = false;
++      return;
++    }
++    const message = state.lastError ?? "";
++    if (/Session is not active|Session not found|sessionNotFound/i.test(message)) {
++      setAnchorLost(true);
++      return;
++    }
++    if (!retriedStoreRef.current) {
++      retriedStoreRef.current = true;
++      void lease?.store.retry();
++    }
++  }, [scopeRef.kind, state.status, state.lastError, lease]);
++  // 待换锚且已有存活的活跃会话 → 重绑；活跃会话晚于消亡出现时同样生效。
++  useEffect(() => {
++    if (!anchorLost) return;
++    if (activeSessionId && activeSessionId !== anchorSessionId) {
++      setAnchorSessionId(activeSessionId);
++      setAnchorLost(false);
++      retriedStoreRef.current = false;
++    }
++  }, [anchorLost, activeSessionId, anchorSessionId]);
+   // 4b-2 R4：侧栏不在 SessionPane 树内，自己把会话投影的资源通知接到路由表（按 store 引用计数，不重复投递）。
+   const feedScope = useMemo<PluginUiSessionScope>(
+     () => ({
+       workspacePath: tab.workspacePath,
+       remoteSessionId: tab.remoteSessionId,
+       ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
+-      sessionId: tab.parentSessionId,
++      sessionId: anchorSessionId,
+     }),
+-    [tab.parentSessionId, tab.workspaceIdentity, tab.workspacePath],
++    [anchorSessionId, tab.workspaceIdentity, tab.workspacePath, tab.remoteSessionId],
+   );
+   usePluginUiResourceDeltaFeed(lease?.store, feedScope);
+ 
+@@ -152,19 +187,23 @@ export function usePluginUiSidePaneModel({
+     [canReturnInline, onCloseTab, tab.id],
+   );
+   const [width, setWidth] = useState(0);
++  // 面板（surface）跟随项目（HBA fr7）：ui/message / 模型上下文发到**当前活跃对话**；
++  // 其余宿主管道（资源通知路由、租约、widgetState）仍绑定创建会话，推送链路不受切换影响。
++  const bindSessionId =
++    scopeRef.kind === "surface" && activeSessionId ? activeSessionId : tab.parentSessionId;
+   const interactions = useMemo(
+     () =>
+       createPluginUiInteractions({
+         workspacePath: tab.workspacePath,
+         remoteSessionId: tab.remoteSessionId,
+         workspaceIdentity: tab.workspaceIdentity,
+-        sessionId: tab.parentSessionId,
++        sessionId: bindSessionId,
+         pluginId: tab.pluginId,
+         scope: scopeRef,
+       }),
+     [
+       scopeRef,
+-      tab.parentSessionId,
++      bindSessionId,
+       tab.pluginId,
+       tab.workspacePath,
+       tab.workspaceIdentity,
+@@ -182,9 +221,11 @@ export function usePluginUiSidePaneModel({
+       workspacePath: tab.workspacePath,
+       remoteSessionId: tab.remoteSessionId ?? undefined,
+       ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
+-      sessionId: tab.parentSessionId,
++      sessionId: anchorSessionId,
+       scope: scopeRef,
+     },
++    // HBA fr19：锚点会话被删除时换锚重绑（managedPage 检测 scope.sessionId 变化整体重启）。
++    onSessionLost: () => setAnchorLost(true),
+     theme: resolveTheme(theme),
+     locale,
+     displayMode: "fullscreen",
+diff --git a/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts b/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts
+index 91b9e8d1..195d9c37 100644
+--- a/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts
++++ b/packages/ui/src/plugin-ui/adapters/useRecommendedUiPlugins.ts
+@@ -26,9 +26,9 @@ export function useRecommendedUiPlugins(target: {
+   } = useServices();
+   const store = useScopedPluginManagementStore(service);
+   const state = store();
+-  const { recommendations, loading: configLoading } = useUiPluginRecommendations(
+-    target.sessionId !== null,
+-  );
++  // HBA fr12：条目在草稿态（新会话）也列出——推荐读取与目录初始化不再等正式会话，
++  // 此前的 sessionId 门属于「空会话整区隐藏」时代的遗留（读取本就 workspace 级）。
++  const { recommendations, loading: configLoading } = useUiPluginRecommendations(true);
+   const key = JSON.stringify([
+     target.workspacePath,
+     target.workspaceIdentity,
+@@ -47,7 +47,7 @@ export function useRecommendedUiPlugins(target: {
+     let active = true;
+     current.current = context;
+     setReady(undefined);
+-    if (service && target.sessionId !== null) {
++    if (service) {
+       void store
+         .getState()
+         .initialize({
+@@ -136,8 +136,7 @@ export function useRecommendedUiPlugins(target: {
+   };
+   return {
+     entries,
+-    loading:
+-      target.sessionId !== null && (configLoading || (Boolean(service) && ready !== context)),
++    loading: configLoading || (Boolean(service) && ready !== context),
+     resolveSurface,
+     prepare,
+     isBusy: (item: StorePluginItem) => isItemBusy(item, state),
+diff --git a/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts b/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
+index 4a2c3266..ad98a011 100644
+--- a/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
++++ b/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
+@@ -1,8 +1,40 @@
+ import { useEffect, useState } from "react";
+ import type { ClientConfigSnapshot } from "@zcode/shared";
++import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID } from "@zcode/shared";
+ import { useOptionalServices } from "@/hooks/useServices.js";
+ import { logger } from "@/logger.js";
+ 
++type UiPluginRecommendation = ClientConfigSnapshot["uiPluginRecommendations"][number];
++
++// 本地内置面板推荐（fr6）：HBA UI 原型 / 运行面板随内置插件包发布，
++// 不依赖云端下发——clientConfig 的 uiPluginRecommendations 为空、不可达或未含它们时，
++// launcher 也要常驻这两个入口。与云端结果合并去重，内置条目固定靠前。
++export const BUILTIN_UI_PLUGIN_RECOMMENDATIONS: readonly UiPluginRecommendation[] = [
++  {
++    pluginId: "hba-uigen@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
++    surfaceId: "hba-uigen",
++  },
++  {
++    pluginId: "hba-run@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
++    surfaceId: "hba-run",
++  },
++];
++
++// 内置条目在前，云端条目随后；按 pluginId+surfaceId 去重，云端可调整顺序但不重复追加。
++export function mergeUiPluginRecommendations(
++  cloud: readonly UiPluginRecommendation[],
++): UiPluginRecommendation[] {
++  const seen = new Set<string>();
++  const merged: UiPluginRecommendation[] = [];
++  for (const entry of [...BUILTIN_UI_PLUGIN_RECOMMENDATIONS, ...cloud]) {
++    const key = entry.pluginId + " " + entry.surfaceId;
++    if (seen.has(key)) continue;
++    seen.add(key);
++    merged.push(entry);
++  }
++  return merged;
++}
++
+ /** 缓存和请求合并归 Host 配置服务；此处只持有当前入口的展示投影。 */
+ export function useUiPluginRecommendations(enabled: boolean) {
+   const service = useOptionalServices()?.clientConfigService;
+@@ -16,11 +48,16 @@ export function useUiPluginRecommendations(enabled: boolean) {
+     if (enabled && service) {
+       void service.getSnapshot().then(
+         ({ uiPluginRecommendations }) => {
+-          if (active) setSnapshot({ service, recommendations: uiPluginRecommendations ?? [] });
++          if (active)
++            setSnapshot({
++              service,
++              recommendations: mergeUiPluginRecommendations(uiPluginRecommendations ?? []),
++            });
+         },
+         () => {
+           if (active) {
+-            setSnapshot({ service, recommendations: [] });
++            // 云端下发失败不影响本地内置面板：内置推荐照常下发。
++            setSnapshot({ service, recommendations: mergeUiPluginRecommendations([]) });
+             logger.warn("[plugin-ui] 推荐配置读取失败");
+           }
+         },
+diff --git a/packages/ui/src/plugin-ui/app/pluginUiHostBridge.ts b/packages/ui/src/plugin-ui/app/pluginUiHostBridge.ts
+index e2af7780..1f5bc85d 100644
+--- a/packages/ui/src/plugin-ui/app/pluginUiHostBridge.ts
++++ b/packages/ui/src/plugin-ui/app/pluginUiHostBridge.ts
+@@ -36,7 +36,7 @@ export interface PluginUiRequestContext {
+ 
+ /**
+  * 控制器用到的官方 `AppBridge` 成员子集。生产用 `new AppBridge(null, …)`，测试可注入假实现。
+- * 自定义方法（ZCode 扩展与需要放宽 schema 的 ui/message）走基类的三参 `setRequestHandler`；
++ * 自定义方法（VCode 扩展与需要放宽 schema 的 ui/message）走基类的三参 `setRequestHandler`；
+  * 规范方法（resources/subscribe）走二参形式，handler 拿到完整 request。
+  */
+ export interface PluginUiHostBridge {
+diff --git a/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts b/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts
+index 22f0d712..a4a62162 100644
+--- a/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts
++++ b/packages/ui/src/plugin-ui/app/pluginUiInteractionPorts.ts
+@@ -6,7 +6,11 @@ import type {
+   PluginSandboxHandle,
+   PluginSandboxPlatformPort,
+ } from "@zcode/shared/mcp-apps";
+-import { MCP_APPS_SET_WIDGET_STATE_METHOD, concatMcpAppsTextContent } from "@zcode/shared/mcp-apps";
++import {
++  MCP_APPS_INSERT_INPUT_TEXT_METHOD,
++  MCP_APPS_SET_WIDGET_STATE_METHOD,
++  concatMcpAppsTextContent,
++} from "@zcode/shared/mcp-apps";
+ import { z } from "zod";
+ import type { PluginUiHostBridge } from "./pluginUiHostBridge.js";
+ 
+@@ -25,6 +29,8 @@ export interface PluginUiInteractionCallbacks {
+     content: Array<Record<string, unknown>>;
+     structuredContent?: unknown;
+   }): Promise<void>;
++  /** 页面 `ui/insert-input-text { text }`:文本追加到当前会话输入框末尾;没有 composer 接住回 -32601。 */
++  onInsertInputText?(payload: { text: string }): Promise<void>;
+   /** 页面 `ui/set-widget-state { widgetState }`；宿主同步写内存 store 后回包。 */
+   onUpdateWidgetState?(widgetState: unknown): Promise<void>;
+   /** `ui/download-file`；逐项保存，取消 / 失败回 `{ isError: true }`。 */
+@@ -43,6 +49,7 @@ const pluginUiMessageParamsSchema = z
+   })
+   .loose();
+ const pluginUiSetWidgetStateParamsSchema = z.object({ widgetState: z.unknown() }).loose();
++const pluginUiInsertInputTextParamsSchema = z.object({ text: z.string() }).loose();
+ 
+ /** 回调抛出的带 `code` 的错误（-32601 / -32000 / -32602）翻译成 JSON-RPC 错误，其余按内部错误处理。 */
+ function toProtocolError(error: unknown): unknown {
+@@ -56,8 +63,9 @@ const unsupported = (method: string) =>
+   new ProtocolError(METHOD_NOT_FOUND, `${method} is not available for this app`);
+ 
+ /**
+- * 会话交互（ui/message、ui/update-model-context、ui/download-file、ZCode 扩展 ui/set-widget-state）接到官方
+- * AppBridge：缺省回调回 -32601；ui/message 的手势 token 由 main 在 guest input-event 记录、一次性消费，没有句柄视为无手势。
++ * 会话交互（ui/message、ui/update-model-context、ui/download-file、VCode 扩展 ui/set-widget-state、
++ * ui/insert-input-text）接到官方 AppBridge：缺省回调回 -32601；ui/message 的手势 token 由 main 在
++ * guest input-event 记录、一次性消费，没有句柄视为无手势。
+  */
+ export function wirePluginUiInteractions(
+   bridge: PluginUiHostBridge,
+@@ -113,6 +121,21 @@ export function wirePluginUiInteractions(
+     }
+     return {};
+   };
++  bridge.setRequestHandler(
++    MCP_APPS_INSERT_INPUT_TEXT_METHOD,
++    { params: pluginUiInsertInputTextParamsSchema, result: EmptyResultSchema },
++    async (rawParams) => {
++      if (!currentHandle()) throw new Error("MCP App instance was closed");
++      if (!deps.onInsertInputText) throw unsupported(MCP_APPS_INSERT_INPUT_TEXT_METHOD);
++      const params = rawParams as z.infer<typeof pluginUiInsertInputTextParamsSchema>;
++      try {
++        await deps.onInsertInputText({ text: params.text });
++      } catch (error) {
++        throw toProtocolError(error);
++      }
++      return {};
++    },
++  );
+   bridge.ondownloadfile = async (params) => {
+     if (!deps.onDownloadFile) throw unsupported("ui/download-file");
+     try {
+diff --git a/packages/ui/src/plugin-ui/app/pluginUiResourceSubscriptions.ts b/packages/ui/src/plugin-ui/app/pluginUiResourceSubscriptions.ts
+index bf9ef058..0f8c54c4 100644
+--- a/packages/ui/src/plugin-ui/app/pluginUiResourceSubscriptions.ts
++++ b/packages/ui/src/plugin-ui/app/pluginUiResourceSubscriptions.ts
+@@ -105,7 +105,7 @@ export function createPluginUiResourceSubscriptions(
+           ...(request?.cursor ? { cursor: request.cursor } : {}),
+         })) as unknown as ListResourceTemplatesResult;
+       };
+-      // resources/subscribe 是 ZCode 扩展（宣告 experimental["zcode/resourceSubscribe"]），规范方法走二参形式。
++      // resources/subscribe 是 VCode 扩展（宣告 experimental["zcode/resourceSubscribe"]），规范方法走二参形式。
+       bridge.setRequestHandler("resources/subscribe", async (request) => {
+         await subscribe(request.params.uri);
+         return {};
+diff --git a/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx b/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx
+index 298dd618..5ce692f3 100644
+--- a/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx
++++ b/packages/ui/src/plugin-ui/components/PluginUiLauncherItems.tsx
+@@ -23,7 +23,10 @@ export interface PluginUiLauncherItemsProps {
+   workspacePath: string;
+   workspaceIdentity?: string;
+   remoteSessionId?: string;
+-  /** 正式会话 id；草稿态为 null，此时不显示入口（面板是会话级，第一版不支持草稿）。 */
++  /**
++   * 正式会话 id；草稿态（新会话未发首条消息）为 null——条目照常列出，打开时由宿主
++   * 按需补建 deferred 托管会话（HBA fr12：应用插件区不再随空会话隐藏）。
++   */
+   sessionId: string | null;
+   onOpenPluginUi: (request: OpenPluginUiSideTabRequest) => void;
+   /** 菜单复用标准菜单项；空白页与内置应用共用 SidePaneLauncherRow。 */
+@@ -92,7 +95,8 @@ export function PluginUiLauncherItems(props: PluginUiLauncherItemsProps) {
+       </div>
+     );
+   }
+-  if (props.sessionId === null || entries.length === 0)
++  // HBA fr12：草稿态（sessionId=null）也列出条目，不再只留空态文案；仅确实无推荐条目才显示空态。
++  if (entries.length === 0)
+     return props.variant === "menu" ? null : (
+       <p className="text-ui-base text-foreground-subtle" data-testid="side-pane-ui-empty">
+         {intl.formatMessage({ id: "sidePane.launcher.empty" })}
+diff --git a/packages/ui/src/plugin-ui/contract.example.ts b/packages/ui/src/plugin-ui/contract.example.ts
+index 17b650f0..f085877b 100644
+--- a/packages/ui/src/plugin-ui/contract.example.ts
++++ b/packages/ui/src/plugin-ui/contract.example.ts
+@@ -13,14 +13,14 @@ export const examplePresentation: PluginUiPresentation = {
+   prefersBorder: true,
+ };
+ 
+-/** 内联卡片 / 面板入口请求打开侧栏时的载荷，以及据此创建的 tab。 */
++/** 内联卡片 / 面板入口请求打开侧栏时的载荷，以及据此创建的 tab（会话必须已解析，见 OpenScopedPluginUiSideTabRequest）。 */
+ export function exampleOpenSideTab(request: OpenPluginUiSideTabRequest): PluginUiSidePaneTab {
+   const scope = readPluginUiScopeRef(request);
+   if (!scope) throw new Error("request needs toolCallId or surfaceId");
+   return {
+     id: buildPluginUiSidePaneTabId(request),
+     type: "plugin-ui",
+-    parentSessionId: request.parentSessionId,
++    parentSessionId: request.parentSessionId ?? "",
+     ...(request.toolCallId ? { toolCallId: request.toolCallId } : {}),
+     ...(request.surfaceId ? { surfaceId: request.surfaceId } : {}),
+     ...(request.serverName ? { serverName: request.serverName } : {}),
+diff --git a/packages/ui/src/plugin-ui/contract.ts b/packages/ui/src/plugin-ui/contract.ts
+index fc15d446..cc446d6a 100644
+--- a/packages/ui/src/plugin-ui/contract.ts
++++ b/packages/ui/src/plugin-ui/contract.ts
+@@ -47,7 +47,11 @@ export type PluginUiOpenTarget =
+ export type OpenPluginUiSideTabRequest = PluginUiOpenTarget & {
+   /** 手动新建的文档窗口身份；恢复标签页时保持不变。 */
+   instanceId?: string;
+-  parentSessionId: string;
++  /**
++   * 绑定会话 id；草稿态（新会话未发首条消息）为 null——宿主建 tab 前补建 deferred 托管会话
++   * （不进任务索引/侧栏，同工作区复用），tab 落地时必为具体会话 id（HBA fr12）。
++   */
++  parentSessionId: string | null;
+   pluginId: string;
+   resourceUri: string;
+   title: string;
+@@ -57,8 +61,8 @@ export type OpenPluginUiSideTabRequest = PluginUiOpenTarget & {
+ };
+ 
+ /**
+- * 侧栏 tab；工具卡片 id 为 `plugin-ui:<ws>:<session>:<pluginId>:<toolCallId>`，面板为 `plugin-ui:<ws>:<session>:<pluginId>:surface:<surfaceId>`；
+- * 按 parentSessionId 作用域可见。
++ * 侧栏 tab；工具卡片 id 为 `plugin-ui:<ws>:<session>:<pluginId>:<toolCallId>`（归对话），
++ * 面板为 `plugin-ui:<ws>:*:<pluginId>:surface:<surfaceId>`（跟随项目，跨会话共用，HBA fr7）。
+  */
+ export interface PluginUiSidePaneTab {
+   instanceId?: string;
+@@ -172,8 +176,14 @@ export function buildPluginUiSurfaceKey(
+   scope: PluginUiScopeRef,
+ ): string {
+   // 修复：surfaceId 由插件自行命名，必须同时隔离工作区、会话和插件。
++  // HBA fr8/fr19：面板（surface）跟随项目、跨会话共用，key 的会话位用 `*`（与 tab id 同口径）——
++  // 锚点会话消亡换锚重绑时不换 key，widgetState / surfaceStateKey / 页面实例保持连续；
++  // 工具卡片（toolCall）仍按会话隔离。
+   return JSON.stringify([
+-    buildPluginUiSessionKey(target),
++    JSON.stringify([
++      target.workspaceIdentity?.trim() || target.workspacePath,
++      scope.kind === "surface" ? "*" : target.sessionId,
++    ]),
+     target.pluginId,
+     target.serverName ?? "",
+     target.resourceUri ?? "",
+@@ -184,10 +194,14 @@ export function buildPluginUiSurfaceKey(
+ export function buildPluginUiSidePaneTabId(request: OpenPluginUiSideTabRequest): string {
+   const scope = readPluginUiScopeRef(request);
+   if (!scope) throw new Error("plugin-ui side tab needs toolCallId or surfaceId");
++  // 工具卡片归对话，id 必须嵌具体会话 id；草稿态（会话待宿主补建）只出现在面板（surface）打开。
++  if (scope.kind === "toolCall" && !request.parentSessionId)
++    throw new Error("plugin-ui tool card side tab needs parentSessionId");
+   return [
+     "plugin-ui",
+     request.workspaceIdentity?.trim() || request.workspacePath,
+-    request.parentSessionId,
++    // 面板（surface）跟随项目：同工作区跨会话共用一个 tab；工具卡片仍归对话（HBA fr7）。
++    scope.kind === "surface" ? "*" : request.parentSessionId ?? "",
+     request.pluginId,
+     request.serverName ?? "",
+     request.resourceUri,
+diff --git a/packages/ui/src/plugin-ui/domain/buildPluginUiHostCapabilities.ts b/packages/ui/src/plugin-ui/domain/buildPluginUiHostCapabilities.ts
+index f98af51d..8f3174f0 100644
+--- a/packages/ui/src/plugin-ui/domain/buildPluginUiHostCapabilities.ts
++++ b/packages/ui/src/plugin-ui/domain/buildPluginUiHostCapabilities.ts
+@@ -1,5 +1,6 @@
+ import type { McpUiHostCapabilities } from "@modelcontextprotocol/ext-apps/app-bridge";
+ import {
++  MCP_APPS_INSERT_INPUT_TEXT_EXPERIMENTAL_KEY,
+   MCP_APPS_NESTED_FRAMES_EXPERIMENTAL_KEY,
+   MCP_APPS_RESOURCE_SUBSCRIBE_EXPERIMENTAL_KEY,
+   MCP_APPS_SURFACE_EXPERIMENTAL_KEY,
+@@ -12,6 +13,8 @@ export interface PluginUiHostCapabilityInput {
+   canSample?: boolean;
+   canSendFollowUpMessage: boolean;
+   canUpdateModelContext: boolean;
++  /** 有 composer 接住 `ui/insert-input-text`（文本追加到输入框末尾）才声明。 */
++  canInsertInputText: boolean;
+   canSetWidgetState: boolean;
+   /** 宿主能代理 resources/subscribe 并把 server 通知路由回本实例。 */
+   canSubscribeResources: boolean;
+@@ -25,7 +28,7 @@ export interface PluginUiHostCapabilityInput {
+ 
+ /**
+  * hostCapabilities 的唯一构造点。声明与 handler 一一对应：没有会话动作绑定就不声明 message，没有 composer 就不声明
+- * updateModelContext。ZCode 扩展（widgetState、resourceSubscribe、surface、csp 放宽、nestedFrames）一律放 `experimental["zcode/…"]`，
++ * updateModelContext。VCode 扩展（widgetState、resourceSubscribe、surface、csp 放宽、nestedFrames）一律放 `experimental["zcode/…"]`，
+  * 官方 SDK 的 zod 会剥掉标准位之外的未知能力键。
+  */
+ export function buildPluginUiHostCapabilities(
+@@ -45,6 +48,7 @@ export function buildPluginUiHostCapabilities(
+       : {}),
+     experimental: {
+       ...buildMcpAppsCspExperimentalCapability(),
++      ...(input.canInsertInputText ? { [MCP_APPS_INSERT_INPUT_TEXT_EXPERIMENTAL_KEY]: {} } : {}),
+       [MCP_APPS_NESTED_FRAMES_EXPERIMENTAL_KEY]: {},
+       ...(input.canSetWidgetState ? { [MCP_APPS_WIDGET_STATE_EXPERIMENTAL_KEY]: {} } : {}),
+       ...(input.canSubscribeResources
+diff --git a/packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts b/packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts
+new file mode 100644
+index 00000000..42ba7b9b
+--- /dev/null
++++ b/packages/ui/src/plugin-ui/domain/pluginUiInsertInputText.ts
+@@ -0,0 +1,31 @@
++/**
++ * 插件 UI「添加到对话」(VCode 扩展桥方法 `ui/insert-input-text`)的 composer 侧契约。
++ *
++ * 与 workspaceFileDrag 的「加入对话」事件同构:宿主渲染进程内的 window CustomEvent,
++ * composer 以 preventDefault 表示已接住。区别于 `ui/message`(以用户身份发送,无手势时
++ * 宿主弹「插件想以你的身份发送消息」确认框):本通道只把文本插进当前会话输入框末尾,
++ * 不发送、不弹框,由用户自己编辑后发送。
++ */
++export const PLUGIN_UI_INSERT_INPUT_TEXT_EVENT = "zcode/plugin-ui-insert-input-text";
++
++export interface PluginUiInsertInputTextDetail {
++  /** 目标会话(面板绑当前活跃会话);composer 仅接住自己会话的插入请求。 */
++  sessionId: string;
++  /** 要插入的文本,追加到输入框末尾(光标跟随到末尾)。 */
++  text: string;
++}
++
++export function isPluginUiInsertInputTextEvent(
++  event: Event,
++): event is CustomEvent<PluginUiInsertInputTextDetail> {
++  return event.type === PLUGIN_UI_INSERT_INPUT_TEXT_EVENT;
++}
++
++/** 返回 true 表示有 composer 接住;false 时调用方应回 -32601 供页面降级。 */
++export function dispatchPluginUiInsertInputText(detail: PluginUiInsertInputTextDetail): boolean {
++  if (typeof window === "undefined") {
++    return false;
++  }
++  const event = new CustomEvent(PLUGIN_UI_INSERT_INPUT_TEXT_EVENT, { cancelable: true, detail });
++  return !window.dispatchEvent(event);
++}
+diff --git a/packages/ui/src/plugin-ui/domain/pluginUiStyleVariables.ts b/packages/ui/src/plugin-ui/domain/pluginUiStyleVariables.ts
+index 8e4a6e17..f72825f5 100644
+--- a/packages/ui/src/plugin-ui/domain/pluginUiStyleVariables.ts
++++ b/packages/ui/src/plugin-ui/domain/pluginUiStyleVariables.ts
+@@ -1,7 +1,7 @@
+ import type { McpAppsStyleVariables } from "@zcode/shared/mcp-apps";
+ 
+ /**
+- * ZCode 主题 token（DESIGN.md / docs/design/zcode-tokens.md）→ MCP Apps 标准样式变量
++ * VCode 主题 token（DESIGN.md / docs/design/zcode-tokens.md）→ MCP Apps 标准样式变量
+  * （官方 `McpUiStyleVariableKey`）。每个标准键给出来源 token 与兜底字面量：token 读不到（非 DOM 环境、
+  * 旧主题缺项）时用兜底，保证页面拿到的每个键都是可用的 CSS 值。颜色值原样透传（含 color-mix()）。
+  */
+diff --git a/packages/ui/src/plugin-ui/index.ts b/packages/ui/src/plugin-ui/index.ts
+index 0335caa9..7a5367b8 100644
+--- a/packages/ui/src/plugin-ui/index.ts
++++ b/packages/ui/src/plugin-ui/index.ts
+@@ -27,6 +27,12 @@ export {
+   parsePromptPluginUiContexts,
+   type PluginUiModelContext,
+ } from "./domain/pluginUiModelContext.js";
++export {
++  PLUGIN_UI_INSERT_INPUT_TEXT_EVENT,
++  dispatchPluginUiInsertInputText,
++  isPluginUiInsertInputTextEvent,
++  type PluginUiInsertInputTextDetail,
++} from "./domain/pluginUiInsertInputText.js";
+ export {
+   PluginUiWorkspaceProvider,
+   PluginUiSessionProvider,
+diff --git a/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts b/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts
+index 32d74b43..0a9fe049 100644
+--- a/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts
++++ b/packages/ui/src/plugin-ui/sidePane/pluginUiSidePaneTab.ts
+@@ -3,7 +3,12 @@ import { activateSidePaneTab } from "@/lib/workspaceSidePane.js";
+ import type { OpenPluginUiSideTabRequest, PluginUiSidePaneTab } from "../contract.js";
+ import { buildPluginUiSidePaneTabId, readPluginUiScopeRef } from "../contract.js";
+ 
++/**
++ * 建 tab 前的请求：parentSessionId 以交集收窄为具体会话 id（草稿打开由宿主补建托管会话，
++ * HBA fr12）。不能用 Omit——请求是 toolCall/surface 两形态的 union，Omit 会丢判别字段。
++ */
+ export type OpenScopedPluginUiSideTabRequest = OpenPluginUiSideTabRequest & {
++  parentSessionId: string;
+   workspaceKey: string;
+ };
+ 

@@ -39,6 +39,7 @@
 | FR-3 | Git 面板 | **补丁就绪** | 采用内置 Git 面板 + 补差异;`fork/patches/fr3-01/02`(worktree 创建服务 + GitPane 入口)已应用至上游源码并通过 typecheck(0 错误),见 `fork/patch-verify-report.md`;待宿主 GUI 黑盒 |
 | FR-4 | 运行面板 | **进行中** | `plugins/hba-run/` 全部落盘,测试 11/11,FR-4-1~5 均有落点;待宿主内集成校验(P0) |
 | FR-5 | 终端整合 | **补丁就绪** | 入口收敛核心层小改;`fork/patches/fr5-01/02`(移除顶部按钮 + 底部打开右侧终端)已应用并通过 typecheck,见 `fork/patch-verify-report.md`;待宿主 GUI 黑盒(TC-TRM-01) |
+| FR-20 | 删除登录入口链 | **补丁就绪** | `fork/patches/fr20-01-remove-login-entry-chain.patch`(94 文件:+145/−7097,快照法生成,`git apply -R --check` 通过);WelcomeScreen/登录表单/启动门禁/Connect 按钮/i18n 全删,深层 OAuth 管线休眠保留;`tsc -b packages/ui` 与 desktop main/e2e 0 错误、`test:architecture` 35 过/1 跳过、符号终扫零残留,见 `docs/fr20-remove-login-entry-chain.md`;round-trip 叠加验证待补(工作区多补丁在途) |
 
 ## 快速开始
 
