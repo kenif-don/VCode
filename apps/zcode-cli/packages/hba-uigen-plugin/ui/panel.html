@@ -300,7 +300,8 @@
   /* 视口 pill:390 / 768 / 1280 — 单页视图大卡的预设宽 */
   #viewport-pill {
     position: absolute; right: 12px; top: 12px; z-index: 30;
-    display: flex; gap: 2px; padding: 3px;
+    display: flex; flex-wrap: wrap; justify-content: flex-end;
+    gap: 2px; padding: 3px; max-width: calc(100% - 24px);
     background: var(--bg-surface-raised); border: 1px solid var(--border-strong);
     border-radius: var(--radius-full); box-shadow: var(--shadow-sm);
   }
@@ -309,6 +310,18 @@
     background: transparent; border-color: transparent; color: var(--text-secondary);
   }
   #viewport-pill button.on { background: var(--primary); color: var(--primary-fg); font-weight: 600; }
+  /* 自定义预设药丸:hover / 长按浮现 ×(内置 390/768/1280 无 × 不可删)。
+     宽度常驻占位、透明度切换,避免 hover 时药丸宽度跳动;隐藏时不吃点击。 */
+  #viewport-pill .vp-x {
+    display: inline-block; width: 10px; text-align: center;
+    margin-left: 4px; font-size: 11px; font-weight: 700;
+    color: var(--text-muted); opacity: 0; pointer-events: none;
+    transition: opacity var(--transition-fast);
+  }
+  #viewport-pill button:hover .vp-x,
+  #viewport-pill button.vp-hold .vp-x { opacity: 1; pointer-events: auto; }
+  #viewport-pill .vp-x:hover { color: var(--err-fg); }
+  #vp-add { font-weight: 700; }
 
   /* 屏幕卡片:标题栏(名称+⋯)+ 预览内容区 */
   .screen-card {
@@ -339,12 +352,15 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     border: 0; display: block; background: #fff;
   }
+  /* 全览卡的活预览只看不点:指针事件穿透回卡片(拖卡/点卡进单页语义不变);
+     单页视图大卡(.focus)的 iframe 保持可交互(拾取在单页里)。 */
+  .screen-card:not(.focus) iframe { pointer-events: none; }
   .screen-card .card-code {
     position: absolute; inset: 0; overflow: auto; margin: 0; padding: 10px;
     background: var(--code-bg); color: var(--code-fg);
     font: 11px/1.6 Consolas, Menlo, monospace; white-space: pre; tab-size: 2;
   }
-  /* 全览卡占位(不写 iframe:同屏只允许一张卡写 src) */
+  /* 全览卡占位:离屏未挂载 / 预览失败时显示(挂载后活 iframe 盖在其上) */
   .card-ph {
     position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 8px; padding: 8px;
@@ -564,12 +580,8 @@
         <button id="btn-grid-toggle" class="on" title="点状网格开关">&#9707;</button>
       </div>
 
-      <!-- 视口 pill:单页视图大卡预设宽 -->
-      <div id="viewport-pill" title="单页视图预设宽">
-        <button data-vp="390" class="on">390</button>
-        <button data-vp="768">768</button>
-        <button data-vp="1280">1280</button>
-      </div>
+      <!-- 视口 pill:单页视图大卡预设宽(内置 390/768/1280 + 自定义,JS 渲染;尾部 ＋ 添加) -->
+      <div id="viewport-pill" title="单页视图预设宽"></div>
 
       <!-- 单页视图工具条:选取元素(拾取模式)/ 添加到对话(当前页引用立即插入) -->
       <div id="focus-toolbar">
@@ -836,7 +848,14 @@
       mod("prototypes/drafts");   // 空模块
       fsMap = m;
     }
-    seed();
+    // 默认空树(演示树是测试残留,不再自动播种);URL 带 ?demo=1 才播种,
+    // 保留冒烟/演示用途。workspace 标签仍是 demo-workspace(/demo/workspace)。
+    fsMap = {};
+    var demoSeed = false;
+    try {
+      demoSeed = /(?:^\?|&)demo=1(?:&|$)/.test((global.location && global.location.search) || "");
+    } catch (e) { demoSeed = false; }
+    if (demoSeed) seed();
 
     function absPath(rel) { return rel ? WORKSPACE + "/" + rel : WORKSPACE; }
 
@@ -1293,8 +1312,34 @@
   // state — HBA 原型库浏览器:左树 + 右全览画布,点页面进单页视图
   // ==================================================================
   var VP = { 390: { w: 390, h: 844 }, 768: { w: 768, h: 1024 }, 1280: { w: 1280, h: 800 } };
+  var BUILTIN_VPS = [390, 768, 1280];           // 内置预设宽:不可删
   var CARD_W = 320, CARD_H = 240;   // 全览卡固定尺寸(对齐 HBA ScreenNode 默认 320×240)
   var EMPTY_COPY = "项目里还没有原型页面(html/jsx/tsx/vue),在对话里让 UI 原型智能体创建吧。";
+
+  /** 预设宽合法性:整数 200~3840(自定义药丸输入与布局恢复共用)。 */
+  function isValidVp(v) {
+    return typeof v === "number" && Number.isInteger(v) && v >= 200 && v <= 3840;
+  }
+
+  /** 预设宽 → 单页大卡尺寸;内置查表,自定义按档位推高(不存高度)。 */
+  function vpDims(w) {
+    if (VP[w]) return VP[w];
+    if (w < 768) return { w: w, h: 844 };
+    if (w < 1280) return { w: w, h: 1024 };
+    return { w: w, h: 800 };
+  }
+
+  /** 布局里的预设列表消毒:非法/空回退内置 [390,768,1280],去重且内置必在。 */
+  function normalizePresets(list) {
+    if (!Array.isArray(list)) return BUILTIN_VPS.slice();
+    var out = [];
+    list.forEach(function (v) {
+      var n = Number(v);
+      if (isValidVp(n) && out.indexOf(n) < 0) out.push(n);
+    });
+    BUILTIN_VPS.forEach(function (b) { if (out.indexOf(b) < 0) out.push(b); });
+    return out;
+  }
 
   var state = {
     tree: [],                 // uigen_* 返回的嵌套节点(服务端已排好序,不二次排序)
@@ -1302,6 +1347,7 @@
     focusId: "",              // 单页视图页 id;"" = 所有页面全览
     collapsed: {},            // 目录 id -> true;折叠状态仅本会话内存
     viewport: 390,
+    viewportPresets: BUILTIN_VPS.slice(),   // 单页视图预设宽列表(含自定义,持久化)
     zoom: 1,
     grid: true,
     sidebarCollapsed: false,
@@ -1312,7 +1358,7 @@
 
   // B2 状态:元素拾取(postMessage 驱动)/ 技能弹窗 / 内联命名弹窗
   var pick = { on: false };   // 面板侧只记开关;高亮与 element 回传由预览注入脚本负责
-  var nameUi = { open: false, resolve: null, mode: "name" };
+  var nameUi = { open: false, resolve: null, mode: "name", validate: null };
   var skillUi = {
     open: false, skills: [], filter: "all", loading: false,
     showNew: false, editingId: null, deletingId: null,
@@ -1448,7 +1494,9 @@
 
   // ==================================================================
   // canvas layout persistence — uigen_canvas_save / uigen_canvas_get
-  // 形状:{ version, zoom, grid, viewport, sidebarCollapsed, cards }
+  // 形状:{ version, zoom, grid, viewport, viewportPresets, sidebarCollapsed, cards }
+  // viewport = 单页视图激活宽;viewportPresets = 预设宽列表(内置+自定义)。
+  // 两者都放布局本体(服务端只剥离 layoutJson.ui,其余字段原样落盘)。
   // (原型根死绑工作区,无 rootDir 选择;打开面板即恢复画布状态。)
   // ==================================================================
   var saveTimer = null;
@@ -1460,6 +1508,7 @@
       zoom: state.zoom,
       grid: state.grid,
       viewport: state.viewport,
+      viewportPresets: state.viewportPresets.slice(),
       sidebarCollapsed: state.sidebarCollapsed,
       cards: state.cards
     };
@@ -1481,7 +1530,14 @@
     if (!layout || typeof layout !== "object") return;
     if (typeof layout.zoom === "number") state.zoom = Math.min(2, Math.max(0.25, layout.zoom));
     if (typeof layout.grid === "boolean") state.grid = layout.grid;
-    if (VP[layout.viewport]) state.viewport = layout.viewport;
+    state.viewportPresets = normalizePresets(layout.viewportPresets);
+    var vp = Number(layout.viewport);
+    if (isValidVp(vp)) {
+      if (state.viewportPresets.indexOf(vp) < 0) state.viewportPresets.push(vp);
+      state.viewport = vp;
+    } else {
+      state.viewport = 390;
+    }
     if (typeof layout.sidebarCollapsed === "boolean") state.sidebarCollapsed = layout.sidebarCollapsed;
     if (layout.cards && typeof layout.cards === "object") state.cards = layout.cards;
   }
@@ -1714,12 +1770,13 @@
   // 内联命名弹窗 — 插件 WebView 里 window.prompt 不可用(点了没反应的根因),
   // 新建页面/目录、重命名统一走这里:输入框 + 确定/取消,Promise 回传名称。
   // ==================================================================
-  function promptName(title, placeholder, initial) {
+  function promptName(title, placeholder, initial, validate) {
     return new Promise(function (resolve) {
       if (nameUi.open) closeNameDialog(false);   // 防重入:上一个挂起的直接取消
       nameUi.open = true;
       nameUi.resolve = resolve;
       nameUi.mode = "name";
+      nameUi.validate = validate || null;        // 可选:点确定时校验,返回错误串则拦下不关窗
       $("name-modal-title").textContent = title;
       var input = $("name-modal-input");
       input.hidden = false;                      // 确认弹窗会藏输入框,这里复原
@@ -1734,14 +1791,39 @@
     });
   }
 
+  /** 数字输入弹窗(promptName 壳 + 整数 200~3840 校验):合法回传 Number,取消回 null。 */
+  function promptNumber(title, placeholder, initial) {
+    return promptName(title, placeholder, initial, function (raw) {
+      var s = String(raw == null ? "" : raw).trim();
+      if (!/^\d+$/.test(s)) return "请输入 200~3840 的整数";
+      var n = parseInt(s, 10);
+      if (n < 200 || n > 3840) return "宽度须在 200~3840 之间";
+      return null;
+    }).then(function (value) {
+      return value == null ? null : parseInt(String(value).trim(), 10);
+    });
+  }
+
   function closeNameDialog(ok) {
     if (!nameUi.open) return;
     var input = $("name-modal-input");
     var value = input.value;
     var resolve = nameUi.resolve;
     var mode = nameUi.mode;
+    var validate = nameUi.validate;
+    // 命名/数字模式点确定:校验不过 → toast 报错并留在弹窗(不 resolve 不关窗)
+    if (ok && mode === "name" && validate) {
+      var err = validate(value);
+      if (err) {
+        toast(err, true);
+        input.focus();
+        input.select();
+        return;
+      }
+    }
     nameUi.open = false;
     nameUi.resolve = null;
+    nameUi.validate = null;
     $("name-modal").hidden = true;
     input.value = "";
     // 确认模式回传布尔(输入框隐藏其值恒空,不能当真值);命名模式回传名称/取消为 null
@@ -1756,6 +1838,7 @@
       nameUi.open = true;
       nameUi.resolve = resolve;
       nameUi.mode = "confirm";
+      nameUi.validate = null;
       $("name-modal-title").textContent = "请确认";
       $("name-modal-confirm-msg").textContent = message;
       $("name-modal-confirm-msg").hidden = false;
@@ -2441,7 +2524,7 @@
 
   /** 单页大卡在世界坐标里的落点:居中偏左,可滚动查看。 */
   function focusPos() {
-    var vp = VP[state.viewport];
+    var vp = vpDims(state.viewport);
     var canvas = $("screen-canvas");
     var viewW = (canvas.clientWidth || 800) / state.zoom;
     var x = Math.max(40, Math.round((viewW - vp.w) / 2) - 60);
@@ -2449,10 +2532,128 @@
   }
 
   // ==================================================================
-  // 画布卡片 — 全览:固定 320×240 占位卡(不写 iframe,点击进单页);
+  // 画布卡片 — 全览:固定 320×240 卡,进入可视区才懒挂活预览 iframe
+  // (uigen_preview_url;并发最多 4 个排队;离屏保留名称占位,挂载后不卸载;
+  //  iframe 无 sandbox、不写 srcdoc、pointer-events:none —— 拖卡/点卡语义不变);
   // 单页:一张视口尺寸大卡,进视图即取 uigen_preview_url 写 iframe.src
   // (一次点击出内容;loading 由预览 ready 消息消除;iframe 无 sandbox)。
   // ==================================================================
+
+  // ---- 全览卡活预览:IntersectionObserver(root=画布视窗)驱动 + 平移/缩放后
+  // 节流兜底检查;队列并发上限 4,避免同时拉一屏预览地址。 ----
+  var pvQueue = [];          // 待挂载的卡片元素(进入可视区顺序)
+  var pvActive = 0;          // 挂载中数量(取址 + 等 load)
+  var PV_MAX = 4;
+  var pvObserver = null;
+  var pvCheckTimer = null;
+
+  function ensurePvObserver() {
+    if (pvObserver || !window.IntersectionObserver) return;
+    pvObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        pvObserver.unobserve(en.target);
+        enqueuePv(en.target);
+      });
+    }, { root: $("screen-canvas") });
+  }
+
+  function enqueuePv(card) {
+    if (!card || card._pvState) return;   // 已排队/挂载中/已挂载/失败,不重复
+    card._pvState = "queued";
+    pvQueue.push(card);
+    pumpPv();
+  }
+
+  function pumpPv() {
+    while (pvActive < PV_MAX && pvQueue.length) {
+      var card = pvQueue.shift();
+      if (!card.isConnected || card._pvState !== "queued") continue;
+      card._pvState = "loading";
+      pvActive += 1;
+      mountPv(card);
+    }
+  }
+
+  /** 取预览地址 → 挂 iframe;成功摘占位,失败撤 iframe 留占位(带名称)。 */
+  function mountPv(card) {
+    var id = card.dataset.id;
+    var body = card.querySelector(".card-body");
+    var settled = false;
+    function done(ok) {
+      if (settled) return;
+      settled = true;
+      pvActive = Math.max(0, pvActive - 1);
+      card._pvState = ok ? "mounted" : "failed";
+      pumpPv();
+    }
+    if (!body) { done(false); return; }
+    bridge.callTool("uigen_preview_url", { id: id }).then(okOrThrow).then(function (res) {
+      if (!res || !res.url) throw new Error("预览地址为空");
+      if (!card.isConnected) { done(false); return; }   // 卡片已重绘丢弃
+      var nameEl = card.querySelector(".card-name");
+      var frame = document.createElement("iframe");
+      frame.setAttribute("loading", "lazy");
+      frame.title = ((nameEl && nameEl.textContent) || id) + " 预览";
+      var watchdog = setTimeout(function () {   // load 迟迟不来:撤 iframe 回占位,别卡并发额度
+        if (settled) return;
+        if (frame.parentNode) frame.parentNode.removeChild(frame);
+        done(false);
+      }, 10000);
+      frame.addEventListener("load", function () {
+        if (!frame.getAttribute("src")) return;   // 空 iframe 的 about:blank load 不算
+        clearTimeout(watchdog);
+        var ph = body.querySelector(".card-ph");
+        if (ph && ph.parentNode) ph.parentNode.removeChild(ph);
+        done(true);
+      });
+      frame.addEventListener("error", function () {
+        clearTimeout(watchdog);
+        if (frame.parentNode) frame.parentNode.removeChild(frame);
+        done(false);
+      });
+      body.appendChild(frame);
+      frame.src = res.url;
+    }).catch(function () {
+      // 取址失败:iframe 从未挂出,名称占位原样保留
+      done(false);
+    });
+  }
+
+  /** 平移/缩放后兜底:把进入视窗的卡补进队列(IO 对 transform 的触发不总及时)。 */
+  function schedulePvCheck() {
+    if (state.focusId || pvCheckTimer) return;
+    pvCheckTimer = setTimeout(function () {
+      pvCheckTimer = null;
+      checkVisiblePv();
+    }, 120);
+  }
+
+  function checkVisiblePv() {
+    var root = $("screen-canvas");
+    if (!root || state.focusId) return;
+    var rr = root.getBoundingClientRect();
+    Array.prototype.forEach.call(
+      document.querySelectorAll("#canvas-grid .screen-card:not(.focus)"),
+      function (card) {
+        if (card._pvState) return;
+        var r = card.getBoundingClientRect();
+        if (r.right < rr.left || r.left > rr.right || r.bottom < rr.top || r.top > rr.bottom) return;
+        enqueuePv(card);
+      });
+  }
+
+  /** 全览卡挂载编排:重连 IO 观察 + 立即补一次可视检查。 */
+  function armOverviewPv() {
+    ensurePvObserver();
+    Array.prototype.forEach.call(
+      document.querySelectorAll("#canvas-grid .screen-card:not(.focus)"),
+      function (card) {
+        if (pvObserver) pvObserver.observe(card);
+      });
+    checkVisiblePv();
+  }
+
   function defaultCardPos(i) {
     return { x: 40 + (i % 4) * 360, y: 40 + Math.floor(i / 4) * 360, w: CARD_W };
   }
@@ -2480,6 +2681,8 @@
   function renderCards() {
     closeElementPicker();   // 画布重绘 = iframe 重建,拾取态随之失效
     var world = $("canvas-grid");
+    if (pvObserver) pvObserver.disconnect();   // 旧卡作废,重连新卡
+    pvQueue.length = 0;                        // 在途挂载靠 isConnected 自行作废
     world.textContent = "";
     updateFocusUi();
 
@@ -2500,6 +2703,7 @@
     }
     pages.forEach(function (p, i) { world.appendChild(overviewCard(p, i)); });
     applyZoom();
+    armOverviewPv();
   }
 
   function overviewCard(page, i) {
@@ -2533,7 +2737,7 @@
 
     var body = document.createElement("div");
     body.className = "card-body";
-    // 全览卡只显示名称占位:同屏只允许一张卡写 iframe.src(崩溃守卫)
+    // 名称占位:离屏未挂载 / 预览失败时显示;挂载成功后由活 iframe 盖住并摘除
     var ph = document.createElement("div");
     ph.className = "card-ph";
     var phName = document.createElement("span");
@@ -2547,8 +2751,10 @@
     ph.appendChild(phName);
     ph.appendChild(phBadge);
     ph.appendChild(phHint);
-    ph.addEventListener("click", function () { focusPage(page.id); });
     body.appendChild(ph);
+
+    // 点卡片(非 ✎)进单页视图:iframe pointer-events:none,点击落到 body
+    body.addEventListener("click", function () { focusPage(page.id); });
 
     card.appendChild(head);
     card.appendChild(body);
@@ -2582,7 +2788,7 @@
   }
 
   function renderFocusCard(page) {
-    var vp = VP[state.viewport];
+    var vp = vpDims(state.viewport);
     var pos = focusPos();
     var ext = extOf(page.id);
 
@@ -2674,6 +2880,7 @@
     world.style.transform =
       "translate(" + pan.x + "px," + pan.y + "px) scale(" + state.zoom + ")";
     $("zoom-label").textContent = Math.round(state.zoom * 100) + "%";
+    schedulePvCheck();   // 平移/缩放改变可视区:节流补挂新进视窗的卡
   }
 
   function setZoom(z) {
@@ -2704,7 +2911,7 @@
     var pad = 120;
     var maxX = 0, maxY = 0;
     if (state.focusId) {
-      var vp = VP[state.viewport];
+      var vp = vpDims(state.viewport);
       var pos = focusPos();
       maxX = pos.x + vp.w + 40;
       maxY = pos.y + vp.h + 80;
@@ -2722,15 +2929,99 @@
     setZoom(Math.min(zx, zy, 1));
   }
 
-  function setViewport(vp) {
-    if (!VP[vp]) return;
-    state.viewport = vp;
-    Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
-      b.classList.toggle("on", String(vp) === b.dataset.vp);
+  // ==================================================================
+  // 视口预设 pill — 内置 390/768/1280 不可删;自定义药丸 hover/长按浮现 × 删;
+  // 尾部 ＋ 弹数字弹窗追加(整数 200~3840,去重)。列表+激活宽随布局持久化。
+  // ==================================================================
+  function renderViewportPills() {
+    var pill = $("viewport-pill");
+    pill.textContent = "";
+    state.viewportPresets.forEach(function (w) {
+      var b = document.createElement("button");
+      b.dataset.vp = String(w);
+      b.textContent = String(w);
+      if (w === state.viewport) b.classList.add("on");
+      if (BUILTIN_VPS.indexOf(w) < 0) {
+        b.classList.add("vp-custom");
+        var x = document.createElement("span");
+        x.className = "vp-x";
+        x.textContent = "×";
+        x.title = "删除该预设";
+        b.appendChild(x);
+      }
+      pill.appendChild(b);
     });
-    renderCards();   // 全览卡固定 320×240 不变;单页大卡换预设宽
+    var add = document.createElement("button");
+    add.id = "vp-add";
+    add.textContent = "＋";
+    add.title = "添加自定义预设宽";
+    pill.appendChild(add);
+  }
+
+  function removeViewportPreset(w) {
+    if (BUILTIN_VPS.indexOf(w) >= 0) return;        // 内置三档不可删
+    var at = state.viewportPresets.indexOf(w);
+    if (at < 0) return;
+    state.viewportPresets.splice(at, 1);
+    if (state.viewport === w) setViewport(390);     // 删的是激活宽 → 回退内置
+    else { renderViewportPills(); scheduleSaveLayout(); }
+  }
+
+  function addViewportPreset() {
+    promptNumber("添加预设宽", "整数 200~3840", "").then(function (w) {
+      if (w == null) return;
+      if (state.viewportPresets.indexOf(w) >= 0) { toast("该预设已存在:" + w, true); return; }
+      state.viewportPresets.push(w);
+      renderViewportPills();
+      scheduleSaveLayout();
+      toast("已添加预设宽 " + w);
+    });
+  }
+
+  function setViewport(vp) {
+    if (!isValidVp(vp)) return;
+    state.viewport = vp;
+    renderViewportPills();
+    if (state.focusId) renderCards();   // 单页大卡换预设宽;全览卡尺寸与预设无关
     scheduleSaveLayout();
   }
+
+  // 长按自定义药丸浮现 ×(400ms);touch 抬手可能不派发 click,故抬手后 × 留着,
+  // 由下一次 pointerdown(非 × 区)或 pill 重渲染收掉。
+  var vpHoldTimer = null, vpHoldFired = false;
+  function stopVpHold() {
+    if (vpHoldTimer) { clearTimeout(vpHoldTimer); vpHoldTimer = null; }
+  }
+  $("viewport-pill").addEventListener("pointerdown", function (ev) {
+    vpHoldFired = false;
+    var onX = ev.target.closest && ev.target.closest(".vp-x");
+    if (!onX) {
+      Array.prototype.forEach.call($("viewport-pill").querySelectorAll(".vp-hold"), function (el) {
+        el.classList.remove("vp-hold");
+      });
+    }
+    var b = ev.target.closest && ev.target.closest("button.vp-custom");
+    if (!b || onX) return;
+    stopVpHold();
+    vpHoldTimer = setTimeout(function () {
+      vpHoldTimer = null;
+      b.classList.add("vp-hold");
+      vpHoldFired = true;
+    }, 400);
+  });
+  document.addEventListener("pointerup", stopVpHold);
+  document.addEventListener("pointercancel", stopVpHold);
+
+  $("viewport-pill").addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest("#vp-add")) { addViewportPreset(); return; }
+    var b = t.closest("button[data-vp]");
+    if (!b) return;
+    if (t.closest(".vp-x")) { removeViewportPreset(parseInt(b.dataset.vp, 10)); return; }
+    if (vpHoldFired) { vpHoldFired = false; return; }   // 长按刚弹出 ×,这次抬手不算应用宽度
+    setViewport(parseInt(b.dataset.vp, 10));
+  });
 
   function toggleGrid() {
     state.grid = !state.grid;
@@ -2841,10 +3132,6 @@
     applyZoom();
   }, { passive: false });
 
-  Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
-    b.addEventListener("click", function () { setViewport(parseInt(b.dataset.vp, 10)); });
-  });
-
   $("btn-pick-element").addEventListener("click", openElementPicker);
   $("btn-ref-page").addEventListener("click", insertPageRef);
 
@@ -2899,6 +3186,7 @@
 
   applySidebar();
   $("screen-canvas").classList.toggle("grid-on", state.grid);
+  renderViewportPills();
   try {
     renderAll();
   } catch (e) { /* 初始渲染失败不阻塞握手 */ }
@@ -2917,9 +3205,7 @@
               applyLayout(res.layout);
               applySidebar();
               $("screen-canvas").classList.toggle("grid-on", state.grid);
-              Array.prototype.forEach.call(document.querySelectorAll("#viewport-pill button"), function (b) {
-                b.classList.toggle("on", String(state.viewport) === b.dataset.vp);
-              });
+              renderViewportPills();
               applyZoom();
             }
           }
