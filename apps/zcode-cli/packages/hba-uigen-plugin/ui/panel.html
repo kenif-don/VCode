@@ -344,7 +344,7 @@
     background: var(--code-bg); color: var(--code-fg);
     font: 11px/1.6 Consolas, Menlo, monospace; white-space: pre; tab-size: 2;
   }
-  /* 全览卡占位(不写 iframe:同屏只允许一张卡写 srcdoc) */
+  /* 全览卡占位(不写 iframe:同屏只允许一张卡写 src) */
   .card-ph {
     position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 8px; padding: 8px;
@@ -390,46 +390,22 @@
 </style>
 <style>
   /* ─────────────────────────────────────────────────────────────
-   * 第二阶段(B2):引用 chip 暂存区 + 技能弹窗 + 元素拾取态。
+   * 第二阶段(B2):技能弹窗 + 元素拾取态 + 内联命名弹窗 + 树拖拽。
    * ───────────────────────────────────────────────────────────── */
 
-  /* 引用 chip 暂存区:贴面板底部,横排可换行(380px 不出横向滚动) */
-  #ref-bar {
-    flex: none; display: flex; align-items: center; gap: 8px;
-    padding: 6px 10px; background: var(--bg-surface);
-    border-top: 1px solid var(--border);
-    max-width: 100%;
+  /* 树拖拽:目标目录行高亮;拖到树空白区 = 移到根 */
+  .tree-row.drop-target {
+    border-color: var(--primary); background: var(--bg-hover);
   }
-  #ref-bar[hidden] { display: none; }
-  #ref-chips {
-    flex: 1; min-width: 0; display: flex; flex-wrap: wrap;
-    align-items: center; gap: 6px;
+  #screen-tree.drop-root {
+    outline: 1px dashed var(--primary); outline-offset: -4px;
   }
-  .ref-chip {
-    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
-    padding: 3px 4px 3px 6px; border-radius: var(--radius-full);
-    background: var(--bg-subtle); border: 1px solid var(--border-strong);
-    font-size: 11.5px; min-width: 0;
-  }
-  .ref-chip .rc-kind {
-    flex: none; font-size: 10px; font-weight: 600; padding: 0 5px;
-    border-radius: var(--radius-full);
-    background: var(--bg-muted); color: var(--text-secondary);
-  }
-  .ref-chip.element .rc-kind { background: var(--primary-muted); color: var(--primary-text); }
-  .ref-chip .rc-text {
-    min-width: 0; max-width: 240px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-  }
-  .ref-chip .rc-x {
-    flex: none; padding: 0 5px; font-size: 13px; line-height: 1.4;
-    background: transparent; border: none; color: var(--text-muted);
-    border-radius: var(--radius-full);
-  }
-  .ref-chip .rc-x:hover { background: var(--bg-muted); color: var(--text); }
-  #btn-insert-chat { flex: none; }
-  /* chip 区占了底部一条,toast 抬高不盖住 chip */
-  body.chips-visible #toast { bottom: 58px; }
+
+  /* 内联命名弹窗(新建页面/目录、重命名)——插件 WebView 不可用 window.prompt */
+  .name-dialog { width: min(380px, 100%); }
+  .name-dialog .m-body { padding: 14px 16px; }
+  .name-dialog input[type="text"] { width: 100%; font-size: 13px; }
+  .name-dialog .confirm-msg { font-size: 13px; line-height: 1.7; word-break: break-all; }
 
   /* 单页视图工具条:拾取模式激活态 */
   #btn-pick-element.on {
@@ -566,7 +542,7 @@
         <span>页面</span><span class="count" id="page-count">(0)</span>
         <span class="spacer"></span>
         <button id="btn-all-pages" title="退出单页视图,回到所有页面画布">所有页面</button>
-        <button id="btn-add" title="新建页面或模块(根层级)">＋</button>
+        <button id="btn-add" title="新建页面或目录(根层级)">＋</button>
         <button id="btn-sidebar-collapse" title="收起侧栏">&#171;</button>
       </div>
       <div id="screen-tree"></div>
@@ -595,19 +571,13 @@
         <button data-vp="1280">1280</button>
       </div>
 
-      <!-- 单页视图工具条:选取元素(拾取模式)/ 引用此页(进底部引用区) -->
+      <!-- 单页视图工具条:选取元素(拾取模式)/ 添加到对话(当前页引用立即插入) -->
       <div id="focus-toolbar">
         <button id="btn-pick-element" title="在预览里悬停高亮、点选元素生成引用">选取元素</button>
-        <button id="btn-ref-page" title="把当前页加入底部引用区">引用此页</button>
+        <button id="btn-ref-page" title="把当前页引用立即插入对话输入框(不发送)">添加到对话</button>
         <span class="hint" id="focus-hint">Esc 返回所有页面</span>
       </div>
     </section>
-  </div>
-
-  <!-- 引用 chip 暂存区:页面/模块/元素引用在此堆积,「插入到对话」一次性送出 -->
-  <div id="ref-bar" hidden>
-    <div id="ref-chips"></div>
-    <button id="btn-insert-chat" class="primary" title="把全部引用拼成尾注插入对话输入框(不发送)">插入到对话</button>
   </div>
 
   <div id="toast"></div>
@@ -632,11 +602,29 @@
     </div>
   </div>
 
-  <!-- 单页视图预览 iframe 模板:进单页时克隆挂载,启动时不出现(不写 srcdoc)。
+  <!-- 单页视图预览 iframe 模板:进单页时克隆挂载,src = uigen_preview_url 返回的本地预览地址。
        一律不带 sandbox 属性——宿主插件沙箱 WebView 对嵌套 sandbox iframe 会崩。 -->
   <template id="focus-frame-tpl">
     <iframe id="preview-frame" title="原型预览"></iframe>
   </template>
+
+  <!-- 内联命名弹窗:新建页面/目录、重命名的取名入口(prompt 在插件 WebView 不可用) -->
+  <div id="name-modal" class="modal-overlay" hidden>
+    <div class="skill-modal name-dialog" role="dialog" aria-label="输入名称">
+      <div class="m-head">
+        <span id="name-modal-title">新建</span><span class="spacer"></span>
+        <button id="name-modal-close" class="m-close" title="关闭">×</button>
+      </div>
+      <div class="m-body">
+        <input type="text" id="name-modal-input" placeholder="名称" autocomplete="off">
+        <div id="name-modal-confirm-msg" class="confirm-msg" hidden></div>
+      </div>
+      <div class="m-foot">
+        <button id="name-modal-cancel">取消</button>
+        <button id="name-modal-ok" class="primary">确定</button>
+      </div>
+    </div>
+  </div>
 
 <script>
 /* 内联桥副本 — 与 ui/bridge.js 逐字节一致(部署脚本同步);宿主经资源加载,独立打开走内联。 */
@@ -689,7 +677,10 @@
   function demoPage(title, bodyHtml) {
     return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
       "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
-      "  <title>" + title + "</title>\n  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
+      "  <title>" + title + "</title>\n" +
+      "  <style>\n    /* mock 演示页保留 Tailwind CDN script 字样(断言用,不真正加载):" +
+      "<script src=\"https://cdn.tailwindcss.com\"><\/script> */\n" +
+      "    * { box-sizing: border-box; margin: 0; }\n" +
       "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
       "    .bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
       "    main { padding: 16px; }\n    h1 { font-size: 22px; margin: 12px 0 6px; }\n" +
@@ -702,6 +693,32 @@
 
   function blankPage(stem) {
     return demoPage(stem, "    <h1>" + stem + "</h1>\n    <p>新页面,从树的 ⋯ 菜单或画布进入编辑。</p>");
+  }
+
+  /** mock 版"服务端注入拾取脚本":load 后 postMessage ready;收 setPickMode 后
+   *  悬停高亮 + 点击回传 element 消息(ref 字段 = buildElementReference 口径),
+   *  让 standalone 冒烟能走通预览 → 拾取 → 插入全流程。 */
+  function withPickStub(html, screenId, screenName) {
+    var idJson = JSON.stringify(String(screenId));
+    var nameJson = JSON.stringify(String(screenName));
+    var stub =
+      "<style>.hba-pick-hover{outline:2px solid #f59e0b !important;outline-offset:1px !important;}</style>\n" +
+      "<script>(function(){\n" +
+      "var pickOn=false;\n" +
+      "function post(m){try{if(window.parent&&window.parent!==window)window.parent.postMessage(m,'*');}catch(e){}}\n" +
+      "function pickSel(el){if(el.id)return '#'+el.id;var cs=(typeof el.className==='string'?el.className:'').trim().split(/\\s+/).filter(Boolean).slice(0,3);return el.tagName.toLowerCase()+(cs.length?cs.map(function(c){return '.'+c;}).join(''):'');}\n" +
+      "function pickPath(el){var parts=[],cur=el;while(cur&&cur.nodeType===1&&parts.length<8){var tag=cur.tagName.toLowerCase();if(cur===document.body){parts.unshift('body');break;}var p=cur.parentElement;if(p){var idx=0,total=0;for(var i=0;i<p.children.length;i++){if(p.children[i].tagName===cur.tagName){total++;if(p.children[i]===cur)idx=total;}}if(total>1)tag+='('+idx+')';}parts.unshift(tag);cur=p;}return parts.join('>');}\n" +
+      "function clearHover(){var e=document.querySelector('.hba-pick-hover');if(e)e.classList.remove('hba-pick-hover');}\n" +
+      "window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.source!=='hba-uigen-panel')return;if(d.type==='setPickMode'){pickOn=!!d.on;if(!pickOn)clearHover();document.documentElement.style.cursor=pickOn?'crosshair':'';}});\n" +
+      "document.addEventListener('mouseover',function(ev){if(!pickOn)return;clearHover();var el=ev.target;if(el&&el.nodeType===1&&el!==document.body&&el!==document.documentElement){try{el.classList.add('hba-pick-hover');}catch(e){}}},true);\n" +
+      "document.addEventListener('click',function(ev){if(!pickOn)return;var el=ev.target;if(!el||el.nodeType!==1||el===document.body||el===document.documentElement)return;ev.preventDefault();ev.stopPropagation();var text=(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,40);var ref={screenId:" + idJson + ",screenName:" + nameJson + ",tagName:el.tagName.toLowerCase(),text:text,path:pickPath(el),selector:pickSel(el)};if(el.id)ref.htmlId=el.id;pickOn=false;clearHover();document.documentElement.style.cursor='';post({source:'hba-uigen-preview',type:'element',ref:ref});},true);\n" +
+      "function ready(){post({source:'hba-uigen-preview',type:'ready'});}\n" +
+      "if(document.readyState==='complete')ready();else window.addEventListener('load',ready);\n" +
+      "})();<\/script>";
+    html = String(html == null ? "" : html);
+    return /<\/body>/i.test(html)
+      ? html.replace(/<\/body>/i, function () { return stub + "\n</body>"; })
+      : html + "\n" + stub;
   }
 
   var DEMO_JSX = "// banner.jsx — 演示 JSX 产物(单页视图以代码形式展示)\n" +
@@ -988,6 +1005,43 @@
                 delete fsMap[full3];
                 kids.forEach(function (k) { delete fsMap[k]; });
                 resolve({ ok: true, deleted: String(args.id) });
+              } else if (name === "uigen_preview_url") {
+                var pfull = resolveId(args.id);
+                if (!isPageFull(pfull)) return reject(new Error("不是页面: " + args.id));
+                var rel = (root && pfull.indexOf(root + "/") === 0) ? pfull.slice(root.length + 1) : pfull;
+                var segs = rel.split("/");
+                var lastSeg = segs[segs.length - 1];
+                var lastExt = extOf(lastSeg);
+                var label = lastExt ? lastSeg.slice(0, lastSeg.length - lastExt.length - 1) : lastSeg;
+                segs[segs.length - 1] = label;
+                var previewHtml = withPickStub(fsMap[pfull].content || "", args.id, segs.join(" > "));
+                resolve({ ok: true, url: "data:text/html;charset=utf-8," + encodeURIComponent(previewHtml) });
+              } else if (name === "uigen_move_page") {
+                var fromFull = resolveId(args.id);
+                var parentArg = args.parent == null ? "" : String(args.parent).trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+                if (parentArg.split("/").some(function (s) { return s === ".." || s === "."; })) {
+                  return reject(new Error("非法 parent: " + args.parent));
+                }
+                var toFull = parentArg ? (root ? root + "/" + parentArg : parentArg) : root;
+                if (parentArg) {
+                  if (!Object.prototype.hasOwnProperty.call(fsMap, toFull) || fsMap[toFull].type !== "module") {
+                    return reject(new Error("目标目录不存在: " + parentArg));
+                  }
+                  if (toFull === fromFull || toFull.indexOf(fromFull + "/") === 0) {
+                    return reject(new Error("不能把目录移动到自身或其子目录下"));
+                  }
+                }
+                var baseName = fromFull.slice(fromFull.lastIndexOf("/") + 1);
+                var destFull = toFull ? toFull + "/" + baseName : baseName;
+                var relOf = function (f) {
+                  return (root && f.indexOf(root + "/") === 0) ? f.slice(root.length + 1) : f;
+                };
+                if (destFull === fromFull) return resolve({ ok: true, id: relOf(fromFull) });
+                if (Object.prototype.hasOwnProperty.call(fsMap, destFull)) {
+                  return reject(new Error("已存在同名节点: " + baseName));
+                }
+                moveSubtree(fromFull, destFull);
+                resolve({ ok: true, id: relOf(destFull) });
               } else if (name === "uigen_list_skills") {
                 // 与 server toolListSkills 同口径:缺省只回启用项,includeInactive 回全部
                 resolve({
@@ -1246,7 +1300,7 @@
     tree: [],                 // uigen_* 返回的嵌套节点(服务端已排好序,不二次排序)
     stats: null,
     focusId: "",              // 单页视图页 id;"" = 所有页面全览
-    collapsed: {},            // 模块 id -> true;折叠状态仅本会话内存
+    collapsed: {},            // 目录 id -> true;折叠状态仅本会话内存
     viewport: 390,
     zoom: 1,
     grid: true,
@@ -1256,15 +1310,15 @@
   var pan = { x: 0, y: 0 };   // 画布平移量(屏幕 px);视口态,不入 canvas-layout 持久化
   var pageCache = {};         // 页面 id → content(uigen_get_page 结果)
 
-  // B2 状态:引用 chip 暂存区 / 元素拾取 / 技能弹窗
-  var refChips = [];          // [{type:'page'|'module'|'element', id, name, label?, ref?}]
-  var pick = { on: false, frame: null, doc: null, hover: null, styleEl: null };
+  // B2 状态:元素拾取(postMessage 驱动)/ 技能弹窗 / 内联命名弹窗
+  var pick = { on: false };   // 面板侧只记开关;高亮与 element 回传由预览注入脚本负责
+  var nameUi = { open: false, resolve: null, mode: "name" };
   var skillUi = {
     open: false, skills: [], filter: "all", loading: false,
     showNew: false, editingId: null, deletingId: null,
     newForm: null, editForm: null
   };
-  var addInFlight = false;    // 「插入到对话」并发守卫
+  var addInFlight = false;    // 「添加到对话」并发守卫
 
   var $ = function (id) { return document.getElementById(id); };
   var bridge = window.UiGenBridge.create({ connectTimeoutMs: 10000 });
@@ -1297,12 +1351,6 @@
     el.className = "show" + (isErr ? " err" : "");
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { el.className = ""; }, 2600);
-  }
-
-  // 沙箱铁律:写入 iframe 前剥离 <script>;iframe 一律不带 sandbox 属性
-  // (宿主插件沙箱 WebView 对嵌套 sandbox iframe 会崩——历史教训)
-  function stripScripts(html) {
-    return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, "");
   }
 
   function esc(s) {
@@ -1362,7 +1410,7 @@
     return out;
   }
 
-  /** 树 → 可视行(折叠模块的子行不出现)。 */
+  /** 树 → 可视行(折叠目录的子行不出现)。 */
   function flattenRows(nodes, depth, out) {
     nodes = nodes || state.tree;
     depth = depth || 0;
@@ -1376,6 +1424,26 @@
       if (expanded) flattenRows(n.children, depth + 1, out);
     }
     return out;
+  }
+
+  /** 节点 id 变化(重命名/移动)后迁移面板状态:选中单页、卡片坐标、折叠标记
+   *  的 key 按 oldId → newId 整体跟过去,单页视图不丢。 */
+  function retargetId(oldId, newId) {
+    if (!oldId || !newId || oldId === newId) return;
+    function mapKey(k) {
+      if (k === oldId) return newId;
+      if (k.indexOf(oldId + "/") === 0) return newId + k.slice(oldId.length);
+      return k;
+    }
+    if (state.focusId === oldId || state.focusId.indexOf(oldId + "/") === 0) {
+      state.focusId = mapKey(state.focusId);
+    }
+    var cards = {};
+    Object.keys(state.cards).forEach(function (k) { cards[mapKey(k)] = state.cards[k]; });
+    state.cards = cards;
+    var collapsed = {};
+    Object.keys(state.collapsed).forEach(function (k) { collapsed[mapKey(k)] = state.collapsed[k]; });
+    state.collapsed = collapsed;
   }
 
   // ==================================================================
@@ -1461,18 +1529,21 @@
   }
 
   // ==================================================================
-  // 页面树(左 220px)— 模块(目录)可展开/折叠,页面点击进单页视图;
+  // 页面树(左 220px)— 目录可展开/折叠,页面点击进单页视图;
   // 行尾 ⋯ = 新建/重命名/删除;树顶「所有页面」退出单页视图。
   // ==================================================================
-  var moreMenu = null;   // 当前打开的 ⋯ 菜单元素
+  var moreMenu = null;        // 当前打开的浮层菜单元素
+  var moreMenuAnchor = null;  // 打开它的锚点(再点同一锚点 = 开关切换)
 
   function closeMoreMenu() {
     if (moreMenu && moreMenu.parentNode) moreMenu.parentNode.removeChild(moreMenu);
     moreMenu = null;
+    moreMenuAnchor = null;
   }
 
   /** 通用浮层菜单:items = [{label,fn,danger} | {sep:true}],贴锚点弹出并夹取视口。 */
   function openMenu(anchor, items) {
+    if (moreMenu && moreMenuAnchor === anchor) { closeMoreMenu(); return; }  // 同锚点再点 = 关闭
     closeMoreMenu();
     var menu = document.createElement("div");
     menu.className = "dropdown-menu open";
@@ -1504,8 +1575,15 @@
 
     document.body.appendChild(menu);
     moreMenu = menu;
+    moreMenuAnchor = anchor;
+    // 点击外部关闭:只认“自己那一次”。菜单项点击会 stopPropagation 把监听留到下一次,
+    // 若不校验 moreMenu 归属,同一次点击里新开的菜单(⋯ 之后点 ＋)会被顺手关掉 = 按钮没反应
     setTimeout(function () {
-      document.addEventListener("click", closeMoreMenu, { once: true });
+      var opened = menu;
+      document.addEventListener("click", function onDocClick() {
+        document.removeEventListener("click", onDocClick);
+        if (moreMenu === opened) closeMoreMenu();
+      });
     }, 0);
   }
 
@@ -1536,6 +1614,7 @@
         (state.focusId === n.id ? " on" : "");
       el.dataset.id = n.id;                 // id 含 "/",一律走 dataset,不拼选择器
       el.style.paddingLeft = (8 + row.depth * 12) + "px";
+      el.draggable = true;                  // 行可拖:拖到目录行 = 移动进去,拖到空白 = 移到根
 
       var chev = document.createElement("span");
       chev.className = "t-chev" + (row.expanded ? " open" : "");
@@ -1573,12 +1652,20 @@
       var more = document.createElement("button");
       more.className = "t-more";
       more.textContent = "⋯";
-      more.title = row.isModule ? "模块操作" : "页面操作";
+      more.title = row.isModule ? "目录操作" : "页面操作";
       more.addEventListener("click", function (ev) {
         ev.stopPropagation();
         openNodeMenu(more, n);
       });
       el.appendChild(more);
+
+      el.addEventListener("dragstart", function (ev) {
+        dragId = n.id;
+        try {
+          ev.dataTransfer.effectAllowed = "move";
+          ev.dataTransfer.setData("text/plain", n.id);
+        } catch (e) { /* 合成事件可能没有 dataTransfer,内部 dragId 已兜底 */ }
+      });
 
       el.addEventListener("click", function () {
         if (row.isModule) toggleCollapse(n.id);
@@ -1596,28 +1683,23 @@
 
   function openNodeMenu(anchor, n) {
     var items = [];
-    // 引用入口:按行类型给「引用此页 / 引用此模块」,进底部 chip 暂存区
+    // 引用入口:按行类型区分尾注(页面/目录),点击立即插入对话输入框
     items.push({
-      label: n.type === "module" ? "引用此模块" : "引用此页",
+      label: "添加到对话",
       fn: function () {
-        addRefChip({
-          type: n.type === "module" ? "module" : "page",
-          id: n.id,
-          name: nodePathLabel(n.id)
-        });
-        toast("已加入引用,可在底部「插入到对话」");
+        insertNotesToChat([screenReferenceNote(nodePathLabel(n.id), n.id, n.type === "module" ? "module" : "page")]);
       }
     });
     items.push({ sep: true });
     if (n.type === "module") {
       items.push({ label: "新建页面", fn: function () { createNode(n.id, "page"); } });
-      items.push({ label: "新建子模块", fn: function () { createNode(n.id, "module"); } });
+      items.push({ label: "新建目录", fn: function () { createNode(n.id, "module"); } });
       items.push({ sep: true });
     }
     items.push({ label: "重命名", fn: function () { renameNode(n); } });
     items.push({ sep: true });
     items.push({
-      label: n.type === "module" ? "删除模块" : "删除页面",
+      label: n.type === "module" ? "删除目录" : "删除页面",
       danger: true,
       fn: function () { deleteNode(n); }
     });
@@ -1628,84 +1710,214 @@
     return !name || name === "." || name === ".." || name.indexOf("/") >= 0 || name.indexOf("\\") >= 0;
   }
 
-  /** 新建:页面落父模块下(无扩展名自动补 .html);模块 = mkdir。 */
+  // ==================================================================
+  // 内联命名弹窗 — 插件 WebView 里 window.prompt 不可用(点了没反应的根因),
+  // 新建页面/目录、重命名统一走这里:输入框 + 确定/取消,Promise 回传名称。
+  // ==================================================================
+  function promptName(title, placeholder, initial) {
+    return new Promise(function (resolve) {
+      if (nameUi.open) closeNameDialog(false);   // 防重入:上一个挂起的直接取消
+      nameUi.open = true;
+      nameUi.resolve = resolve;
+      nameUi.mode = "name";
+      $("name-modal-title").textContent = title;
+      var input = $("name-modal-input");
+      input.hidden = false;                      // 确认弹窗会藏输入框,这里复原
+      $("name-modal-confirm-msg").hidden = true;
+      input.placeholder = placeholder || "名称";
+      input.value = initial || "";
+      $("name-modal").hidden = false;
+      setTimeout(function () {
+        input.focus();
+        input.select();
+      }, 0);
+    });
+  }
+
+  function closeNameDialog(ok) {
+    if (!nameUi.open) return;
+    var input = $("name-modal-input");
+    var value = input.value;
+    var resolve = nameUi.resolve;
+    var mode = nameUi.mode;
+    nameUi.open = false;
+    nameUi.resolve = null;
+    $("name-modal").hidden = true;
+    input.value = "";
+    // 确认模式回传布尔(输入框隐藏其值恒空,不能当真值);命名模式回传名称/取消为 null
+    if (resolve) resolve(mode === "confirm" ? !!ok : (ok ? value : null));
+  }
+
+  // 内联确认弹窗 — window.confirm 在插件 WebView 同样不可用(删除会静默失败),
+  // 复用命名弹窗的壳:隐藏输入框只留说明文案 + 确定/取消,Promise 回传布尔。
+  function confirmDialog(message) {
+    return new Promise(function (resolve) {
+      if (nameUi.open) closeNameDialog(false);   // 防重入:上一个挂起的直接取消
+      nameUi.open = true;
+      nameUi.resolve = resolve;
+      nameUi.mode = "confirm";
+      $("name-modal-title").textContent = "请确认";
+      $("name-modal-confirm-msg").textContent = message;
+      $("name-modal-confirm-msg").hidden = false;
+      $("name-modal-input").hidden = true;
+      $("name-modal").hidden = false;
+      setTimeout(function () { $("name-modal-ok").focus(); }, 0);
+    });
+  }
+
+  /** 新建:页面落父目录下(无扩展名自动补 .html);目录 = mkdir。 */
   function createNode(parentId, type) {
-    var name = window.prompt(type === "module" ? "模块名称:" : "页面名称(可不带扩展名):", "");
-    if (name == null) return;
-    name = name.trim();
-    if (!name) return;
-    if (badName(name)) { toast("名称不能含路径分隔符", true); return; }
-    var id;
-    if (type === "module") {
-      id = parentId ? parentId + "/" + name : name;
-    } else {
-      if (!/\.(html?|jsx|tsx|vue)$/i.test(name)) name += ".html";
-      id = parentId ? parentId + "/" + name : name;
-    }
-    if (findNode(id)) { toast("已存在同名节点:" + id, true); return; }
-    bridge.callTool("uigen_save_page", { id: id }).then(okOrThrow).then(function (res) {
-      if (parentId) delete state.collapsed[parentId];   // 新节点可能落在折叠模块里
-      var newId = (res && res.id) ? res.id : id;
-      return refreshTree().then(function () {
-        toast("已新建「" + name + "」");
-        if (type === "page") focusPage(newId);
-      });
-    }).catch(function (e) { toast("新建失败:" + e.message, true); });
+    var isModule = type === "module";
+    promptName(isModule ? "新建目录" : "新建页面",
+      isModule ? "目录名称" : "页面名称(可不带扩展名)", "").then(function (name) {
+      if (name == null) return;
+      name = name.trim();
+      if (!name) return;
+      if (badName(name)) { toast("名称不能含路径分隔符", true); return; }
+      var id;
+      if (isModule) {
+        id = parentId ? parentId + "/" + name : name;
+      } else {
+        if (!/\.(html?|jsx|tsx|vue)$/i.test(name)) name += ".html";
+        id = parentId ? parentId + "/" + name : name;
+      }
+      if (findNode(id)) { toast("已存在同名节点:" + id, true); return; }
+      bridge.callTool("uigen_save_page", { id: id }).then(okOrThrow).then(function (res) {
+        if (parentId) delete state.collapsed[parentId];   // 新节点可能落在折叠目录里
+        var newId = (res && res.id) ? res.id : id;
+        return refreshTree().then(function () {
+          toast("已新建「" + name + "」");
+          if (type === "page") focusPage(newId);
+        });
+      }).catch(function (e) { toast("新建失败:" + e.message, true); });
+    });
   }
 
   /** 重命名:page 改 stem 保扩展名,module 改目录名(语义在服务端)。 */
   function renameNode(n) {
     var isModule = n.type === "module";
     var cur = isModule ? n.id.split("/").pop() : stemOf(n.id);
-    var name = window.prompt(isModule ? "模块新名称:" : "页面新名称(不含扩展名):", cur);
-    if (name == null) return;
-    name = name.trim();
-    if (!name || name === cur) return;
-    if (badName(name)) { toast("名称不能含路径分隔符", true); return; }
-    var oldId = n.id;
-    bridge.callTool("uigen_save_page", { id: oldId, name: name }).then(okOrThrow).then(function (res) {
-      var newId = (res && res.id) ? res.id : oldId;
-      if (state.focusId === oldId) state.focusId = newId;
-      if (state.cards[oldId]) {
-        state.cards[newId] = state.cards[oldId];
-        delete state.cards[oldId];
-      }
-      if (state.collapsed[oldId]) {
-        state.collapsed[newId] = true;
-        delete state.collapsed[oldId];
-      }
-      return refreshTree().then(function () {
-        toast("已重命名为「" + name + "」");
-        scheduleSaveLayout();
-      });
-    }).catch(function (e) { toast("重命名失败:" + e.message, true); });
+    promptName(isModule ? "重命名目录" : "重命名页面",
+      isModule ? "目录名称" : "页面名称(不含扩展名)", cur).then(function (name) {
+      if (name == null) return;
+      name = name.trim();
+      if (!name || name === cur) return;
+      if (badName(name)) { toast("名称不能含路径分隔符", true); return; }
+      var oldId = n.id;
+      bridge.callTool("uigen_save_page", { id: oldId, name: name }).then(okOrThrow).then(function (res) {
+        retargetId(oldId, (res && res.id) ? res.id : oldId);
+        return refreshTree().then(function () {
+          toast("已重命名为「" + name + "」");
+          scheduleSaveLayout();
+        });
+      }).catch(function (e) { toast("重命名失败:" + e.message, true); });
+    });
   }
 
-  /** 删除:非空模块自动带 recursive:true,确认文案里说明会删子内容。 */
+  /** 删除:非空目录自动带 recursive:true,确认文案里说明会删子内容。 */
   function deleteNode(n) {
     var isModule = n.type === "module";
     var nonEmpty = isModule && n.children && n.children.length > 0;
     var msg;
     if (isModule) {
       msg = nonEmpty
-        ? "删除模块「" + (n.name || n.id) + "」?其下的子模块与页面会一并删除。"
-        : "删除空模块「" + (n.name || n.id) + "」?";
+        ? "删除目录「" + (n.name || n.id) + "」?其下的子目录与页面会一并删除。"
+        : "删除空目录「" + (n.name || n.id) + "」?";
     } else {
       msg = "删除页面「" + (n.name || n.id) + "」?(将删除磁盘文件)";
     }
-    if (!window.confirm(msg)) return;
-    var args = { id: n.id };
-    if (nonEmpty) args.recursive = true;
-    bridge.callTool("uigen_delete_page", args).then(okOrThrow).then(function () {
-      if (state.focusId === n.id || state.focusId.indexOf(n.id + "/") === 0) state.focusId = "";
-      Object.keys(state.cards).forEach(function (k) {
-        if (k === n.id || k.indexOf(n.id + "/") === 0) delete state.cards[k];
-      });
-      return refreshTree().then(function () {
-        toast("已删除「" + (n.name || n.id) + "」");
-        scheduleSaveLayout();
+    confirmDialog(msg).then(function (ok) {
+      if (!ok) return;
+      var args = { id: n.id };
+      if (nonEmpty) args.recursive = true;
+      return bridge.callTool("uigen_delete_page", args).then(okOrThrow).then(function () {
+        if (state.focusId === n.id || state.focusId.indexOf(n.id + "/") === 0) state.focusId = "";
+        Object.keys(state.cards).forEach(function (k) {
+          if (k === n.id || k.indexOf(n.id + "/") === 0) delete state.cards[k];
+        });
+        return refreshTree().then(function () {
+          toast("已删除「" + (n.name || n.id) + "」");
+          scheduleSaveLayout();
+        });
       });
     }).catch(function (e) { toast("删除失败:" + e.message, true); });
+  }
+
+  // ==================================================================
+  // 树拖拽移动 — 拖到目录行 = uigen_move_page({id, parent:目标目录}),
+  // 拖到树空白 = parent:""(移到根);不做行间排序(保持磁盘字典序)。
+  // ==================================================================
+  var dragId = null;          // 正在拖的节点 id;dragend/drop 后清空
+
+  function clearDropHints() {
+    Array.prototype.forEach.call(document.querySelectorAll(".tree-row.drop-target"), function (el) {
+      el.classList.remove("drop-target");
+    });
+    $("screen-tree").classList.remove("drop-root");
+  }
+
+  function moveNode(id, parentId) {
+    if (!id) return;
+    parentId = parentId || "";
+    var curParent = id.indexOf("/") < 0 ? "" : id.slice(0, id.lastIndexOf("/"));
+    if (curParent === parentId) return;   // 已在目标位置:无操作
+    // 循环/同名冲突交给服务端校验,失败以 toast 报出
+    bridge.callTool("uigen_move_page", { id: id, parent: parentId })
+      .then(okOrThrow)
+      .then(function (res) {
+        var newId = (res && res.id) ? res.id : id;
+        retargetId(id, newId);            // 跟随新 id:选中/卡片/折叠不丢
+        return refreshTree().then(function () {
+          toast("已移动「" + newId.split("/").pop() + "」");
+        });
+      })
+      .catch(function (e) { toast("移动失败:" + e.message, true); });
+  }
+
+  function initTreeDnd() {
+    var tree = $("screen-tree");
+    function setEffect(ev, eff) {
+      if (!ev.dataTransfer) return;   // 合成事件可能不带 dataTransfer
+      try { ev.dataTransfer.dropEffect = eff; } catch (e) { /* 只读属性忽略 */ }
+    }
+    tree.addEventListener("dragover", function (ev) {
+      if (!dragId) return;
+      ev.preventDefault();
+      clearDropHints();
+      var row = ev.target && ev.target.closest ? ev.target.closest(".tree-row") : null;
+      if (row) {
+        var targetId = row.dataset.id;
+        var node = targetId ? findNode(targetId) : null;
+        if (node && node.type === "module") {
+          setEffect(ev, "move");
+          row.classList.add("drop-target");   // 目录行高亮(循环/冲突由服务端报错)
+        } else {
+          setEffect(ev, "none");              // 页面行:不接受落下
+        }
+        return;
+      }
+      setEffect(ev, "move");                  // 树空白区 = 移到根
+      tree.classList.add("drop-root");
+    });
+    tree.addEventListener("drop", function (ev) {
+      if (!dragId) return;
+      ev.preventDefault();
+      var id = dragId;
+      clearDropHints();
+      dragId = null;
+      var row = ev.target && ev.target.closest ? ev.target.closest(".tree-row") : null;
+      if (row) {
+        var targetId = row.dataset.id;
+        var node = targetId ? findNode(targetId) : null;
+        if (node && node.type === "module") moveNode(id, targetId);
+        return;
+      }
+      moveNode(id, "");                     // 树空白 = 移到根
+    });
+    tree.addEventListener("dragend", function () {
+      dragId = null;
+      clearDropHints();
+    });
   }
 
   // ==================================================================
@@ -1736,19 +1948,14 @@
   }
 
   // ==================================================================
-  // B2-1 元素选取 —— srcdoc iframe 与父页同源,父页直接给 contentDocument
-  // 挂监听,绝不向 iframe 注入 script(宿主插件 WebView 崩溃守卫)。
-  // 快照与尾注口径逐字复刻 HBA ui-gen/chat/elementRef.ts,结构路径复刻
-  // preview/sandbox-utils.ts 的 domPath(同名兄弟 total>1 才带序号,从 1 起)。
+  // B2-1 预览 + 元素选取 —— iframe 导航到 uigen_preview_url 返回的本地预览
+  // (跨源,面板绝不碰 contentDocument):服务端/注入脚本负责 hover 高亮与
+  // ref 快照,面板只收 postMessage:
+  //   {source:"hba-uigen-preview", type:"ready"}          加载完成(清 loading)
+  //   {source:"hba-uigen-preview", type:"element", ref}    拾取到元素
+  // 下行同契约:{source:"hba-uigen-panel", type:"setPickMode", on:bool}。
+  // ref 字段与尾注口径沿用 HBA elementRef(结构路径 / 选择器 / 截 40 字文本)。
   // ==================================================================
-
-  /** 元素 CSS 选择器:#id 优先 → tag.c1.c2.c3(最多 3 类)→ 裸 tag。 */
-  function elementCssSelector(el) {
-    if (el.htmlId) return "#" + el.htmlId;
-    var classes = el.className.trim().split(/\s+/).filter(Boolean).slice(0, 3);
-    if (classes.length > 0) return el.tagName + classes.map(function (c) { return "." + c; }).join("");
-    return el.tagName;
-  }
 
   /** 元素定位串:结构路径 > CSS 选择器 > #id > 裸 tag。 */
   function elementLocator(ref) {
@@ -1771,149 +1978,67 @@
       : "[引用元素: " + elementLabel(ref) + "]";
   }
 
-  /** chip 定位短形式 = elementCssSelector 口径(与属性面板同一串)。 */
-  function elementSelectorShortForm(ref) {
-    if (ref.selector) return ref.selector;
-    if (ref.htmlId) return "#" + ref.htmlId;
-    return ref.tagName;
+  /** 当前单页视图的预览 iframe(代码视图卡没有)。 */
+  function focusFrame() {
+    var card = document.querySelector("#canvas-grid .screen-card.focus");
+    return card ? card.querySelector("iframe") : null;
   }
 
-  /** chip 文案:`@首页 · button「提交订单」`;无文本时退到选择器短形式。 */
-  function elementReferenceChipLabel(ref) {
-    if (ref.text) return "@" + ref.screenName + " · " + elementLabel(ref);
-    var short = elementSelectorShortForm(ref);
-    return short && short !== ref.tagName
-      ? "@" + ref.screenName + " · " + short
-      : "@" + ref.screenName + " · " + ref.tagName;
+  function clearPreviewLoading(frame) {
+    if (!frame) return;
+    var el = frame._loadingEl;
+    frame._loadingEl = null;
+    if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
-  /** 结构路径(复刻 sandbox-utils domPath):body>section(2)>form>button(1)。
-   *  doc 必须显式传 iframe 文档 —— 函数定义在父页,全局 document 会指到父文档。 */
-  function domPath(el, doc) {
-    var parts = [];
-    var cur = el;
-    while (cur && cur.nodeType === 1 && parts.length < 8) {
-      var tag = cur.tagName ? cur.tagName.toLowerCase() : "";
-      if (cur === doc.body) { parts.unshift("body"); break; }
-      var parent = cur.parentElement;
-      if (parent) {
-        var idx = 0, total = 0;
-        for (var i = 0; i < parent.children.length; i++) {
-          if (parent.children[i].tagName === cur.tagName) {
-            total++;
-            if (parent.children[i] === cur) idx = total;
-          }
-        }
-        if (total > 1) tag += "(" + idx + ")";
-      }
-      parts.unshift(tag);
-      cur = parent;
+  /** 下行:setPickMode 开关(预览注入脚本据此挂/卸 hover 与点击)。 */
+  function postPickMode(on) {
+    var frame = focusFrame();
+    if (!frame || !frame.contentWindow) return false;
+    try {
+      frame.contentWindow.postMessage(
+        { source: "hba-uigen-panel", type: "setPickMode", on: !!on }, "*");
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /** 预览侧消息:ready 清 loading(拾取若已开则补发一次 setPickMode);
+   *  element = 拾取成功,立即走「添加到对话」插入流程。 */
+  function onPreviewMessage(ev) {
+    var d = ev && ev.data;
+    if (!d || d.source !== "hba-uigen-preview") return;
+    var frame = focusFrame();
+    if (!frame || ev.source !== frame.contentWindow) return;   // 只认当前预览窗
+    if (d.type === "ready") {
+      clearPreviewLoading(frame);
+      if (pick.on) postPickMode(true);
+    } else if (d.type === "element" && pick.on && d.ref) {
+      handlePickedElement(d.ref);
     }
-    return parts.join(">");
   }
+  window.addEventListener("message", onPreviewMessage);
 
-  /** DOM → 纯数据快照(复刻 buildElementReference):text 空白归一截 40 字,
-   *  tagName 小写;刻意不落 data-os-id(运行时编号,随重排漂移)。 */
-  function buildElementReference(screenId, screenName, el, doc) {
-    var tagName = (el.tagName || "div").toLowerCase();
-    var htmlId = el.id || "";
-    var className = (el.className && typeof el.className === "string") ? el.className.trim() : "";
-    var text = String(el.textContent == null ? "" : el.textContent)
-      .replace(/\s+/g, " ").trim().slice(0, 40);
-    var path = domPath(el, doc);
-    var ref = {
-      screenId: screenId,
-      screenName: screenName,
-      tagName: tagName,
-      text: text,
-      selector: elementCssSelector({ tagName: tagName, htmlId: htmlId, className: className })
-    };
-    if (path) ref.path = path;
-    if (htmlId) ref.htmlId = htmlId;
-    return ref;
-  }
-
-  var PICK_HOVER_CLASS = "hba-pick-hover";
-
-  function pickIsSkippable(el) {
-    return !el || el.nodeType !== 1 || !pick.doc ||
-      el === pick.doc.body || el === pick.doc.documentElement;
-  }
-
-  function clearPickHover() {
-    if (!pick.hover) return;
-    try { pick.hover.classList.remove(PICK_HOVER_CLASS); } catch (e) { /* 目标可能已卸载 */ }
-    pick.hover = null;
-  }
-
-  function pickOver(ev) {
-    var el = ev.target;
-    if (pickIsSkippable(el)) { clearPickHover(); return; }
-    if (el === pick.hover) return;
-    clearPickHover();
-    pick.hover = el;
-    try { el.classList.add(PICK_HOVER_CLASS); } catch (e) { /* 个别目标不支持 classList */ }
-  }
-
-  function pickOut(ev) {
-    if (!ev.relatedTarget) clearPickHover();   // 指针离开预览文档
-  }
-
-  function pickClick(ev) {
-    ev.preventDefault();
-    ev.stopPropagation();
-    ev.stopImmediatePropagation();            // 吞掉页内链接/按钮的默认行为
-    var el = ev.target;
-    if (pickIsSkippable(el)) return;           // body/html 空白:留在拾取模式
-    var screenId = state.focusId;
-    var ref = buildElementReference(screenId, nodePathLabel(screenId), el, pick.doc);
-    clearPickHover();
+  /** 拾取成功:页面尾注 + 元素尾注立即插入对话输入框(不再暂存)。 */
+  function handlePickedElement(ref) {
     closeElementPicker();
-    addRefChip({
-      type: "element", id: screenId, name: nodePathLabel(screenId),
-      label: elementReferenceChipLabel(ref), ref: ref
+    var screenId = ref.screenId || state.focusId;
+    var pageName = nodePathLabel(screenId) || ref.screenName || "";
+    insertNotesToChat([
+      screenReferenceNote(pageName, screenId, "page"),
+      elementReferenceNote(ref)
+    ]).then(function () {
+      toast("已引用元素:" + elementLabel(ref));
     });
-    toast("已引用元素:" + elementLabel(ref));
   }
 
   /** 进入/退出拾取模式(工具条按钮;Esc 也走这里,退出拾取不退单页视图)。 */
   function openElementPicker() {
     if (!state.focusId) { toast("先进入单页视图再选取元素", true); return; }
     if (pick.on) { closeElementPicker(); return; }
-    var card = document.querySelector("#canvas-grid .screen-card.focus");
-    var frame = card ? card.querySelector("iframe") : null;
+    var frame = focusFrame();
     if (!frame) { toast("当前页面没有可选取的预览(代码视图)", true); return; }
-    var doc = null;
-    try { doc = frame.contentDocument; } catch (e) { doc = null; }
-    if (!doc) { toast("预览尚未就绪,请稍后再试", true); return; }
-    if (doc.readyState === "complete" && doc.body) { startPick(frame, doc); return; }
-    frame.addEventListener("load", function onLoad() {
-      frame.removeEventListener("load", onLoad);
-      if (pick.on || !state.focusId || !frame.isConnected) return;
-      var d = null;
-      try { d = frame.contentDocument; } catch (e) { d = null; }
-      if (d) startPick(frame, d);
-    });
-    toast("预览加载中,稍候自动进入拾取…");
-  }
-
-  function startPick(frame, doc) {
-    if (!doc || !doc.body) { toast("预览尚未就绪,请稍后再试", true); return; }
     pick.on = true;
-    pick.frame = frame;
-    pick.doc = doc;
-    pick.hover = null;
-    // 高亮用临时 style 元素 + 类名(不改页面 inline style,退出即摘除)
-    var style = doc.createElement("style");
-    style.id = "__hba_pick_style";
-    style.textContent = "." + PICK_HOVER_CLASS +
-      "{outline:2px solid #f59e0b !important;outline-offset:1px !important;}";
-    (doc.head || doc.documentElement).appendChild(style);
-    pick.styleEl = style;
-    doc.addEventListener("mouseover", pickOver, true);
-    doc.addEventListener("mouseout", pickOut, true);
-    doc.addEventListener("click", pickClick, true);
-    frame.style.cursor = "crosshair";
+    if (!postPickMode(true)) { toast("预览尚未就绪,请稍后再试", true); pick.on = false; return; }
     var btn = $("btn-pick-element");
     btn.classList.add("on");
     btn.textContent = "退出拾取";
@@ -1922,16 +2047,8 @@
 
   function closeElementPicker() {
     if (!pick.on) return;
-    clearPickHover();
-    var doc = pick.doc, frame = pick.frame;
-    if (doc) {
-      doc.removeEventListener("mouseover", pickOver, true);
-      doc.removeEventListener("mouseout", pickOut, true);
-      doc.removeEventListener("click", pickClick, true);
-      if (pick.styleEl && pick.styleEl.parentNode) pick.styleEl.parentNode.removeChild(pick.styleEl);
-    }
-    if (frame) frame.style.cursor = "";
-    pick.on = false; pick.doc = null; pick.frame = null; pick.styleEl = null;
+    pick.on = false;
+    postPickMode(false);
     var btn = $("btn-pick-element");
     btn.classList.remove("on");
     btn.textContent = "选取元素";
@@ -1939,7 +2056,8 @@
   }
 
   // ==================================================================
-  // B2-2 引用 chip + 插入到会话 —— 尾注模板逐字复刻 HBA UiGenChatPanel
+  // B2-2 添加到对话(直接插入) —— 无暂存区:菜单/工具条/拾取点击都立即把
+  // 尾注经三级通道送进对话输入框。尾注模板逐字复刻 HBA UiGenChatPanel
   // (screenReferenceNote / elementReferenceNote / appendNotes 口径),
   // 显示名带祖先链(screen-tree nodePathLabel,「 > 」连接)。
   // ==================================================================
@@ -1956,91 +2074,35 @@
     return null;
   }
 
-  /** 引用目标的显示名:`模块A > 页面名`(根层级就是自身名),与侧栏一致。 */
+  /** 引用目标的显示名:`目录A > 页面名`(根层级就是自身名),与侧栏一致。 */
   function nodePathLabel(id) {
     var hit = findNodeWithPath(id, state.tree, []);
     return hit ? hit.chain.concat([hit.node.name || hit.node.id]).join(" > ") : String(id || "");
   }
 
-  /** 选中节点引用尾注:type='module' → [引用模块: …],否则 [引用页面: …]。 */
+  /** 节点引用尾注:type='module' → [引用目录: …],否则 [引用页面: …]。 */
   function screenReferenceNote(name, screenId, type) {
     return type === "module"
-      ? "[引用模块: " + name + " (" + screenId + ")]"
+      ? "[引用目录: " + name + " (" + screenId + ")]"
       : "[引用页面: " + name + " (" + screenId + ")]";
   }
 
-  function addRefChip(chip) {
-    if (chip.type === "element") {
-      refChips = refChips.filter(function (c) { return c.type !== "element"; });  // 再拾取即替换
-    } else if (refChips.some(function (c) { return c.type === chip.type && c.id === chip.id; })) {
-      toast("该引用已在列表中");
-      return;
-    }
-    refChips.push(chip);
-    renderRefChips();
-  }
-
-  function removeRefChip(index) {
-    refChips.splice(index, 1);
-    renderRefChips();
-  }
-
-  function renderRefChips() {
-    var box = $("ref-chips");
-    box.textContent = "";
-    var has = refChips.length > 0;
-    $("ref-bar").hidden = !has;
-    document.body.classList.toggle("chips-visible", has);
-    refChips.forEach(function (c, i) {
-      var el = document.createElement("span");
-      el.className = "ref-chip " + c.type;
-      var kind = document.createElement("span");
-      kind.className = "rc-kind";
-      kind.textContent = c.type === "page" ? "页" : c.type === "module" ? "模块" : "元素";
-      var txt = document.createElement("span");
-      txt.className = "rc-text";
-      txt.textContent = c.type === "element" ? c.label : c.name;
-      txt.title = c.type === "element" ? c.label : c.name + " (" + c.id + ")";
-      var x = document.createElement("button");
-      x.className = "rc-x";
-      x.textContent = "×";
-      x.title = "移除";
-      x.addEventListener("click", function () { removeRefChip(i); });
-      el.appendChild(kind);
-      el.appendChild(txt);
-      el.appendChild(x);
-      box.appendChild(el);
-    });
-  }
-
-  /** 全部 chip → 尾注文本:每条独占一行、整行 trim 去重(appendNotes 口径)。
-   *  有元素引用时页面尾注用元素所属页、元素尾注紧随其后,再补其余页面/模块。 */
-  function buildRefPayload() {
-    var notes = [], seen = {};
-    function push(note) {
+  /** 尾注文本:每条独占一行、整行 trim 去重(appendNotes 口径)。 */
+  function buildRefPayload(notes) {
+    var out = [], seen = {};
+    (notes || []).forEach(function (note) {
       if (!note || seen[note]) return;
       seen[note] = true;
-      notes.push(note);
-    }
-    var elem = null, pages = [], mods = [];
-    refChips.forEach(function (c) {
-      if (c.type === "element") elem = c;
-      else if (c.type === "page") pages.push(c);
-      else mods.push(c);
+      out.push(note);
     });
-    if (elem) push(screenReferenceNote(elem.name, elem.id, "page"));
-    pages.forEach(function (c) { push(screenReferenceNote(c.name, c.id, "page")); });
-    if (elem) push(elementReferenceNote(elem.ref));
-    mods.forEach(function (c) { push(screenReferenceNote(c.name, c.id, "module")); });
-    return notes.join("\n");
+    return out.join("\n");
   }
 
-  /** 工具条「引用此页」:当前单页进 chip 暂存区。 */
+  /** 工具条「添加到对话」:当前单页引用立即插入。 */
   function insertPageRef() {
     var n = findNode(state.focusId);
     if (!n || n.type !== "page") return;
-    addRefChip({ type: "page", id: n.id, name: nodePathLabel(n.id) });
-    toast("已加入引用,可在底部「插入到对话」");
+    insertNotesToChat([screenReferenceNote(nodePathLabel(n.id), n.id, "page")]);
   }
 
   // ---- 插入到对话:三级降级(照抄 hba-run insertSelectionToInput) ----
@@ -2048,7 +2110,7 @@
   //   2) ui/update-model-context —— 以插件上下文附在输入区;
   //   3) 剪贴板兜底(独立模式直接走这条)。
   //   composer 未就绪(-32601 非「方法不存在」)→ 等待重试 10s/500ms;
-  //   通道方法不存在 → 该通道作废直接降级;成功后清空 chip 区。
+  //   通道方法不存在 → 该通道作废直接降级。
   var ADD_WAIT_TIMEOUT_MS = 10000;
   var ADD_WAIT_STEP_MS = 500;
 
@@ -2077,18 +2139,12 @@
     return Promise.resolve();
   }
 
-  function clearRefChips() {
-    refChips = [];
-    renderRefChips();
-  }
-
-  async function insertRefsToChat() {
-    var payload = buildRefPayload();
-    if (!payload) { toast("还没有引用,先添加页面/模块/元素", true); return; }
+  async function insertNotesToChat(notes) {
+    var payload = buildRefPayload(notes);
+    if (!payload) return;
     if (window.parent === window || bridge.mode === "standalone") {
       // 独立模式没有宿主可以代发,降级为复制到剪贴板
       await copyText(payload);
-      clearRefChips();
       toast("独立模式:无法添加到对话,已复制到剪贴板");
       return;
     }
@@ -2101,7 +2157,6 @@
         if (insertOk) {
           try {
             await bridge.request("ui/insert-input-text", { text: payload }, 3000);
-            clearRefChips();
             toast("已添加到对话");
             return;
           } catch (e) {
@@ -2113,7 +2168,6 @@
             await bridge.request("ui/update-model-context", {
               content: [{ type: "text", text: payload }]
             }, 3000);
-            clearRefChips();
             toast("已添加到对话输入区(宿主不支持直插文本,以插件上下文附上)");
             return;
           } catch (e) {
@@ -2122,13 +2176,11 @@
         }
         if (!insertOk && !contextOk) {
           await copyText(payload);
-          clearRefChips();
           toast("宿主不支持添加到对话,已复制到剪贴板");
           return;
         }
         if (Date.now() >= deadline) {
           await copyText(payload);
-          clearRefChips();
           toast("等待输入框就绪超时,已复制到剪贴板");
           return;
         }
@@ -2398,7 +2450,8 @@
 
   // ==================================================================
   // 画布卡片 — 全览:固定 320×240 占位卡(不写 iframe,点击进单页);
-  // 单页:一张视口尺寸大卡,内容异步取回后写 srcdoc(剥 script、无 sandbox)。
+  // 单页:一张视口尺寸大卡,进视图即取 uigen_preview_url 写 iframe.src
+  // (一次点击出内容;loading 由预览 ready 消息消除;iframe 无 sandbox)。
   // ==================================================================
   function defaultCardPos(i) {
     return { x: 40 + (i % 4) * 360, y: 40 + Math.floor(i / 4) * 360, w: CARD_W };
@@ -2480,7 +2533,7 @@
 
     var body = document.createElement("div");
     body.className = "card-body";
-    // 全览卡只显示名称占位:同屏只允许一张卡写 iframe.srcdoc(崩溃守卫)
+    // 全览卡只显示名称占位:同屏只允许一张卡写 iframe.src(崩溃守卫)
     var ph = document.createElement("div");
     ph.className = "card-ph";
     var phName = document.createElement("span");
@@ -2561,32 +2614,52 @@
 
     var body = document.createElement("div");
     body.className = "card-body";
-    var loading = document.createElement("div");
-    loading.className = "card-ph";
-    loading.style.cursor = "default";
-    loading.textContent = "加载中…";
-    body.appendChild(loading);
-
     card.appendChild(head);
     card.appendChild(body);
 
-    // 内容异步取回后才写 srcdoc(启动时绝不写);仅此一张卡写,iframe 无 sandbox
     var wantedId = page.id;
-    loadPageContent(wantedId).then(function (content) {
-      if (state.focusId !== wantedId || !card.isConnected) return;
-      body.textContent = "";
-      if (isHtmlExt(ext)) {
-        var frame = $("focus-frame-tpl").content.firstElementChild.cloneNode(true);
-        frame.title = (page.name || page.id) + " 预览";
-        try { frame.srcdoc = stripScripts(content); } catch (e) { /* 预览失败不拖垮面板 */ }
-        body.appendChild(frame);
-      } else {
+    if (isHtmlExt(ext)) {
+      // 一次点击即出内容:进视图立刻取预览地址写 src,loading 盖在 iframe 上,
+      // 收到预览 ready 消息(或 load 兜底)后摘除
+      var frame = $("focus-frame-tpl").content.firstElementChild.cloneNode(true);
+      frame.title = (page.name || page.id) + " 预览";
+      body.appendChild(frame);
+      var loading = document.createElement("div");
+      loading.className = "card-ph";
+      loading.style.cursor = "default";
+      loading.textContent = "加载中…";
+      body.appendChild(loading);
+      frame._loadingEl = loading;
+      // 空 iframe 插入即触发一次 about:blank 的 load,必须等真正写了 src 才算加载完
+      frame.addEventListener("load", function () {
+        if (frame.getAttribute("src")) clearPreviewLoading(frame);
+      });
+      bridge.callTool("uigen_preview_url", { id: wantedId }).then(okOrThrow).then(function (res) {
+        if (state.focusId !== wantedId || !frame.isConnected) return;
+        if (!res || !res.url) throw new Error("预览地址为空");
+        frame.src = res.url;
+      }).catch(function (e) {
+        if (state.focusId !== wantedId || !frame.isConnected) return;
+        // 取地址失败:loading 就地变错误态(src 从未写入,不会被 load 清掉)
+        loading.textContent = "预览加载失败:" + (e && e.message);
+        toast("预览加载失败:" + (e && e.message), true);
+      });
+    } else {
+      // jsx/tsx/vue 产物走代码视图(不写 iframe)
+      var loading2 = document.createElement("div");
+      loading2.className = "card-ph";
+      loading2.style.cursor = "default";
+      loading2.textContent = "加载中…";
+      body.appendChild(loading2);
+      loadPageContent(wantedId).then(function (content) {
+        if (state.focusId !== wantedId || !card.isConnected) return;
+        body.textContent = "";
         var pre = document.createElement("pre");
         pre.className = "card-code";
         pre.textContent = content || "(" + ext.toUpperCase() + " 产物为空)";
         body.appendChild(pre);
-      }
-    });
+      });
+    }
 
     return card;
   }
@@ -2722,7 +2795,7 @@
   $("btn-add").addEventListener("click", function () {
     openMenu($("btn-add"), [
       { label: "新建页面", fn: function () { createNode("", "page"); } },
-      { label: "新建模块", fn: function () { createNode("", "module"); } }
+      { label: "新建目录", fn: function () { createNode("", "module"); } }
     ]);
   });
   $("btn-sidebar-collapse").addEventListener("click", toggleSidebar);
@@ -2774,10 +2847,28 @@
 
   $("btn-pick-element").addEventListener("click", openElementPicker);
   $("btn-ref-page").addEventListener("click", insertPageRef);
-  $("btn-insert-chat").addEventListener("click", insertRefsToChat);
 
-  // Esc 层级:拾取 → 弹窗/菜单 → 单页视图(依次退出)
+  // 内联命名弹窗:确定/取消/遮罩/Enter/Esc
+  $("name-modal-ok").addEventListener("click", function () { closeNameDialog(true); });
+  $("name-modal-cancel").addEventListener("click", function () { closeNameDialog(false); });
+  $("name-modal-close").addEventListener("click", function () { closeNameDialog(false); });
+  $("name-modal").addEventListener("click", function (ev) {
+    if (ev.target === $("name-modal")) closeNameDialog(false);   // 点遮罩取消
+  });
+  $("name-modal-input").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") { ev.preventDefault(); closeNameDialog(true); }
+  });
+
+  // 树拖拽(委托在 #screen-tree 上,行是动态渲染的)
+  initTreeDnd();
+
+  // Esc 层级:命名弹窗 → 拾取 → 技能弹窗/菜单 → 单页视图(依次退出)
   document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && nameUi.open) {
+      ev.preventDefault();
+      closeNameDialog(false);                            // 0) 命名弹窗最优先(输入框里也要能关)
+      return;
+    }
     var t = ev.target;
     if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.tagName === "SELECT")) return;
     if (ev.key !== "Escape") return;
