@@ -47,7 +47,10 @@
   function demoPage(title, bodyHtml) {
     return "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n" +
       "  <meta name=\"viewport\" content=\"width=390, initial-scale=1\">\n" +
-      "  <title>" + title + "</title>\n  <style>\n    * { box-sizing: border-box; margin: 0; }\n" +
+      "  <title>" + title + "</title>\n" +
+      "  <style>\n    /* mock 演示页保留 Tailwind CDN script 字样(断言用,不真正加载):" +
+      "<script src=\"https://cdn.tailwindcss.com\"><\/script> */\n" +
+      "    * { box-sizing: border-box; margin: 0; }\n" +
       "    body { width: 390px; min-height: 844px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }\n" +
       "    .bar { height: 56px; display: flex; align-items: center; padding: 0 16px; background: #2b6cb0; color: #fff; font-size: 17px; font-weight: 600; }\n" +
       "    main { padding: 16px; }\n    h1 { font-size: 22px; margin: 12px 0 6px; }\n" +
@@ -60,6 +63,32 @@
 
   function blankPage(stem) {
     return demoPage(stem, "    <h1>" + stem + "</h1>\n    <p>新页面,从树的 ⋯ 菜单或画布进入编辑。</p>");
+  }
+
+  /** mock 版"服务端注入拾取脚本":load 后 postMessage ready;收 setPickMode 后
+   *  悬停高亮 + 点击回传 element 消息(ref 字段 = buildElementReference 口径),
+   *  让 standalone 冒烟能走通预览 → 拾取 → 插入全流程。 */
+  function withPickStub(html, screenId, screenName) {
+    var idJson = JSON.stringify(String(screenId));
+    var nameJson = JSON.stringify(String(screenName));
+    var stub =
+      "<style>.hba-pick-hover{outline:2px solid #f59e0b !important;outline-offset:1px !important;}</style>\n" +
+      "<script>(function(){\n" +
+      "var pickOn=false;\n" +
+      "function post(m){try{if(window.parent&&window.parent!==window)window.parent.postMessage(m,'*');}catch(e){}}\n" +
+      "function pickSel(el){if(el.id)return '#'+el.id;var cs=(typeof el.className==='string'?el.className:'').trim().split(/\\s+/).filter(Boolean).slice(0,3);return el.tagName.toLowerCase()+(cs.length?cs.map(function(c){return '.'+c;}).join(''):'');}\n" +
+      "function pickPath(el){var parts=[],cur=el;while(cur&&cur.nodeType===1&&parts.length<8){var tag=cur.tagName.toLowerCase();if(cur===document.body){parts.unshift('body');break;}var p=cur.parentElement;if(p){var idx=0,total=0;for(var i=0;i<p.children.length;i++){if(p.children[i].tagName===cur.tagName){total++;if(p.children[i]===cur)idx=total;}}if(total>1)tag+='('+idx+')';}parts.unshift(tag);cur=p;}return parts.join('>');}\n" +
+      "function clearHover(){var e=document.querySelector('.hba-pick-hover');if(e)e.classList.remove('hba-pick-hover');}\n" +
+      "window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.source!=='hba-uigen-panel')return;if(d.type==='setPickMode'){pickOn=!!d.on;if(!pickOn)clearHover();document.documentElement.style.cursor=pickOn?'crosshair':'';}});\n" +
+      "document.addEventListener('mouseover',function(ev){if(!pickOn)return;clearHover();var el=ev.target;if(el&&el.nodeType===1&&el!==document.body&&el!==document.documentElement){try{el.classList.add('hba-pick-hover');}catch(e){}}},true);\n" +
+      "document.addEventListener('click',function(ev){if(!pickOn)return;var el=ev.target;if(!el||el.nodeType!==1||el===document.body||el===document.documentElement)return;ev.preventDefault();ev.stopPropagation();var text=(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,40);var ref={screenId:" + idJson + ",screenName:" + nameJson + ",tagName:el.tagName.toLowerCase(),text:text,path:pickPath(el),selector:pickSel(el)};if(el.id)ref.htmlId=el.id;pickOn=false;clearHover();document.documentElement.style.cursor='';post({source:'hba-uigen-preview',type:'element',ref:ref});},true);\n" +
+      "function ready(){post({source:'hba-uigen-preview',type:'ready'});}\n" +
+      "if(document.readyState==='complete')ready();else window.addEventListener('load',ready);\n" +
+      "})();<\/script>";
+    html = String(html == null ? "" : html);
+    return /<\/body>/i.test(html)
+      ? html.replace(/<\/body>/i, function () { return stub + "\n</body>"; })
+      : html + "\n" + stub;
   }
 
   var DEMO_JSX = "// banner.jsx — 演示 JSX 产物(单页视图以代码形式展示)\n" +
@@ -346,6 +375,43 @@
                 delete fsMap[full3];
                 kids.forEach(function (k) { delete fsMap[k]; });
                 resolve({ ok: true, deleted: String(args.id) });
+              } else if (name === "uigen_preview_url") {
+                var pfull = resolveId(args.id);
+                if (!isPageFull(pfull)) return reject(new Error("不是页面: " + args.id));
+                var rel = (root && pfull.indexOf(root + "/") === 0) ? pfull.slice(root.length + 1) : pfull;
+                var segs = rel.split("/");
+                var lastSeg = segs[segs.length - 1];
+                var lastExt = extOf(lastSeg);
+                var label = lastExt ? lastSeg.slice(0, lastSeg.length - lastExt.length - 1) : lastSeg;
+                segs[segs.length - 1] = label;
+                var previewHtml = withPickStub(fsMap[pfull].content || "", args.id, segs.join(" > "));
+                resolve({ ok: true, url: "data:text/html;charset=utf-8," + encodeURIComponent(previewHtml) });
+              } else if (name === "uigen_move_page") {
+                var fromFull = resolveId(args.id);
+                var parentArg = args.parent == null ? "" : String(args.parent).trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+                if (parentArg.split("/").some(function (s) { return s === ".." || s === "."; })) {
+                  return reject(new Error("非法 parent: " + args.parent));
+                }
+                var toFull = parentArg ? (root ? root + "/" + parentArg : parentArg) : root;
+                if (parentArg) {
+                  if (!Object.prototype.hasOwnProperty.call(fsMap, toFull) || fsMap[toFull].type !== "module") {
+                    return reject(new Error("目标目录不存在: " + parentArg));
+                  }
+                  if (toFull === fromFull || toFull.indexOf(fromFull + "/") === 0) {
+                    return reject(new Error("不能把目录移动到自身或其子目录下"));
+                  }
+                }
+                var baseName = fromFull.slice(fromFull.lastIndexOf("/") + 1);
+                var destFull = toFull ? toFull + "/" + baseName : baseName;
+                var relOf = function (f) {
+                  return (root && f.indexOf(root + "/") === 0) ? f.slice(root.length + 1) : f;
+                };
+                if (destFull === fromFull) return resolve({ ok: true, id: relOf(fromFull) });
+                if (Object.prototype.hasOwnProperty.call(fsMap, destFull)) {
+                  return reject(new Error("已存在同名节点: " + baseName));
+                }
+                moveSubtree(fromFull, destFull);
+                resolve({ ok: true, id: relOf(destFull) });
               } else if (name === "uigen_list_skills") {
                 // 与 server toolListSkills 同口径:缺省只回启用项,includeInactive 回全部
                 resolve({

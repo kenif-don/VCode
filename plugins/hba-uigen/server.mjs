@@ -18,6 +18,15 @@
  *     is_active/scope 保留 store 值(用户启停不被冲掉);store 有 seed 缺→不动
  *   storeDir = $UIGEN_STORE_DIR or <cwd>/.hba/uigen
  *
+ * 预览架构 —— 本地只读 HTTP + 服务端注入拾取脚本(非 srcdoc):
+ *   面板预览不再用 iframe.srcdoc + 剥 <script>(会把 Tailwind CDN 等页面自身
+ *   的 <script> 一起剥掉,<style type="text/tailwindcss"> 没运行时不生效,样式全丢)。
+ *   改为 iframe 导航到本进程内置的只读 HTTP 服务(127.0.0.1、随机端口、懒启动、
+ *   仅 GET):页面在自己的 http 源里正常跑自己的 JS,相对/根相对资源路径自然解析。
+ *   跨源 iframe 父页无法直连 DOM → 元素选取由服务端在 </body> 前注入拾取脚本,
+ *   经 postMessage 把元素快照回传面板;快照口径与 panel.html 的
+ *   buildElementReference/domPath/elementCssSelector 逐字一致。
+ *
  * Methods implemented:
  *   initialize / notifications/initialized / ping
  *   tools/list / tools/call
@@ -26,6 +35,8 @@
  *       uigen_get_page     — one page/module (pages carry content)
  *       uigen_save_page    — create/update/rename a page file or module dir
  *       uigen_delete_page  — delete a page file / module directory
+ *       uigen_preview_url  — local read-only preview URL (lazy 127.0.0.1 HTTP server)
+ *       uigen_move_page    — move a page/module into another directory (tree drag)
  *       uigen_list_skills  — skill library (active-only by default)
  *       uigen_get_skill    — one full skill record
  *       uigen_save_skill   — create/update a skill YAML
@@ -42,6 +53,7 @@
  */
 
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -894,6 +906,330 @@ function notifyStateUpdated() {
 }
 
 // ---------------------------------------------------------------------------
+// 本地预览 HTTP 服务 —— 面板预览的载体(见文件头"预览架构")。
+//   懒启动:首次 uigen_preview_url 才 listen;127.0.0.1 随机端口,仅 GET;
+//   路由 /__uigen_preview__/<rel> = 读 HTML 注入拾取脚本后返回,
+//   路由 /<rel> = root 下对应文件原样流式返回(mime 按扩展名粗分);
+//   两条路由都做路径逃逸防护(resolve 后必须仍在 root 内,否则 403);
+//   unref:服务不拽住事件循环,进程退出端口自然释放。
+// ---------------------------------------------------------------------------
+
+const PREVIEW_PREFIX = "__uigen_preview__/";
+const PREVIEW_SOURCE = "hba-uigen-preview";
+
+// 扩展名 → 静态资源 Content-Type(粗分即可,预览够用)
+const STATIC_MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".txt": "text/plain; charset=utf-8",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+};
+
+function mimeOf(abs) {
+  return STATIC_MIME[path.posix.extname(abs).toLowerCase()] || "application/octet-stream";
+}
+
+function sendText(res, code, text) {
+  res.writeHead(code, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end(text);
+}
+
+/**
+ * 拾取脚本 —— 服务端注入到 </body> 前(页面自身 script 一律不剥,照常执行)。
+ * 快照口径与 panel.html 的 elementCssSelector / domPath / buildElementReference
+ * 逐字一致(tagName 小写、text 空白归一截 40、path=tag(n) 链同名唯一省序号
+ * 最多 8 段、selector=#id→tag.≤3class→tag、不存 data-os-id);
+ * screenId/screenName 由注入时常量写入。
+ * 用 String.raw:正则里的反斜杠必须原样进入页面。
+ */
+function buildPickScript(screenId, screenName) {
+  return String.raw`/* hba-uigen-preview-pick —— 服务端注入的拾取脚本(跨源 iframe 父页无法直连 DOM) */
+(function () {
+  "use strict";
+  var SOURCE = ${JSON.stringify(PREVIEW_SOURCE)};
+  var HBA_PREVIEW_SCREEN_ID = ${JSON.stringify(screenId)};
+  var HBA_PREVIEW_SCREEN_NAME = ${JSON.stringify(screenName)};
+  var pickOn = false;
+  var hoverEl = null;
+  var hoverPrevOutline = "";
+  var hoverPrevOffset = "";
+  var prevCursor = "";
+
+  function post(type, extra) {
+    var msg = { source: SOURCE, type: type };
+    if (extra) for (var k in extra) msg[k] = extra[k];
+    try { parent.postMessage(msg, "*"); } catch (e) { /* 忽略 */ }
+  }
+
+  /** 元素 CSS 选择器:#id 优先 → tag.c1.c2.c3(最多 3 类)→ 裸 tag。 */
+  function elementCssSelector(el) {
+    if (el.htmlId) return "#" + el.htmlId;
+    var classes = el.className.trim().split(/\s+/).filter(Boolean).slice(0, 3);
+    if (classes.length > 0) return el.tagName + classes.map(function (c) { return "." + c; }).join("");
+    return el.tagName;
+  }
+
+  /** 结构路径(复刻 sandbox-utils domPath):body>section(2)>form>button(1)。 */
+  function domPath(el, doc) {
+    var parts = [];
+    var cur = el;
+    while (cur && cur.nodeType === 1 && parts.length < 8) {
+      var tag = cur.tagName ? cur.tagName.toLowerCase() : "";
+      if (cur === doc.body) { parts.unshift("body"); break; }
+      var parent = cur.parentElement;
+      if (parent) {
+        var idx = 0, total = 0;
+        for (var i = 0; i < parent.children.length; i++) {
+          if (parent.children[i].tagName === cur.tagName) {
+            total++;
+            if (parent.children[i] === cur) idx = total;
+          }
+        }
+        if (total > 1) tag += "(" + idx + ")";
+      }
+      parts.unshift(tag);
+      cur = parent;
+    }
+    return parts.join(">");
+  }
+
+  /** DOM → 纯数据快照:tagName 小写,text 空白归一截 40,刻意不落 data-os-id。 */
+  function buildElementReference(screenId, screenName, el, doc) {
+    var tagName = (el.tagName || "div").toLowerCase();
+    var htmlId = el.id || "";
+    var className = (el.className && typeof el.className === "string") ? el.className.trim() : "";
+    var text = String(el.textContent == null ? "" : el.textContent)
+      .replace(/\s+/g, " ").trim().slice(0, 40);
+    var path = domPath(el, doc);
+    var ref = {
+      screenId: screenId,
+      screenName: screenName,
+      tagName: tagName,
+      text: text,
+      selector: elementCssSelector({ tagName: tagName, htmlId: htmlId, className: className })
+    };
+    if (path) ref.path = path;
+    if (htmlId) ref.htmlId = htmlId;
+    return ref;
+  }
+
+  function isSkippable(el) {
+    return !el || el.nodeType !== 1 || el === document.body || el === document.documentElement;
+  }
+
+  function clearHover() {
+    if (!hoverEl) return;
+    try {
+      hoverEl.style.outline = hoverPrevOutline;
+      hoverEl.style.outlineOffset = hoverPrevOffset;
+    } catch (e) { /* 目标可能已卸载 */ }
+    hoverEl = null;
+  }
+
+  function pickOver(ev) {
+    var el = ev.target;
+    if (isSkippable(el)) { clearHover(); return; }
+    if (el === hoverEl) return;
+    clearHover();
+    hoverEl = el;
+    try {
+      hoverPrevOutline = el.style.outline;
+      hoverPrevOffset = el.style.outlineOffset;
+      el.style.outline = "2px solid #38788A";
+      el.style.outlineOffset = "1px";
+    } catch (e) { /* 个别目标不支持内联样式 */ }
+  }
+
+  function pickOut(ev) {
+    if (!ev.relatedTarget) clearHover(); // 指针离开预览文档
+  }
+
+  function pickClick(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation(); // 吞掉页内链接/按钮的默认行为
+    var el = ev.target;
+    if (isSkippable(el)) return; // body/html 空白:留在拾取模式
+    var ref = buildElementReference(HBA_PREVIEW_SCREEN_ID, HBA_PREVIEW_SCREEN_NAME, el, document);
+    clearHover();
+    setPickMode(false); // 选中后自动退出拾取态
+    post("element", { ref: ref });
+  }
+
+  function setPickMode(on) {
+    on = !!on;
+    if (on === pickOn) return;
+    pickOn = on;
+    if (on) {
+      document.addEventListener("mouseover", pickOver, true);
+      document.addEventListener("mouseout", pickOut, true);
+      document.addEventListener("click", pickClick, true);
+      prevCursor = document.documentElement.style.cursor;
+      document.documentElement.style.cursor = "crosshair";
+    } else {
+      document.removeEventListener("mouseover", pickOver, true);
+      document.removeEventListener("mouseout", pickOut, true);
+      document.removeEventListener("click", pickClick, true);
+      document.documentElement.style.cursor = prevCursor;
+      clearHover();
+    }
+  }
+
+  window.addEventListener("message", function (ev) {
+    var d = ev && ev.data;
+    if (!d || d.source !== "hba-uigen-panel") return;
+    if (d.type === "setPickMode") setPickMode(!!d.on);
+  });
+
+  function announceReady() { post("ready"); }
+  if (document.readyState === "complete") announceReady();
+  else window.addEventListener("load", announceReady);
+})();
+`;
+}
+
+/** 在 </body> 前注入拾取脚本;没有 </body> 则追加到文件尾。 */
+function injectPickScript(html, screenId, screenName) {
+  const script = "\n<script>\n" + buildPickScript(screenId, screenName) + "</script>\n";
+  const idx = html.toLowerCase().lastIndexOf("</body");
+  if (idx >= 0) return html.slice(0, idx) + script + html.slice(idx);
+  return html + script;
+}
+
+/** 页面 screenName:路径各段名(目录名 / 末段去扩展名)以 " > " 连接,复刻面板 nodePathLabel 口径。 */
+function screenNameOf(id) {
+  const parts = id.split("/");
+  return parts
+    .map((seg, i) => {
+      if (i !== parts.length - 1) return seg;
+      const ext = path.posix.extname(seg);
+      return ext ? seg.slice(0, seg.length - ext.length) : seg;
+    })
+    .join(" > ");
+}
+
+/** URL 路径 → root 内绝对路径;逃逸(../、绝对路径、盘符)返回 null。 */
+function resolveUrlPath(rootAbs, rel) {
+  const abs = path.resolve(rootAbs, ...rel.split("/").filter((s) => s && s !== "."));
+  return isWithin(rootAbs, abs) ? abs : null;
+}
+
+async function handlePreviewRequest(req, res) {
+  if (req.method !== "GET") {
+    res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8", Allow: "GET" });
+    res.end("method not allowed");
+    return;
+  }
+  // 手工解码:WHATWG URL 会把 %2e%2e 归一化掉,逃逸就测不出来了
+  let decoded;
+  try {
+    decoded = decodeURIComponent((req.url || "/").split("?")[0].split("#")[0]);
+  } catch {
+    sendText(res, 400, "bad request");
+    return;
+  }
+  const rel = decoded.replace(/^\/+/, "");
+  const rootAbs = rootAbsPath();
+
+  if (rel.startsWith(PREVIEW_PREFIX)) {
+    const pageRel = rel.slice(PREVIEW_PREFIX.length);
+    const abs = resolveUrlPath(rootAbs, pageRel);
+    if (!abs) {
+      sendText(res, 403, "forbidden");
+      return;
+    }
+    let st;
+    try {
+      st = fs.statSync(abs);
+    } catch {
+      sendText(res, 404, "not found");
+      return;
+    }
+    if (!st.isFile()) {
+      sendText(res, 404, "not found");
+      return;
+    }
+    const screenId = path.relative(rootAbs, abs).split(path.sep).join("/");
+    let html;
+    try {
+      html = readTextFile(abs);
+    } catch (e) {
+      sendText(res, 500, `read failed: ${e.message}`);
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/html;charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(injectPickScript(html, screenId, screenNameOf(screenId)));
+    return;
+  }
+
+  // 静态资源:root 下对应文件原样流式返回
+  const abs = resolveUrlPath(rootAbs, rel);
+  if (!abs) {
+    sendText(res, 403, "forbidden");
+    return;
+  }
+  let st;
+  try {
+    st = fs.statSync(abs);
+  } catch {
+    sendText(res, 404, "not found");
+    return;
+  }
+  if (!st.isFile()) {
+    sendText(res, 404, "not found");
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": mimeOf(abs),
+    "Content-Length": st.size,
+    "Cache-Control": "no-store",
+  });
+  const stream = fs.createReadStream(abs);
+  stream.on("error", () => res.destroy());
+  stream.pipe(res);
+}
+
+/** 懒启动预览服务:进程内单实例,重复调用拿到同一端口(同一 url)。 */
+let previewListening = null;
+function ensurePreviewServer() {
+  if (!previewListening) {
+    previewListening = new Promise((resolve, reject) => {
+      const server = http.createServer((req, res) => {
+        handlePreviewRequest(req, res).catch((e) => {
+          try { sendText(res, 500, `internal error: ${e.message}`); } catch { /* 已响应 */ }
+        });
+      });
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        server.unref(); // 不拽住事件循环:进程退出端口自然释放
+        resolve({ server, port: server.address().port });
+      });
+    });
+  }
+  return previewListening;
+}
+
+// ---------------------------------------------------------------------------
 // tools
 // ---------------------------------------------------------------------------
 
@@ -945,6 +1281,29 @@ const TOOLS = [
         recursive: { type: "boolean", description: "Delete a non-empty module with its contents." },
       },
       required: ["id"],
+    },
+  },
+  {
+    name: "uigen_preview_url",
+    description:
+      "Get a local read-only preview URL for a page (http://127.0.0.1:<port>/__uigen_preview__/<id>). The page loads in its own http origin so its own scripts run (Tailwind CDN etc.) and relative assets resolve; the server injects an element-pick script that postMessages refs to the panel. The server starts lazily on first call and keeps one port for the process lifetime.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Page id (posix relative path), e.g. app/login.html." } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "uigen_move_page",
+    description:
+      "Move a page file or module directory into a target directory (tree drag-drop). parent is the target directory id, \"\" = workspace root. The file/dir keeps its name and the new relative id is returned; the index cache is reconciled and a state update is pushed. Rejects missing ids, non-directory parents, cycles (a directory moved into itself or its own subtree), target name conflicts and path escapes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Page/module id to move." },
+        parent: { type: "string", description: 'Target directory id; "" = workspace root.' },
+      },
+      required: ["id", "parent"],
     },
   },
   {
@@ -1190,6 +1549,72 @@ async function toolDeletePage(args) {
   return { ok: true, deleted: r.id };
 }
 
+async function toolPreviewUrl(args) {
+  const rootAbs = rootAbsPath();
+  const r = resolveInRoot(rootAbs, args.id);
+  if (!r.ok) return r;
+  let st;
+  try {
+    st = fs.statSync(r.abs);
+  } catch {
+    return { ok: false, error: `not found: ${r.id}` };
+  }
+  if (!st.isFile()) return { ok: false, error: `not a page file: ${r.id}` };
+  try {
+    const { port } = await ensurePreviewServer();
+    const encoded = r.id.split("/").map(encodeURIComponent).join("/");
+    return { ok: true, url: `http://127.0.0.1:${port}/${PREVIEW_PREFIX}${encoded}` };
+  } catch (e) {
+    return { ok: false, error: `preview server failed: ${e.message}` };
+  }
+}
+
+async function toolMovePage(args) {
+  const rootAbs = rootAbsPath();
+  const r = resolveInRoot(rootAbs, args.id);
+  if (!r.ok) return r;
+  let st;
+  try {
+    st = fs.statSync(r.abs);
+  } catch {
+    return { ok: false, error: `not found: ${r.id}` };
+  }
+
+  if (typeof args.parent !== "string") {
+    return { ok: false, error: 'parent is required (use "" for the workspace root)' };
+  }
+  let parentRel = args.parent.replace(/\\/g, "/").trim();
+  if (parentRel === ".") parentRel = "";
+  let parentAbs = rootAbs;
+  if (parentRel) {
+    const pr = resolveInRoot(rootAbs, parentRel);
+    if (!pr.ok) return pr;
+    parentAbs = pr.abs;
+    let pst;
+    try {
+      pst = fs.statSync(parentAbs);
+    } catch {
+      return { ok: false, error: `parent not found: ${pr.id}` };
+    }
+    if (!pst.isDirectory()) return { ok: false, error: `parent is not a directory: ${pr.id}` };
+  }
+
+  const destAbs = path.join(parentAbs, path.basename(r.abs));
+  // 循环:目录移进自己或自己的子孙
+  if (st.isDirectory() && isWithin(r.abs, parentAbs)) {
+    return { ok: false, error: `cannot move ${r.id} into itself or its own subtree: ${parentRel || "(root)"}` };
+  }
+  if (destAbs === r.abs) return { ok: true, id: r.id }; // 已在目标目录:无操作
+  if (fs.existsSync(destAbs)) {
+    return { ok: false, error: `target already exists: ${toStoreForm(destAbs)}` };
+  }
+  fs.renameSync(r.abs, destAbs);
+  const newId = path.relative(rootAbs, destAbs).split(path.sep).join("/");
+  reconcile(rootAbs);
+  notifyStateUpdated();
+  return { ok: true, id: newId };
+}
+
 async function toolListSkills(args) {
   const includeInactive = args.includeInactive === true;
   let skills = listSkillRecords();
@@ -1308,6 +1733,8 @@ const TOOL_HANDLERS = {
   uigen_get_page: toolGetPage,
   uigen_save_page: toolSavePage,
   uigen_delete_page: toolDeletePage,
+  uigen_preview_url: toolPreviewUrl,
+  uigen_move_page: toolMovePage,
   uigen_list_skills: toolListSkills,
   uigen_get_skill: toolGetSkill,
   uigen_save_skill: toolSaveSkill,

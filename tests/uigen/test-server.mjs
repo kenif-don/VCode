@@ -8,7 +8,10 @@
  *   → list/rescan 对账 → 单页 get/save/delete(重命名 id 变化、路径安全);
  *   技能库:启动播种 16 个 seed、CRUD、重启播种保留用户 is_active;
  *   YAML 往返与对账对齐走导出的纯函数(子进程 import server.mjs 验证);
- *   canvas 布局持久化(无 ui 绑定字段,旧数据读到即忽略);resources 面照常。
+ *   canvas 布局持久化(无 ui 绑定字段,旧数据读到即忽略);resources 面照常;
+ *   本地预览 HTTP(uigen_preview_url:注入拾取脚本、页面原 script 不剥、
+ *   静态资源、../ 逃逸 403、404、仅 GET)与 uigen_move_page(文件/目录移动
+ *   id 变化、子树跟随、循环/同名冲突/不存在/非目录 parent 拒绝)。
  *
  * Run:  node tests/uigen/test-server.mjs   (等价: node --test tests/uigen/test-server.mjs)
  */
@@ -16,6 +19,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -174,6 +178,24 @@ function findNode(tree, id) {
   return null;
 }
 
+/** 原始 HTTP GET:fetch 会把路径里的 .. 归一化掉,逃逸用例必须发原始请求行。 */
+function rawGet(origin, rawPath) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(origin);
+    const req = http.request(
+      { host: u.hostname, port: Number(u.port), path: rawPath, method: "GET" },
+      (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (d) => { body += d; });
+        res.on("end", () => resolve({ status: res.statusCode, body }));
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 // ---------------------------------------------------------------------------
 // tests —— 顺序即状态机:握手 → 工具面 → 播种 → 技能 CRUD → 重启播种语义
 // → YAML 往返/对账对齐 → 启动即扫工作区根 → 扫描断言 → 对账 → 单页读写删
@@ -190,7 +212,7 @@ test("initialize handshake", async () => {
   assert.ok(msg.result.capabilities.resources, "capabilities.resources declared");
 });
 
-test("tools/list exposes the 11 prototype-library tools with schemas", async () => {
+test("tools/list exposes the 13 prototype-library tools with schemas", async () => {
   const msg = await client.request("tools/list", {});
   const tools = msg.result.tools;
   const names = tools.map((t) => t.name).sort();
@@ -203,6 +225,8 @@ test("tools/list exposes the 11 prototype-library tools with schemas", async () 
     "uigen_get_skill",
     "uigen_list_pages",
     "uigen_list_skills",
+    "uigen_move_page",
+    "uigen_preview_url",
     "uigen_rescan",
     "uigen_save_page",
     "uigen_save_skill",
@@ -233,6 +257,8 @@ test("tools/list exposes the 11 prototype-library tools with schemas", async () 
   assert.deepEqual(req("uigen_delete_skill"), ["id"]);
   assert.deepEqual(req("uigen_save_skill"), ["name", "description", "instructions"]);
   assert.deepEqual(req("uigen_canvas_save"), ["layoutJson"]);
+  assert.deepEqual(req("uigen_preview_url"), ["id"]);
+  assert.deepEqual(req("uigen_move_page"), ["id", "parent"]);
   assert.deepEqual(req("uigen_list_pages"), []);
   assert.deepEqual(req("uigen_list_skills"), []);
   const save = tools.find((t) => t.name === "uigen_save_page").inputSchema.properties;
@@ -791,4 +817,138 @@ test("unknown method, unknown tool and retired tools produce JSON-RPC errors", a
     const r = await client.callTool(retired, {});
     assert.equal(r.error.code, -32602, `${retired} is unknown`);
   }
+});
+
+test("uigen_preview_url serves injected HTML over a local read-only HTTP server", async () => {
+  // 带 Tailwind CDN script 的原型页 —— 旧 srcdoc+剥 script 方案会把它剥掉,
+  // <style type="text/tailwindcss"> 没运行时不生效,样式全丢
+  writeFixture(
+    "tw.html",
+    [
+      "<!doctype html>",
+      '<html lang="zh-CN"><head><meta charset="utf-8"><title>tw</title>',
+      '<script src="https://cdn.tailwindcss.com"></script>',
+      "</head>",
+      '<body><h1 class="text-2xl">hi</h1></body>',
+      "</html>",
+      "",
+    ].join("\n")
+  );
+  writeFixture("assets/logo.txt", "LOGO-BYTES");
+
+  const got = await client.callTool("uigen_preview_url", { id: "tw.html" });
+  const r = got.result.structuredContent;
+  assert.equal(r.ok, true);
+  assert.match(r.url, /^http:\/\/127\.0\.0\.1:\d+\/__uigen_preview__\/tw\.html$/);
+  // 重复调用返回同一 url(进程内单实例、端口固定)
+  const again = await client.callTool("uigen_preview_url", { id: "tw.html" });
+  assert.equal(again.result.structuredContent.url, r.url);
+
+  // 页面可 fetch:原 script 未被剥 + 注入拾取脚本 + screenId/screenName 常量
+  const res = await fetch(r.url);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") || "", /text\/html/);
+  const html = await res.text();
+  assert.ok(html.includes('<script src="https://cdn.tailwindcss.com"></script>'), "tailwind CDN script kept");
+  assert.ok(html.includes("hba-uigen-preview-pick"), "pick script injected");
+  assert.ok(html.includes('var HBA_PREVIEW_SCREEN_ID = "tw.html"'), "screenId constant injected");
+  assert.ok(html.includes('var HBA_PREVIEW_SCREEN_NAME = "tw"'), "screenName constant injected");
+  assert.ok(html.includes('"setPickMode"'), "pick script listens for setPickMode");
+  assert.ok(html.indexOf("hba-uigen-preview-pick") < html.lastIndexOf("</body"), "injected before </body>");
+  assert.ok(html.indexOf("hba-uigen-preview-pick") > html.indexOf("cdn.tailwindcss.com"), "page scripts untouched");
+
+  // 静态资源:/assets/... 原样命中(mime 粗分)
+  const origin = new URL(r.url).origin;
+  const asset = await fetch(new URL("/assets/logo.txt", origin));
+  assert.equal(asset.status, 200);
+  assert.match(asset.headers.get("content-type") || "", /text\/plain/);
+  assert.equal(await asset.text(), "LOGO-BYTES");
+
+  // 路径逃逸 → 403(fetch 归一化 ..,用原始请求行发)
+  const esc = await rawGet(origin, "/../secret.txt");
+  assert.equal(esc.status, 403);
+  const escPreview = await rawGet(origin, "/__uigen_preview__/../../secret.html");
+  assert.equal(escPreview.status, 403);
+
+  // 不存在 → 404;仅 GET
+  const missing = await fetch(new URL("/no-such-404.html", origin));
+  assert.equal(missing.status, 404);
+  const postRes = await fetch(r.url, { method: "POST" });
+  assert.equal(postRes.status, 405);
+
+  // 工具错误面:不存在的 id / 目录
+  const ghost = await client.callTool("uigen_preview_url", { id: "never-existed.html" });
+  assert.equal(ghost.result.structuredContent.ok, false);
+  const dir = await client.callTool("uigen_preview_url", { id: "assets" });
+  assert.equal(dir.result.structuredContent.ok, false);
+});
+
+test("uigen_move_page moves files and directories, rejects cycles and conflicts", async () => {
+  // 夹具:mv/a 带子树;mv/b/page.html 用来撞同名冲突
+  writeFixture("mv/a/page.html", HTML("page"));
+  writeFixture("mv/a/sub/child.html", HTML("child"));
+  writeFixture("mv/b/page.html", HTML("bpage"));
+  await client.callTool("uigen_rescan", {});
+  await client.request("resources/subscribe", { uri: "ui://hba-uigen/state.json" });
+  const notifCount = () =>
+    client.notifications.filter((n) => n.method === "notifications/resources/updated").length;
+  const notifBefore = notifCount();
+
+  // 文件移进 root:id 变化、文件落新位、旧位消失、树/缓存/通知同步
+  const mvFile = await client.callTool("uigen_move_page", { id: "mv/a/page.html", parent: "" });
+  const mvf = mvFile.result.structuredContent;
+  assert.equal(mvf.ok, true);
+  assert.equal(mvf.id, "page.html");
+  assert.ok(fs.existsSync(path.join(wsDir, "page.html")), "file landed at root");
+  assert.ok(!fs.existsSync(path.join(wsDir, "mv", "a", "page.html")), "old file gone");
+  const tree1 = (await client.callTool("uigen_list_pages", {})).result.structuredContent.tree;
+  assert.ok(findNode(tree1, "page.html"), "moved page appears in tree");
+  assert.ok(!findNode(tree1, "mv/a/page.html"), "old id gone from tree");
+  assert.ok(indexOnDisk().entries.some((e) => e.id === "page.html"), "index reconciled");
+  assert.ok(notifCount() > notifBefore, "state update pushed after move");
+
+  // 目录移动:整棵子树跟随
+  const mvDir = await client.callTool("uigen_move_page", { id: "mv/a", parent: "" });
+  assert.equal(mvDir.result.structuredContent.id, "a");
+  assert.ok(fs.existsSync(path.join(wsDir, "a", "sub", "child.html")), "subtree moved along");
+  assert.ok(!fs.existsSync(path.join(wsDir, "mv", "a")), "old module dir gone");
+
+  // 同名冲突拒绝(目标处已有 page.html)
+  const conflict = await client.callTool("uigen_move_page", { id: "page.html", parent: "mv/b" });
+  assert.equal(conflict.result.structuredContent.ok, false);
+  assert.match(conflict.result.structuredContent.error, /already exists/);
+  assert.ok(fs.existsSync(path.join(wsDir, "page.html")), "file kept after conflict");
+
+  // 移进指定目录(非 root):id 带上目标前缀
+  const mvInto = await client.callTool("uigen_move_page", { id: "page.html", parent: "a" });
+  assert.equal(mvInto.result.structuredContent.id, "a/page.html");
+  assert.ok(fs.existsSync(path.join(wsDir, "a", "page.html")));
+
+  // 循环:目录移进自己 / 自己的子孙
+  const selfMove = await client.callTool("uigen_move_page", { id: "a", parent: "a" });
+  assert.equal(selfMove.result.structuredContent.ok, false);
+  assert.match(selfMove.result.structuredContent.error, /itself/);
+  const intoChild = await client.callTool("uigen_move_page", { id: "a", parent: "a/sub" });
+  assert.equal(intoChild.result.structuredContent.ok, false);
+  assert.ok(fs.existsSync(path.join(wsDir, "a", "sub", "child.html")), "subtree intact after cycle rejection");
+
+  // parent 指向文件 / 不存在的目录;id 不存在
+  const fileParent = await client.callTool("uigen_move_page", { id: "a", parent: "mv/b/page.html" });
+  assert.equal(fileParent.result.structuredContent.ok, false);
+  assert.match(fileParent.result.structuredContent.error, /not a directory/);
+  const ghostParent = await client.callTool("uigen_move_page", { id: "a", parent: "no-such-dir" });
+  assert.equal(ghostParent.result.structuredContent.ok, false);
+  const ghostId = await client.callTool("uigen_move_page", { id: "no-such.html", parent: "" });
+  assert.equal(ghostId.result.structuredContent.ok, false);
+
+  // 路径逃逸:id 与 parent 都拒绝
+  for (const bad of [
+    { id: "../evil.html", parent: "" },
+    { id: "a", parent: "../.." },
+    { id: "a", parent: "/etc" },
+  ]) {
+    const esc = await client.callTool("uigen_move_page", bad);
+    assert.equal(esc.result.structuredContent.ok, false, `move rejects ${JSON.stringify(bad)}`);
+  }
+  assert.ok(!fs.existsSync(path.join(tmpRoot, "evil.html")), "no escape file moved");
 });
