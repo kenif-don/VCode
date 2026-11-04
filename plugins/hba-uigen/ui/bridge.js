@@ -206,7 +206,14 @@
       mod("prototypes/drafts");   // 空模块
       fsMap = m;
     }
-    seed();
+    // 默认空树(演示树是测试残留,不再自动播种);URL 带 ?demo=1 才播种,
+    // 保留冒烟/演示用途。workspace 标签仍是 demo-workspace(/demo/workspace)。
+    fsMap = {};
+    var demoSeed = false;
+    try {
+      demoSeed = /(?:^\?|&)demo=1(?:&|$)/.test((global.location && global.location.search) || "");
+    } catch (e) { demoSeed = false; }
+    if (demoSeed) seed();
 
     function absPath(rel) { return rel ? WORKSPACE + "/" + rel : WORKSPACE; }
 
