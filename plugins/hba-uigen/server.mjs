@@ -1812,7 +1812,26 @@ function handleRequest(msg) {
     case "resources/read": {
       const uri = params && params.uri;
       if (uri === PANEL_URI) {
-        reply(id, { contents: [{ uri, mimeType: HTML_MIME, text: readResourceFile("panel.html") }] });
+        // 资源级 _meta.ui.csp.frameDomains:宿主给插件面板罩的 CSP 是 default-src 'none'
+        // 且 frame-src 缺省 'none'(pluginSandbox/csp.ts),不声明放行域,面板里的预览
+        // iframe(本地预览服务)会被拦成白板。声明走 MCP Apps 规范的资源 _meta 通道
+        // (normalizeMcpAppResourceMeta 读 _meta.ui.csp,优先于工具级兜底);origin 必须
+        // 精确到端口(normalizeCspOrigin 不收通配,但明确放行 127.0.0.1 的 http),
+        // 端口取预览服务实际监听端口(进程内单实例,稳定)。
+        const text = readResourceFile("panel.html");
+        ensurePreviewServer().then(
+          ({ port }) =>
+            reply(id, {
+              contents: [{
+                uri,
+                mimeType: HTML_MIME,
+                text,
+                _meta: { ui: { csp: { frameDomains: [`http://127.0.0.1:${port}`] } } },
+              }],
+            }),
+          // 预览服务起不来也要让面板能开(预览失败回退占位,别锁死整个面板)
+          () => reply(id, { contents: [{ uri, mimeType: HTML_MIME, text }] }),
+        );
       } else if (uri === BRIDGE_URI) {
         reply(id, { contents: [{ uri, mimeType: "text/javascript", text: readResourceFile("bridge.js") }] });
       } else if (uri === STATE_URI) {

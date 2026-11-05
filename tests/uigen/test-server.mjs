@@ -772,6 +772,17 @@ test("resources/list and resources/read serve panel, bridge and state tree", asy
   assert.equal(content.mimeType, "text/html;profile=mcp-app");
   assert.ok(content.text.length > 0, "panel html served");
 
+  // 资源级 CSP 声明:宿主 frame-src 缺省 'none',面板预览 iframe 必须靠
+  // _meta.ui.csp.frameDomains 放行本地预览服务(精确 origin,与 preview_url 同端口)。
+  const pv = await client.callTool("uigen_preview_url", { id: "app/login.html" });
+  const pvRes = pv.result.structuredContent;
+  assert.equal(pvRes && pvRes.ok, true, `preview_url ok: ${JSON.stringify(pvRes)}`);
+  const previewOrigin = new URL(pvRes.url).origin;
+  const frameDomains = content._meta?.ui?.csp?.frameDomains;
+  assert.ok(Array.isArray(frameDomains) && frameDomains.length === 1, "frameDomains declared");
+  assert.equal(frameDomains[0], previewOrigin, "frameDomains matches the preview origin");
+  assert.match(frameDomains[0], /^http:\/\/127\.0\.0\.1:\d+$/, "loopback http origin with explicit port");
+
   const bridge = await client.request("resources/read", { uri: "ui://hba-uigen/bridge.js" });
   assert.ok(bridge.result.contents[0].text.length > 0, "bridge js served");
 
