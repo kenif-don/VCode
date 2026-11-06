@@ -2,29 +2,29 @@ import { test, expect } from "@playwright/test";
 import { T } from "../support/testids";
 
 /**
- * FR-1 六子智能体验收用例(TC-AGT-01 ~ TC-AGT-04)
+ * FR-1 五子智能体验收用例(TC-AGT-01 ~ TC-AGT-04)
  *
  * 前置条件(见 e2e/README.md):
  *   1. `zcode --web` 已启动,ZCODE_WEB_URL 指向其地址;
- *   2. hba-on-zcode\agents\ 下 6 个智能体定义已装入 ZCode(<repo>/.zcode/agents/);
+ *   2. hba-on-zcode\agents\ 下 5 个智能体定义已装入 ZCode(<repo>/.zcode/agents/);
  *   3. 宿主 UI 已挂 e2e/support/testids.ts 冻结的 data-testid。
  *
  * 状态:待宿主集成(骨架完整,依赖宿主 UI testid 与子智能体派发机制)。
  */
 
-test.describe("TC-AGT 六子智能体", () => {
-  test("TC-AGT-01 六智能体定义加载与校验", async ({ page }) => {
+test.describe("TC-AGT 五子智能体", () => {
+  test("TC-AGT-01 五智能体定义加载与校验", async ({ page }) => {
     // 步骤 1: 打开 ZCode 设置页,进入智能体(Agents)面板
     await page.goto("/settings");
     await page.getByTestId(T.settingsAgentsPanel).waitFor();
 
     // 步骤 2: 收集面板中列出的智能体行
     const rows = page.getByTestId(T.agentRow);
-    // 断言: 设置页列出 6 项(通过标准)
-    await expect(rows).toHaveCount(6);
+    // 断言: 设置页列出 5 项(通过标准)
+    await expect(rows).toHaveCount(5);
 
     // 步骤 3: 逐项核对名称集合与校验徽标
-    const expected = ["architect", "browser-tester", "coder", "planner", "reviewer", "ui-prototype"];
+    const expected = ["architect", "browser-tester", "coder", "planner", "reviewer"];
     for (const name of expected) {
       const row = rows.filter({ has: page.locator(`[data-agent="${name}"]`) });
       // 断言: 每个智能体定义存在且名称与文件名一致

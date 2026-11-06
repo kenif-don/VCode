@@ -6,7 +6,7 @@
  *   node tests/agents/validate-agents.mjs
  *
  * 校验项:
- *   - 6 个文件齐全(且没有多余/缺失的 .md)
+ *   - 5 个文件齐全(且没有多余/缺失的 .md)
  *   - frontmatter 可解析:name/description/color/model/thoughtLevel/tools 等
  *   - name 合法(仅字母/数字/连字符)、与文件名一致、不占用内置名(Explore/general-purpose)
  *   - description 非空
@@ -67,13 +67,6 @@ const EXPECTED = [
     hbaSource: "browser_tester.md",
     tools: ["Read", "Bash", "WebFetch", "WebSearch"],
     thoughtLevel: "low",
-  },
-  {
-    file: "ui-prototype.md",
-    name: "ui-prototype",
-    hbaSource: "ui-gen-assistant.md",
-    tools: ["Read", "Write", "Edit", "Bash", "Glob"],
-    thoughtLevel: "medium",
   },
 ];
 

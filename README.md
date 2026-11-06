@@ -6,7 +6,7 @@
 
 | 路径 | 说明 |
 |---|---|
-| `agents/` | FR-1 六个子智能体定义(ZCode Markdown + frontmatter 格式):`coder.md`、`reviewer.md`、`architect.md`、`planner.md`、`browser-tester.md`、`ui-prototype.md` |
+| `agents/` | FR-1 五个子智能体定义(ZCode Markdown + frontmatter 格式):`coder.md`、`reviewer.md`、`architect.md`、`planner.md`、`browser-tester.md` |
 | `docs/fr1-agents.md` | FR-1 迁移映射、字段映射表、与 HBA 原文差异点、遗留事项 |
 | `docs/migration-guide.md` | 部署迁移指南(智能体/插件安装、数据位置、白标构建、回滚) |
 | `docs/batch-report-2026-10-28.md` | 第一批开发报告(WBS W0-W7 对照、测试结果、关键决策、遗留) |
