@@ -6,14 +6,10 @@ import { logger } from "@/logger.js";
 
 type UiPluginRecommendation = ClientConfigSnapshot["uiPluginRecommendations"][number];
 
-// 本地内置面板推荐（fr6）：HBA UI 原型 / 运行面板随内置插件包发布，
-// 不依赖云端下发——clientConfig 的 uiPluginRecommendations 为空、不可达或未含它们时，
-// launcher 也要常驻这两个入口。与云端结果合并去重，内置条目固定靠前。
+// 本地内置面板推荐（fr6）：HBA 运行面板随内置插件包发布，
+// 不依赖云端下发——clientConfig 的 uiPluginRecommendations 为空、不可达或未含它时，
+// launcher 也要常驻这个入口。与云端结果合并去重，内置条目固定靠前。
 export const BUILTIN_UI_PLUGIN_RECOMMENDATIONS: readonly UiPluginRecommendation[] = [
-  {
-    pluginId: "hba-uigen@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
-    surfaceId: "hba-uigen",
-  },
   {
     pluginId: "hba-run@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
     surfaceId: "hba-run",

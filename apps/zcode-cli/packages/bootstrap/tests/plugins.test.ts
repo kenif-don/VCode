@@ -614,9 +614,9 @@ describe("VCode plugins", () => {
             id: "zcode-plugins-official",
             isOfficial: true,
             name: "zcode-plugins-official",
-            // 官方定义 18 项（12 literal + node-repl-host/browser-use 2 常量名 + 文档四件套 map），
-            // 其中 1 项在源码检出态缺 dist seed 不进清单；本树另含 hba-uigen/hba-run 与 zcode-site。
-            pluginCount: 17,
+            // 官方定义 17 项（11 literal + node-repl-host/browser-use 2 常量名 + 文档四件套 map），
+            // 其中 1 项在源码检出态缺 dist seed 不进清单；本树另含 hba-run 与 zcode-site。
+            pluginCount: 16,
             source: {
               source: "url",
               url: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",
@@ -2397,7 +2397,7 @@ describe("VCode plugins", () => {
       expect(
         overview.marketplaces.find((marketplace) => marketplace.id === "zcode-plugins-official"),
       ).toMatchObject({
-        pluginCount: 17,
+        pluginCount: 16,
         source: {
           source: "url",
           url: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",

@@ -33,8 +33,7 @@ export const DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS: ReadonlySet<string> = new Set(
   // visualize（交互视图）随 UI 插件合入时 CLI 定义已标 defaultEnabled，但这里漏加，
   // Settings 会把它当成默认关闭，与 CLI 实际启用状态不一致。
   "visualize@zcode-plugins-official",
-  // HBA 迁移（fr6）内置 UI 面板：UI 原型 / 运行面板，默认启用，launcher 常驻入口。
-  "hba-uigen@zcode-plugins-official",
+  // HBA 迁移（fr6）内置 UI 面板：运行面板，默认启用，launcher 常驻入口。
   "hba-run@zcode-plugins-official",
   "zcode-site@zcode-plugins-official",
   // 电脑控制回退为默认关闭，故 computer-use 不在此名单内。

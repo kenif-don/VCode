@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json.schemastore.org/package.json",
-  "name": "@zcode/hba-uigen-plugin",
-  "version": "0.3.0",
-  "private": true,
-  "description": "HBA prototype library browser: scan the workspace project into a module/page tree (dirs = modules, html/jsx/tsx/vue = pages), browse single pages, cite them into the conversation, and manage the skill library.",
-  "license": "Apache-2.0",
-  "type": "module"
-}

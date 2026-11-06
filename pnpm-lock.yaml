@@ -598,8 +598,6 @@ importers:
 
   apps/zcode-cli/packages/hba-run-plugin: {}
 
-  apps/zcode-cli/packages/hba-uigen-plugin: {}
-
   apps/zcode-cli/packages/i18n:
     dependencies:
       '@zcode/contracts':

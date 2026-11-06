@@ -249,16 +249,8 @@ const officialPluginPackages = [
     stagedPath: "packages/zcode-guide-plugin",
   },
   {
-    // HBA 迁移（fr6）：UI 原型面板。零外部依赖（node 内置模块），无 runtime 构建；
+    // HBA 迁移（fr6）：运行面板。零外部依赖（node 内置模块），无 runtime 构建，直接 stage；
     // server.mjs 与 ui/ 面板资源靠 includedOfficialPluginTopLevelPaths 白名单进包。
-    packageName: "@zcode/hba-uigen-plugin",
-    relativePath: "apps/zcode-cli/packages/hba-uigen-plugin",
-    requiresRuntime: false,
-    requiredSeedPaths: [".zcode-plugin/plugin.json", "server.mjs", "ui/bridge.js", "ui/panel.html"],
-    stagedPath: "packages/hba-uigen-plugin",
-  },
-  {
-    // HBA 迁移（fr6）：运行面板。同上，纯 JS 插件，直接 stage。
     packageName: "@zcode/hba-run-plugin",
     relativePath: "apps/zcode-cli/packages/hba-run-plugin",
     requiresRuntime: false,
