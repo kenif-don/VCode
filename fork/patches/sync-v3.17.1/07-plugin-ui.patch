@@ -443,19 +443,119 @@ index 37a2e4e7..476e0624 100644
    };
  }
 diff --git a/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts b/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
-index 9fe4136b..2a434a99 100644
+index 9fe4136b..1d8cb668 100644
 --- a/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
 +++ b/packages/ui/src/plugin-ui/adapters/pluginUiManagedPage.ts
-@@ -89,6 +89,8 @@ export function createPage(
+@@ -44,6 +44,11 @@ import { pluginUiPages } from "./pluginUiPageRegistry.js";
+ import { attachPluginUiResourceDeltaFeed } from "./pluginUiResourceDeltaFeed.js";
+ type Platform = IPlatformService;
+ type Services = IServiceAccessor;
++// error 相位有界自动恢复（HBA fr21）：退避 5s→15s→45s→60s 封顶、单错误事件最多 6 次，
++// 可见性重试另有 10s 限流；回 running 或手动 reload 清零（reload 仍清 widgetState）。
++const AUTO_RECOVER_BACKOFF_MS = [5_000, 15_000, 45_000, 60_000];
++const AUTO_RECOVER_MAX_ATTEMPTS = 6;
++const AUTO_RECOVER_VISIBLE_THROTTLE_MS = 10_000;
+ export function createPage(
+   key: string,
+   input: UsePluginUiHostInput,
+@@ -89,6 +94,11 @@ export function createPage(
    let lastFeed = "";
    let lastContext = "";
    let appIdentity: string | undefined;
 +  // 当前租约/订阅锚定的会话（HBA fr19）；update 交付不同锚点时整体重绑。
 +  let boundSessionId: string | null = null;
++  let autoRecoverAttempts = 0;
++  let autoRecoverTimer: ReturnType<typeof setTimeout> | undefined;
++  let lastAutoRecoverAt = 0;
    const notify = () => {
      for (const listener of listeners) listener();
    };
-@@ -215,6 +217,7 @@ export function createPage(
+@@ -101,12 +111,19 @@ export function createPage(
+     error: null,
+     appCapabilities: undefined,
+     reload: () => {
++      resetAutoRecover();
+       clearPluginUiWidgetState(key);
+       void page.suspend(true).then(ensure);
+     },
+   };
+   const patch = (value: Partial<UsePluginUiHostResult>) => {
++    const previousPhase = snapshot.phase;
+     snapshot = { ...snapshot, ...value };
++    // error 相位有界自动恢复（HBA fr21）：进 error 挂退避重试，回 running 清零。
++    if (snapshot.phase !== previousPhase) {
++      if (snapshot.phase === "error") scheduleAutoRecover();
++      else if (snapshot.phase === "running") resetAutoRecover();
++    }
+     notify();
+   };
+   const setPhase = (phase: PluginUiHostPhase) => patch({ phase });
+@@ -150,7 +167,10 @@ export function createPage(
+   const plane = createPluginUiPagePlane({
+     onVisibility(visible) {
+       if (page.visible !== visible) pluginUiPages.visibility(page, visible);
+-      if (visible) ensure();
++      if (visible) {
++        if (snapshot.phase === "error") recoverOnVisible();
++        else ensure();
++      }
+       syncExecution();
+     },
+     onCrash() {
+@@ -184,9 +204,51 @@ export function createPage(
+       });
+   }
+   function onWindowVisibility() {
+-    if (!document.hidden && plane.hasVisibleAnchor()) void ensure();
++    if (!document.hidden && plane.hasVisibleAnchor()) {
++      if (snapshot.phase === "error") recoverOnVisible();
++      else void ensure();
++    }
+     syncExecution();
+   }
++  function cancelAutoRecover() {
++    if (autoRecoverTimer !== undefined) {
++      clearTimeout(autoRecoverTimer);
++      autoRecoverTimer = undefined;
++    }
++  }
++  function resetAutoRecover() {
++    autoRecoverAttempts = 0;
++    cancelAutoRecover();
++  }
++  function scheduleAutoRecover() {
++    if (disposed || autoRecoverTimer !== undefined) return;
++    if (autoRecoverAttempts >= AUTO_RECOVER_MAX_ATTEMPTS) return;
++    const delay =
++      AUTO_RECOVER_BACKOFF_MS[Math.min(autoRecoverAttempts, AUTO_RECOVER_BACKOFF_MS.length - 1)];
++    autoRecoverTimer = setTimeout(() => {
++      autoRecoverTimer = undefined;
++      runAutoRecover();
++    }, delay);
++  }
++  function runAutoRecover() {
++    if (disposed || snapshot.phase !== "error") return;
++    autoRecoverAttempts++;
++    lastAutoRecoverAt = Date.now();
++    logger.lifecycle.info(`[plugin-ui] auto-recover attempt ${autoRecoverAttempts}`, {
++      sessionId: latest.current.scope.sessionId,
++      pluginId: latest.current.presentation.pluginId,
++    });
++    // 与手动 reload 同一重启路径（suspend 清 controller/换 incarnation，ensure 重建），
++    // 但不清 widgetState——面板未保存状态在自动恢复中保留。
++    void page.suspend(true).then(ensure);
++  }
++  function recoverOnVisible() {
++    if (disposed || snapshot.phase !== "error") return;
++    if (autoRecoverAttempts >= AUTO_RECOVER_MAX_ATTEMPTS) return;
++    if (Date.now() - lastAutoRecoverAt < AUTO_RECOVER_VISIBLE_THROTTLE_MS) return;
++    cancelAutoRecover();
++    runAutoRecover();
++  }
+   async function ensure() {
+     if (disposed || controller || starting || snapshot.phase === "error") return;
+     starting = true;
+@@ -215,6 +277,7 @@ export function createPage(
        );
        releaseLease = () => connection.release();
        const lease = connection.layer.acquire(latest.current.scope.sessionId);
@@ -463,7 +563,7 @@ index 9fe4136b..2a434a99 100644
        const runtimeStopped = () => {
          void page.suspend(true);
          patch({ phase: "error", error: "MCP App runtime is no longer available" });
-@@ -291,6 +294,7 @@ export function createPage(
+@@ -291,6 +354,7 @@ export function createPage(
          buildPluginUiHostCapabilities({
            canSendFollowUpMessage: Boolean(latest.current.interactions?.onSendFollowUpMessage),
            canUpdateModelContext: Boolean(latest.current.interactions?.onUpdateModelContext),
@@ -471,7 +571,7 @@ index 9fe4136b..2a434a99 100644
            canSetWidgetState: true,
            canSample: Boolean(services?.pluginUiSamplingService && getPluginUiSessionActions(scope)),
            canSubscribeResources: true,
-@@ -309,6 +313,10 @@ export function createPage(
+@@ -309,6 +373,10 @@ export function createPage(
          latest.current.interactions?.onUpdateModelContext
            ? latest.current.interactions.onUpdateModelContext(payload)
            : Promise.reject(Object.assign(new Error("Not supported"), { code: -32601 })),
@@ -482,7 +582,7 @@ index 9fe4136b..2a434a99 100644
        onUpdateWidgetState: async (widgetState) => {
          setPluginUiWidgetState(surfaceKey, widgetState);
        },
-@@ -367,22 +375,30 @@ export function createPage(
+@@ -367,22 +435,30 @@ export function createPage(
      reportUsage("ui_open_request");
      controller.start();
    }
@@ -519,7 +619,7 @@ index 9fe4136b..2a434a99 100644
      visible: false,
      snapshot: () => snapshot,
      start: () => void ensure(),
-@@ -406,6 +422,14 @@ export function createPage(
+@@ -406,6 +482,14 @@ export function createPage(
      update(next) {
        // 背景内联锚点不能覆盖侧栏当前的交互上下文。
        if (next.enabled === false) return;
@@ -534,7 +634,7 @@ index 9fe4136b..2a434a99 100644
        latest.current = next;
        // 只重选展示锚点，绝不销毁或重载 WebView；插件的未保存状态仍留在同一 guest。
        syncDisplayModes(snapshot.appCapabilities);
-@@ -502,6 +526,7 @@ export function createPage(
+@@ -502,6 +586,7 @@ export function createPage(
          offLease = releaseLease;
        releaseFeed = undefined;
        releaseLease = undefined;
@@ -542,6 +642,14 @@ index 9fe4136b..2a434a99 100644
        patch({ phase: "idle", handle: null, appCapabilities: undefined });
        plane.setAllowedDisplayModes([]);
        // 先前释放未完成时不能重新预备；反复重试也只等待同一个释放链。
+@@ -519,6 +604,7 @@ export function createPage(
+       return true;
+     },
+     destroy() {
++      cancelAutoRecover();
+       document.removeEventListener("visibilitychange", onWindowVisibility);
+       workspaceEvents.dispose();
+       clearPluginUiSurfaceFeed(key);
 diff --git a/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx b/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx
 index 3bcb1e30..efd99569 100644
 --- a/packages/ui/src/plugin-ui/adapters/usePluginUiSidePaneModel.tsx
@@ -706,10 +814,10 @@ index 91b9e8d1..195d9c37 100644
      prepare,
      isBusy: (item: StorePluginItem) => isItemBusy(item, state),
 diff --git a/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts b/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
-index 4a2c3266..ad98a011 100644
+index 4a2c3266..e3f5a4b0 100644
 --- a/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
 +++ b/packages/ui/src/plugin-ui/adapters/useUiPluginRecommendations.ts
-@@ -1,8 +1,40 @@
+@@ -1,8 +1,36 @@
  import { useEffect, useState } from "react";
  import type { ClientConfigSnapshot } from "@zcode/shared";
 +import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID } from "@zcode/shared";
@@ -718,14 +826,10 @@ index 4a2c3266..ad98a011 100644
  
 +type UiPluginRecommendation = ClientConfigSnapshot["uiPluginRecommendations"][number];
 +
-+// 本地内置面板推荐（fr6）：HBA UI 原型 / 运行面板随内置插件包发布，
-+// 不依赖云端下发——clientConfig 的 uiPluginRecommendations 为空、不可达或未含它们时，
-+// launcher 也要常驻这两个入口。与云端结果合并去重，内置条目固定靠前。
++// 本地内置面板推荐（fr6）：HBA 运行面板随内置插件包发布，
++// 不依赖云端下发——clientConfig 的 uiPluginRecommendations 为空、不可达或未含它时，
++// launcher 也要常驻这个入口。与云端结果合并去重，内置条目固定靠前。
 +export const BUILTIN_UI_PLUGIN_RECOMMENDATIONS: readonly UiPluginRecommendation[] = [
-+  {
-+    pluginId: "hba-uigen@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
-+    surfaceId: "hba-uigen",
-+  },
 +  {
 +    pluginId: "hba-run@" + ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
 +    surfaceId: "hba-run",
@@ -750,7 +854,7 @@ index 4a2c3266..ad98a011 100644
  /** 缓存和请求合并归 Host 配置服务；此处只持有当前入口的展示投影。 */
  export function useUiPluginRecommendations(enabled: boolean) {
    const service = useOptionalServices()?.clientConfigService;
-@@ -16,11 +48,16 @@ export function useUiPluginRecommendations(enabled: boolean) {
+@@ -16,11 +44,16 @@ export function useUiPluginRecommendations(enabled: boolean) {
      if (enabled && service) {
        void service.getSnapshot().then(
          ({ uiPluginRecommendations }) => {

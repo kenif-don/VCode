@@ -203,21 +203,19 @@ index 75f5d043..32a7f20c 100644
      "typescript": "^6.0.2",
      "unified": "^11.0.5"
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 74fdedba..e55293fb 100644
+index 74fdedba..f4f73af0 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
-@@ -596,6 +596,10 @@ importers:
+@@ -596,6 +596,8 @@ importers:
          specifier: ^4.1.5
          version: 4.1.7(patch_hash=11fdb66aa985e1d77e68752deeb7c1130ae33c9a4e2968f23aae8adaf8bc9ba0)(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.13.3(@types/node@24.12.2)(typescript@6.0.2))(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
  
 +  apps/zcode-cli/packages/hba-run-plugin: {}
 +
-+  apps/zcode-cli/packages/hba-uigen-plugin: {}
-+
    apps/zcode-cli/packages/i18n:
      dependencies:
        '@zcode/contracts':
-@@ -1953,6 +1957,12 @@ importers:
+@@ -1953,6 +1955,12 @@ importers:
        '@tanstack/react-virtual':
          specifier: ^3.13.23
          version: 3.13.23(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -230,7 +228,7 @@ index 74fdedba..e55293fb 100644
        '@types/qrcode':
          specifier: ^1.5.5
          version: 1.5.6
-@@ -1962,6 +1972,9 @@ importers:
+@@ -1962,6 +1970,9 @@ importers:
        '@types/react-dom':
          specifier: ^19.2.3
          version: 19.2.3(@types/react@19.2.14)
@@ -240,7 +238,7 @@ index 74fdedba..e55293fb 100644
        tailwindcss:
          specifier: ^4.2.2
          version: 4.2.2
-@@ -6360,6 +6373,25 @@ packages:
+@@ -6360,6 +6371,25 @@ packages:
    '@tanstack/virtual-core@3.13.23':
      resolution: {integrity: sha512-zSz2Z2HNyLjCplANTDyl3BcdQJc2k1+yyFoKhNRmCr7V7dY8o8q5m8uFTI1/Pg1kL+Hgrz6u3Xo6eFUB7l66cg==}
  
@@ -266,7 +264,7 @@ index 74fdedba..e55293fb 100644
    '@tokenizer/inflate@0.4.1':
      resolution: {integrity: sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA==}
      engines: {node: '>=18'}
-@@ -6436,6 +6468,9 @@ packages:
+@@ -6436,6 +6466,9 @@ packages:
    '@tybys/wasm-util@0.10.4':
      resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
  
@@ -276,7 +274,7 @@ index 74fdedba..e55293fb 100644
    '@types/babel__core@7.20.5':
      resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
  
-@@ -7114,6 +7149,9 @@ packages:
+@@ -7114,6 +7147,9 @@ packages:
      resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
      engines: {node: '>=10'}
  
@@ -286,7 +284,7 @@ index 74fdedba..e55293fb 100644
    aria-query@5.3.2:
      resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
      engines: {node: '>= 0.4'}
-@@ -8230,6 +8268,9 @@ packages:
+@@ -8230,6 +8266,9 @@ packages:
    docx-preview@0.4.0:
      resolution: {integrity: sha512-OdKtE/uj3M4RfGarLkGjahUzRg8/kBp0Sraj1r1NAY1tp/sTpHOBqDrzVf9onMBt9vxP6SdQ6bpLCUCsFwjgcA==}
  
@@ -296,7 +294,7 @@ index 74fdedba..e55293fb 100644
    dom-serializer@2.0.0:
      resolution: {integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==}
  
-@@ -10111,6 +10152,10 @@ packages:
+@@ -10111,6 +10150,10 @@ packages:
      peerDependencies:
        react: 19.2.7
  
@@ -307,7 +305,7 @@ index 74fdedba..e55293fb 100644
    macos-release@3.4.0:
      resolution: {integrity: sha512-wpGPwyg/xrSp4H4Db4xYSeAr6+cFQGHfspHzDUdYxswDnUW0L5Ov63UuJiSr8NMSpyaChO4u1n0MXUvVPtrN6A==}
      engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-@@ -11201,6 +11246,10 @@ packages:
+@@ -11201,6 +11244,10 @@ packages:
      engines: {node: '>=14'}
      hasBin: true
  
@@ -318,7 +316,7 @@ index 74fdedba..e55293fb 100644
    pretty-format@30.3.0:
      resolution: {integrity: sha512-oG4T3wCbfeuvljnyAzhBvpN45E8iOTXCU/TD3zXW80HA3dQ4ahdqMkWGiPWZvjpQwlbyHrPTWUAqUzGzv4l1JQ==}
      engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
-@@ -11383,6 +11432,9 @@ packages:
+@@ -11383,6 +11430,9 @@ packages:
    react-is@16.13.1:
      resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
  
@@ -328,7 +326,7 @@ index 74fdedba..e55293fb 100644
    react-is@18.3.1:
      resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
  
-@@ -17416,6 +17468,27 @@ snapshots:
+@@ -17416,6 +17466,27 @@ snapshots:
  
    '@tanstack/virtual-core@3.13.23': {}
  
@@ -356,7 +354,7 @@ index 74fdedba..e55293fb 100644
    '@tokenizer/inflate@0.4.1':
      dependencies:
        debug: 4.4.3(supports-color@8.1.1)
-@@ -17490,6 +17563,8 @@ snapshots:
+@@ -17490,6 +17561,8 @@ snapshots:
        tslib: 2.8.1
      optional: true
  
@@ -365,7 +363,7 @@ index 74fdedba..e55293fb 100644
    '@types/babel__core@7.20.5':
      dependencies:
        '@babel/parser': 7.29.2
-@@ -18508,6 +18583,10 @@ snapshots:
+@@ -18508,6 +18581,10 @@ snapshots:
      dependencies:
        tslib: 2.8.1
  
@@ -376,7 +374,7 @@ index 74fdedba..e55293fb 100644
    aria-query@5.3.2: {}
  
    array-buffer-byte-length@1.0.2:
-@@ -19664,6 +19743,8 @@ snapshots:
+@@ -19664,6 +19741,8 @@ snapshots:
      dependencies:
        jszip: 3.10.1
  
@@ -385,7 +383,7 @@ index 74fdedba..e55293fb 100644
    dom-serializer@2.0.0:
      dependencies:
        domelementtype: 2.3.0
-@@ -21878,6 +21959,8 @@ snapshots:
+@@ -21878,6 +21957,8 @@ snapshots:
      dependencies:
        react: 19.2.7
  
@@ -394,7 +392,7 @@ index 74fdedba..e55293fb 100644
    macos-release@3.4.0: {}
  
    magic-string@0.30.21:
-@@ -23450,6 +23533,12 @@ snapshots:
+@@ -23450,6 +23531,12 @@ snapshots:
  
    prettier@3.8.2: {}
  
@@ -407,7 +405,7 @@ index 74fdedba..e55293fb 100644
    pretty-format@30.3.0:
      dependencies:
        '@jest/schemas': 30.0.5
-@@ -23742,6 +23831,8 @@ snapshots:
+@@ -23742,6 +23829,8 @@ snapshots:
  
    react-is@16.13.1: {}
  

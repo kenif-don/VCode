@@ -85,7 +85,7 @@ pnpm run test:unit                # vitest 单元测试(排除 desktop e2e)
 
 ## 5. 核心 diff 最小化原则(PRD 5.1 / 7.5)
 
-1. 能以插件表达的能力**全部进 HBA 插件包**(`../plugins/hba-uigen`、`../plugins/hba-run`、hba-agents),核心层零改动;
+1. 能以插件表达的能力**全部进 HBA 插件包**(`../plugins/hba-run`、hba-agents),核心层零改动;
 2. 核心层仅保留交互调整类小改,当前全部收敛在 `fork/patches/` 4 个补丁(基线 3c5b227 上 `git apply` 验证通过,合计 16 个文件触点(12 修改 + 4 新增)/ +568 / -11 行):
 
 | 补丁 | 内容 | 文档 |
